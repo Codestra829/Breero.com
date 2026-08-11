@@ -40,6 +40,7 @@ class Vendor(Base):
     display_name: Mapped[str] = mapped_column(String(120))
     email: Mapped[str] = mapped_column(String(320), unique=True)
     phone: Mapped[str] = mapped_column(String(32))
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), unique=True)
     status: Mapped[VendorStatus] = mapped_column(
         Enum(VendorStatus, name="vendor_status"), index=True
     )

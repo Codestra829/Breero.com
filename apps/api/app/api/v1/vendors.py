@@ -17,6 +17,16 @@ from app.domains.workforce.service import WorkforceService
 router = APIRouter()
 
 
+async def _authorize_vendor(session: AsyncSession, user: User, vendor_id: uuid.UUID) -> None:
+    from fastapi import HTTPException
+
+    if user.role in {UserRole.admin, UserRole.operations}:
+        return
+    vendor = await WorkforceRepository(session).get_vendor(vendor_id)
+    if not vendor or vendor.owner_user_id != user.id:
+        raise HTTPException(403, "Account does not administer this vendor")
+
+
 async def _worker_for_user(session: AsyncSession, user: User) -> Worker:
     from fastapi import HTTPException
 
@@ -50,8 +60,9 @@ async def create_worker(
     vendor_id: uuid.UUID,
     payload: WorkerCreate,
     session: AsyncSession = Depends(get_db),
-    _: User = Depends(require_roles(UserRole.vendor_admin, UserRole.admin, UserRole.operations)),
+    user: User = Depends(require_roles(UserRole.vendor_admin, UserRole.admin, UserRole.operations)),
 ):
+    await _authorize_vendor(session, user, vendor_id)
     return await WorkforceService(session).add_worker(vendor_id, payload)
 
 
@@ -59,8 +70,9 @@ async def create_worker(
 async def list_workers(
     vendor_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    _: User = Depends(require_roles(UserRole.vendor_admin, UserRole.admin, UserRole.operations)),
+    user: User = Depends(require_roles(UserRole.vendor_admin, UserRole.admin, UserRole.operations)),
 ):
+    await _authorize_vendor(session, user, vendor_id)
     return await WorkforceRepository(session).list_workers(vendor_id)
 
 
@@ -72,6 +84,7 @@ async def decide_offer(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles(UserRole.vendor_admin)),
 ):
+    await _authorize_vendor(session, user, vendor_id)
     return await DispatchService(session).decide_offer(
         offer_id, vendor_id, payload.accept, payload.worker_id, user.id
     )

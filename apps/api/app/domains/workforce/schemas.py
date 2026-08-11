@@ -10,6 +10,7 @@ class VendorCreate(BaseModel):
     display_name: str = Field(min_length=1, max_length=120)
     email: EmailStr
     phone: str = Field(min_length=5, max_length=32)
+    owner_user_id: uuid.UUID | None = None
     capabilities: list[str] = []
     service_radius_meters: int = Field(default=40000, ge=1000, le=500000)
     latitude: float | None = Field(default=None, ge=-90, le=90)
@@ -29,6 +30,7 @@ class VendorRead(BaseModel):
     display_name: str
     email: str
     phone: str
+    owner_user_id: uuid.UUID | None
     status: VendorStatus
     capabilities: list
     service_radius_meters: int

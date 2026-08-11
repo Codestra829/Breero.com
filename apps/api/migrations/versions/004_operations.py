@@ -35,7 +35,7 @@ def upgrade() -> None:
       CREATE TABLE vendors (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(), legal_name varchar(180) NOT NULL,
         display_name varchar(120) NOT NULL, email varchar(320) NOT NULL UNIQUE,
-        phone varchar(32) NOT NULL, status vendor_status NOT NULL,
+        phone varchar(32) NOT NULL, owner_user_id uuid UNIQUE, status vendor_status NOT NULL,
         service_radius_meters integer NOT NULL DEFAULT 40000,
         home_location geography(POINT,4326), capabilities jsonb NOT NULL DEFAULT '[]',
         payout_profile_ref varchar(255), odoo_partner_id varchar(64),
