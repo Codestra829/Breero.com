@@ -1,12 +1,12 @@
 """configurable finance and resilient integrations
 
-Revision ID: 007_finance_integrations
-Revises: 006_auth_customer_payments
+Revision ID: 006_finance_integrations
+Revises: 005_booking_integrations
 """
 from alembic import op
 
-revision = "007_finance_integrations"
-down_revision = "006_auth_customer_payments"
+revision = "006_finance_integrations"
+down_revision = "005_booking_integrations"
 branch_labels = None
 depends_on = None
 
@@ -64,7 +64,7 @@ def upgrade() -> None:
     op.execute("CREATE INDEX IF NOT EXISTS ix_vendor_earnings_available_at ON vendor_earnings(available_at)")
     op.execute("""
       CREATE TABLE earning_adjustments (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(), earning_id uuid NOT NULL REFERENCES vendor_earnings(id),
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(), earning_id uuid NOT NULL REFERENCES vendor_earnings(id) ON DELETE RESTRICT,
         adjustment_type earning_adjustment_type NOT NULL, amount_minor integer NOT NULL, reason text NOT NULL,
         idempotency_key varchar(128) NOT NULL, actor_id uuid, created_at timestamptz NOT NULL DEFAULT now(),
         UNIQUE(earning_id, idempotency_key)

@@ -113,7 +113,9 @@ class PaymentEvent(Base):
     provider: Mapped[str] = mapped_column(String(32), nullable=False)
     provider_event_id: Mapped[str] = mapped_column(String(255), nullable=False)
     event_type: Mapped[str] = mapped_column(String(120), nullable=False)
-    payment_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    payment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("payments.id", ondelete="SET NULL")
+    )
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="processing")
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

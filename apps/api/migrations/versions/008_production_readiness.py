@@ -1,13 +1,14 @@
 """production query indexes and schema corrections
 
 Revision ID: 008_production_readiness
-Revises: 007_finance_integrations
+Revises: 007_backend_merge
 """
 
+import sqlalchemy as sa
 from alembic import op
 
 revision = "008_production_readiness"
-down_revision = "007_finance_integrations"
+down_revision = "007_backend_merge"
 branch_labels = None
 depends_on = None
 
@@ -24,6 +25,11 @@ INDEXES = {
 
 
 def upgrade() -> None:
+    op.add_column("bookings", sa.Column("idempotency_request_hash", sa.String(64), nullable=True))
+    # Existing keys predate request fingerprints. They remain replayable, while all new keys
+    # enforce key+intent equivalence.
+    op.execute("UPDATE bookings SET idempotency_request_hash = 'legacy'")
+    op.alter_column("bookings", "idempotency_request_hash", nullable=False)
     op.execute("UPDATE addresses SET geocoding_provider = 'provided' WHERE geocoding_provider IS NULL")
     op.execute("ALTER TABLE addresses ALTER COLUMN geocoding_provider SET DEFAULT 'provided'")
     op.execute("ALTER TABLE addresses ALTER COLUMN geocoding_provider SET NOT NULL")
@@ -40,3 +46,4 @@ def downgrade() -> None:
         op.execute(f"DROP INDEX IF EXISTS {name}")
     op.execute("ALTER TABLE addresses ALTER COLUMN geocoding_provider DROP NOT NULL")
     op.execute("ALTER TABLE addresses ALTER COLUMN geocoding_provider DROP DEFAULT")
+    op.drop_column("bookings", "idempotency_request_hash")

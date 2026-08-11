@@ -40,6 +40,42 @@ def compare(connection) -> list[str]:
         for name in sorted(expected_names & set(actual)):
             if bool(expected.columns[name].nullable) != bool(actual[name]["nullable"]):
                 errors.append(f"{table_name}.{name}: nullability differs")
+        expected_unique = {
+            tuple(sorted(constraint.columns.keys()))
+            for constraint in expected.constraints
+            if constraint.__class__.__name__ == "UniqueConstraint"
+        }
+        actual_unique = {
+            tuple(sorted(item["column_names"])) for item in inspector.get_unique_constraints(table_name)
+        }
+        # PostgreSQL may represent a unique=True column as either a constraint or unique index.
+        actual_unique |= {
+            tuple(sorted(item["column_names"]))
+            for item in inspector.get_indexes(table_name)
+            if item.get("unique")
+        }
+        if not expected_unique.issubset(actual_unique):
+            errors.append(f"{table_name}: missing unique sets {sorted(expected_unique - actual_unique)}")
+        expected_fks = {
+            (
+                tuple(constraint.column_keys),
+                tuple(element.target_fullname for element in constraint.elements),
+                (constraint.ondelete or "").upper(),
+            )
+            for constraint in expected.foreign_key_constraints
+        }
+        actual_fks = {
+            (
+                tuple(item["constrained_columns"]),
+                tuple(
+                    f"{item['referred_table']}.{column}" for column in item["referred_columns"]
+                ),
+                (item.get("options", {}).get("ondelete") or "").upper(),
+            )
+            for item in inspector.get_foreign_keys(table_name)
+        }
+        if expected_fks != actual_fks:
+            errors.append(f"{table_name}: foreign-key semantics differ")
     return errors
 
 

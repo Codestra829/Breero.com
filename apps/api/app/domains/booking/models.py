@@ -80,13 +80,16 @@ class Customer(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
     phone: Mapped[str] = mapped_column(String(40), nullable=False)
-    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), unique=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), unique=True
+    )
 
 
 class Booking(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "bookings"
     reference: Mapped[str] = mapped_column(String(24), unique=True, nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    idempotency_request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"), index=True)
     address_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("addresses.id"))
     legal_entity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("legal_entities.id"))

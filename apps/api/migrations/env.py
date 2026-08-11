@@ -26,6 +26,19 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def include_object(object_, name, type_, reflected, compare_to):
+    """Route semantic constraint/index drift to the name-independent contract checker.
+
+    Alembic remains authoritative for tables, columns, types, nullability, and defaults.
+    PostGIS's extension-owned table is the only table excluded.
+    """
+    if type_ == "table" and name == "spatial_ref_sys":
+        return False
+    if type_ in {"index", "unique_constraint", "foreign_key_constraint", "check_constraint"}:
+        return False
+    return True
+
+
 def run_migrations_offline() -> None:
     context.configure(
         url=settings.database_url,
@@ -33,13 +46,19 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
 
 
 def do_run_migrations(connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=True,
+        include_object=include_object,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
