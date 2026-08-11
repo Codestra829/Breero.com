@@ -84,6 +84,8 @@ class Settings(BaseSettings):
             missing.append("non-default DATABASE_URL credentials")
         if "*" in self.allowed_origins:
             missing.append("explicit CORS_ORIGINS")
+        if not self.allowed_origins or all("localhost" in origin for origin in self.allowed_origins):
+            missing.append("production CORS_ORIGINS")
         if missing:
             raise ValueError("unsafe production configuration: " + ", ".join(sorted(set(missing))))
         return self

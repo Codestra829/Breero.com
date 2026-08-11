@@ -14,7 +14,8 @@ from app.domains.auth.models import User
 from app.domains.booking.models import Address, Booking, Customer
 from app.domains.booking.schemas import BookingResponse
 from app.domains.jobs.models import Job, WorkRequest
-from app.domains.jobs.schemas import WorkRequestRead
+from app.domains.jobs.schemas import WorkRequestDecision, WorkRequestRead
+from app.domains.jobs.service import JobService
 from app.domains.payments.models import Payment, Refund
 
 router = APIRouter()
@@ -270,6 +271,17 @@ async def quote(
     if not item:
         raise HTTPException(404, "Quote not found")
     return item
+
+
+@router.post("/quotes/{quote_id}/decision", response_model=WorkRequestRead)
+async def decide_quote(
+    quote_id: uuid.UUID,
+    payload: WorkRequestDecision,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> WorkRequest:
+    customer = await customer_for(session, user)
+    return await JobService(session).decide_work_request(quote_id, payload.approve, customer.id)
 
 
 @router.get("/payments", response_model=Page)
