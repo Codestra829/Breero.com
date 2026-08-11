@@ -15,7 +15,10 @@ function Overlay({ open, onOpenChange, title, description, children, footer, cla
     const previous = document.activeElement as HTMLElement | null;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const frame = requestAnimationFrame(() => panel.current?.focus());
+    const frame = requestAnimationFrame(() => {
+      const firstFocusable = panel.current?.querySelector<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+      (firstFocusable || panel.current)?.focus();
+    });
     const keydown = (event: KeyboardEvent) => {
       if (event.key === "Escape") close();
       if (event.key !== "Tab" || !panel.current) return;

@@ -1,16 +1,8 @@
-import { ArrowRightIcon, Badge, Button, Card, CheckIcon, ClockIcon, Container, Grid, SearchIcon, Section, ShieldIcon, StarIcon } from "@breero/ui";
-
-const services = [
-  { title: "Cleaning", detail: "A fresh home, without the lost weekend", icon: "✦", tone: "mint" },
-  { title: "Plumbing", detail: "Small leaks to urgent repairs", icon: "◒", tone: "blue" },
-  { title: "Electrical", detail: "Safe, certified help when you need it", icon: "ϟ", tone: "amber" },
-  { title: "Handyman", detail: "The jobs that never leave your list", icon: "⌁", tone: "clay" },
-];
-
 export default function HomePage() {
-  return <>
-    <Section className="hero"><Container><div className="hero__grid"><div className="hero__copy"><Badge variant="brand"><StarIcon size={13} />Rated excellent by local households</Badge><h1>Your home,<br /><em>beautifully handled.</em></h1><p>Book trusted professionals for every job around your home. Clear prices, thoughtful service, no chasing.</p><div className="hero-search"><SearchIcon /><div><small>What do you need help with?</small><strong>Search cleaning, plumbing, repairs…</strong></div><Button aria-label="Search services"><ArrowRightIcon /></Button></div><div className="hero__proof"><span><CheckIcon size={16} />Vetted professionals</span><span><CheckIcon size={16} />Protected payments</span><span><CheckIcon size={16} />Real human support</span></div></div><div className="hero__visual" aria-hidden="true"><div className="hero__arch"><div className="hero__room"><div className="hero__sun" /><div className="hero__plant">♧</div><div className="hero__chair" /></div></div><div className="hero__floating hero__floating--rating"><span><StarIcon size={17} /></span><div><strong>4.9 out of 5</strong><small>from verified bookings</small></div></div><div className="hero__floating hero__floating--arrival"><span><ClockIcon size={17} /></span><div><strong>Right on time</strong><small>Sam arrives at 10:00</small></div></div></div></div></Container></Section>
-    <Section spacing="lg"><Container><div className="section-heading"><div><span className="eyebrow">Care for every corner</span><h2>What can we take off your hands?</h2></div><a href="/services">View all services <ArrowRightIcon size={17} /></a></div><Grid columns={4} gap="md">{services.map((service) => <a className="service-link" href="/services" key={service.title}><Card interactive className="service-card"><span className={`service-card__icon service-card__icon--${service.tone}`}>{service.icon}</span><h3>{service.title}</h3><p>{service.detail}</p><ArrowRightIcon /></Card></a>)}</Grid></Container></Section>
-    <Section tone="subtle" spacing="lg"><Container><div className="trust-panel"><div><span className="eyebrow">The BREERO standard</span><h2>Good people.<br />Great work.<br /><em>Zero guesswork.</em></h2><p>We carefully select every professional, make pricing clear before you book, and stay close until the job is done.</p><Button variant="outline" trailingIcon={<ArrowRightIcon />}>How BREERO works</Button></div><div className="trust-list"><article><span>01</span><div><ShieldIcon /><h3>Carefully vetted</h3><p>Identity, experience and quality checks on every professional.</p></div></article><article><span>02</span><div><CheckIcon /><h3>Price confidence</h3><p>Know what you will pay before anyone rings the doorbell.</p></div></article><article><span>03</span><div><StarIcon /><h3>Here if you need us</h3><p>Support from a real person before, during and after every booking.</p></div></article></div></div></Container></Section>
-  </>;
+  return (
+    <div>
+      <h1>BREERO</h1>
+      <p>Home services. One booking.</p>
+    </div>
+  );
 }
