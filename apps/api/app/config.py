@@ -19,10 +19,19 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     geocoding_api_key: str = ""
+    geocoding_provider: str = "geoapify"
     odoo_url: str = ""
     odoo_database: str = ""
     odoo_username: str = ""
     odoo_api_key: str = ""
+    payout_provider: str = ""
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    sms_provider: str = ""
+    sms_api_key: str = ""
     cors_origins: str = (
         "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3003"
     )

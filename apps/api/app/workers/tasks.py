@@ -5,7 +5,8 @@ from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.domains.booking.models import Booking, BookingStatus
-from app.domains.common.outbox import EventStatus, IntegrationEvent
+from app.domains.common.outbox_service import OutboxService
+from app.domains.finance.service import FinanceService
 from app.integrations.email import EmailAdapter
 from app.integrations.odoo import OdooAdapter
 from app.workers.celery_app import celery_app
@@ -44,19 +45,6 @@ def expire_bookings() -> int:
 def publish_outbox() -> int:
     async def run() -> int:
         async with SessionLocal() as session:
-            events = list(
-                (
-                    await session.scalars(
-                        select(IntegrationEvent)
-                        .where(
-                            IntegrationEvent.status == EventStatus.PENDING,
-                            IntegrationEvent.available_at <= datetime.now(UTC),
-                        )
-                        .with_for_update(skip_locked=True)
-                        .limit(50)
-                    )
-                ).all()
-            )
             adapter = OdooAdapter()
             email = EmailAdapter()
             notification_events = {
@@ -66,22 +54,42 @@ def publish_outbox() -> int:
                 "payment_captured",
                 "refund_created",
             }
-            for event in events:
-                event.status = EventStatus.PROCESSING
-                event.attempts += 1
-                try:
-                    if event.event_type in notification_events:
-                        await email.send(event.event_type, event.payload)
-                    else:
-                        await adapter.execute("breero.event", "create", [[event.payload]])
-                    event.status = EventStatus.DELIVERED
-                    event.delivered_at = datetime.now(UTC)
-                except Exception as exc:
-                    event.status = (
-                        EventStatus.FAILED if event.attempts >= 5 else EventStatus.PENDING
-                    )
-                    event.last_error = str(exc)[:2000]
-            await session.commit()
-            return len(events)
+
+            async def deliver(event):
+                if event.event_type in notification_events:
+                    await email.send(event.event_type, event.payload)
+                    return
+                aggregate = event.aggregate_type.lower()
+                if aggregate in {"customer", "vendor", "booking", "job", "payment", "payout"}:
+                    await adapter.upsert(aggregate, event.payload)
+                else:
+                    await adapter.execute("breero.event", "create", [[event.payload]])
+
+            return await OutboxService(session).process(deliver)
+
+    return asyncio.run(run())
+
+
+@celery_app.task(name="app.workers.tasks.release_earnings")
+def release_earnings() -> int:
+    async def run() -> int:
+        async with SessionLocal() as session:
+            return await FinanceService(session).release_eligible()
+
+    return asyncio.run(run())
+
+
+@celery_app.task(name="app.workers.tasks.generate_weekly_payout_candidates")
+def generate_weekly_payout_candidates() -> str:
+    async def run() -> str:
+        async with SessionLocal() as session:
+            try:
+                batch = await FinanceService(session).create_batch("USD")
+                return str(batch.id)
+            except Exception as exc:
+                # A no-candidate week is expected; unexpected task failures remain visible in Celery.
+                if getattr(exc, "status_code", None) == 409:
+                    return "no_candidates"
+                raise
 
     return asyncio.run(run())

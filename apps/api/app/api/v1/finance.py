@@ -8,10 +8,39 @@ from app.domains.auth.dependencies import require_roles
 from app.domains.auth.models import User, UserRole
 from app.domains.finance.models import EarningStatus
 from app.domains.finance.repository import FinanceRepository
-from app.domains.finance.schemas import EarningRead, PayoutBatchCreate, PayoutBatchRead
+from app.domains.finance.schemas import (
+    CompensationPlanCreate,
+    CompensationPlanRead,
+    EarningAdjustmentCreate,
+    EarningRead,
+    PayoutBatchCreate,
+    PayoutBatchRead,
+)
 from app.domains.finance.service import FinanceService
 
 router = APIRouter()
+
+
+@router.post("/compensation-plans", response_model=CompensationPlanRead, status_code=201)
+async def create_compensation_plan(
+    payload: CompensationPlanCreate,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.finance, UserRole.admin)),
+):
+    return await FinanceService(session).create_compensation_plan(payload, user.id)
+
+
+@router.post("/earnings/{earning_id}/adjustments", status_code=201)
+async def adjust_earning(
+    earning_id: uuid.UUID,
+    payload: EarningAdjustmentCreate,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.finance, UserRole.admin)),
+):
+    return await FinanceService(session).adjust_earning(
+        earning_id, payload.amount_minor, payload.adjustment_type, payload.reason,
+        payload.idempotency_key, user.id,
+    )
 
 
 @router.get("/earnings", response_model=list[EarningRead])
@@ -31,7 +60,7 @@ async def create_batch(
     session: AsyncSession = Depends(get_db),
     _: User = Depends(require_roles(UserRole.finance, UserRole.admin)),
 ):
-    return await FinanceService(session).create_batch(payload.currency, payload.vendor_id)
+    return await FinanceService(session).create_batch(payload.currency, payload.vendor_id, _.id)
 
 
 @router.post("/payout-batches/{batch_id}/approve", response_model=PayoutBatchRead)
@@ -43,10 +72,10 @@ async def approve_batch(
     return await FinanceService(session).approve_batch(batch_id, user.id)
 
 
-@router.post("/payout-batches/{batch_id}/process", response_model=PayoutBatchRead)
-async def process_batch(
+@router.post("/payout-batches/{batch_id}/submit", response_model=PayoutBatchRead)
+async def submit_batch(
     batch_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    _: User = Depends(require_roles(UserRole.finance, UserRole.admin)),
+    user: User = Depends(require_roles(UserRole.finance, UserRole.admin)),
 ):
-    return await FinanceService(session).mark_processing(batch_id)
+    return await FinanceService(session).submit_batch(batch_id, user.id)

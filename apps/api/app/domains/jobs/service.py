@@ -1,6 +1,5 @@
 import uuid
 from datetime import UTC, datetime
-from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -8,7 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.booking.models import Booking
 from app.domains.common.outbox import EventStatus, IntegrationEvent
-from app.domains.finance.models import EarningStatus, VendorEarning
+from app.domains.finance.models import VendorEarning
+from app.domains.finance.service import FinanceService
 
 from .models import Job, JobEvent, JobStatus, WorkRequest, WorkRequestStatus
 from .repository import JobRepository
@@ -128,22 +128,9 @@ class JobService:
             booking = await self.session.get(Booking, job.booking_id)
             if not booking:
                 raise HTTPException(409, "Job booking is unavailable")
-            gross = int(
-                (booking.total_amount * Decimal("70")).quantize(
-                    Decimal("1"), rounding=ROUND_HALF_UP
-                )
-            )
-            self.session.add(
-                VendorEarning(
-                    vendor_id=job.vendor_id,
-                    job_id=job.id,
-                    gross_minor=gross,
-                    fee_minor=0,
-                    net_minor=gross,
-                    currency=booking.currency,
-                    status=EarningStatus.PENDING,
-                    available_at=datetime.now(UTC),
-                )
+            gross = int(booking.total_amount * 100)
+            await FinanceService(self.session).recognize_earning(
+                job, gross_minor=gross, currency=booking.currency
             )
         self.session.add(
             IntegrationEvent(
