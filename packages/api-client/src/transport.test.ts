@@ -1,0 +1,36 @@
+import { describe, expect, it, vi } from "vitest";
+import { ApiError } from "./errors";
+import { ApiTransport } from "./transport";
+
+const json = (body: unknown, init: ResponseInit = {}) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json", ...init.headers }, ...init });
+
+describe("ApiTransport", () => {
+  it("adds bearer auth and returns typed JSON", async () => {
+    const fetcher = vi.fn(async (_url: URL | RequestInfo, init?: RequestInit) => {
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer token");
+      return json({ ok: true });
+    });
+    const result = await new ApiTransport({ baseUrl: "https://api.example.test/api/v1", fetch: fetcher as typeof fetch, getAccessToken: () => "token" }).request<{ ok: boolean }>("services");
+    expect(result.ok).toBe(true);
+  });
+
+  it("normalizes API domain errors and preserves request IDs", async () => {
+    const fetcher = vi.fn(async () => json({ error: { code: "slot_unavailable", message: "Choose another slot" } }, { status: 409, headers: { "x-request-id": "req-7" } }));
+    await expect(new ApiTransport({ baseUrl: "https://api.example.test/api/v1", fetch: fetcher as typeof fetch }).request("bookings", { method: "POST" })).rejects.toMatchObject({ kind: "conflict", code: "slot_unavailable", requestId: "req-7" });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries safe reads but never retries writes", async () => {
+    const read = vi.fn().mockResolvedValueOnce(json({}, { status: 503 })).mockResolvedValueOnce(json({ recovered: true }));
+    await expect(new ApiTransport({ baseUrl: "https://api.example.test", fetch: read as typeof fetch }).request("services")).resolves.toEqual({ recovered: true });
+    expect(read).toHaveBeenCalledTimes(2);
+    const write = vi.fn(async () => { throw new TypeError("offline"); });
+    await expect(new ApiTransport({ baseUrl: "https://api.example.test", fetch: write as typeof fetch }).request("bookings", { method: "POST", body: {} })).rejects.toBeInstanceOf(ApiError);
+    expect(write).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports timeouts consistently", async () => {
+    const fetcher = vi.fn((_url: URL | RequestInfo, init?: RequestInit) => new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")))));
+    await expect(new ApiTransport({ baseUrl: "https://api.example.test", timeoutMs: 5, fetch: fetcher as typeof fetch }).request("slow", { retry: false })).rejects.toMatchObject({ kind: "timeout" });
+  });
+});
