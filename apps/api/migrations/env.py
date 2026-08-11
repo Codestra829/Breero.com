@@ -2,7 +2,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import pool
+from sqlalchemy import pool, text
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.config import settings
@@ -24,15 +24,16 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
+extension_owned_tables = {"spatial_ref_sys"}
 
 
 def include_object(object_, name, type_, reflected, compare_to):
     """Route semantic constraint/index drift to the name-independent contract checker.
 
     Alembic remains authoritative for tables, columns, types, nullability, and defaults.
-    PostGIS's extension-owned table is the only table excluded.
+    Tables PostgreSQL records as extension-owned are excluded; application tables are not.
     """
-    if type_ == "table" and name == "spatial_ref_sys":
+    if type_ == "table" and reflected and name in extension_owned_tables:
         return False
     if type_ in {"index", "unique_constraint", "foreign_key_constraint", "check_constraint"}:
         return False
@@ -53,6 +54,18 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection) -> None:
+    extension_owned_tables.update(
+        connection.execute(
+            text(
+                """SELECT c.relname
+                FROM pg_depend d
+                JOIN pg_class c ON c.oid = d.objid
+                WHERE d.refclassid = 'pg_extension'::regclass
+                  AND d.classid = 'pg_class'::regclass
+                  AND d.deptype = 'e'"""
+            )
+        ).scalars()
+    )
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
