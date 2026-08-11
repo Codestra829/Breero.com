@@ -69,7 +69,9 @@ async def logout_all(
 
 @router.post("/password/forgot", response_model=MessageResponse)
 async def forgot(
-    data: ForgotPasswordRequest, session: Annotated[AsyncSession, Depends(get_db)]
+    data: ForgotPasswordRequest,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[None, Depends(rate_limit("password-forgot", 5, 300))],
 ) -> MessageResponse:
     await AuthService(session).forgot_password(str(data.email))
     return MessageResponse(message="If the account exists, reset instructions have been sent")
@@ -77,7 +79,9 @@ async def forgot(
 
 @router.post("/password/reset", response_model=MessageResponse)
 async def reset(
-    data: ResetPasswordRequest, session: Annotated[AsyncSession, Depends(get_db)]
+    data: ResetPasswordRequest,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[None, Depends(rate_limit("password-reset", 10, 300))],
 ) -> MessageResponse:
     await AuthService(session).reset_password(data.token, data.new_password)
     return MessageResponse(message="Password reset")

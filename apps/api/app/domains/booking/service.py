@@ -1,3 +1,5 @@
+import hashlib
+import json
 import secrets
 from datetime import UTC, datetime, timedelta
 
@@ -117,8 +119,17 @@ class BookingService:
         self.availability = AvailabilityService(session)
 
     async def create(self, payload: BookingCreateRequest, idempotency_key: str) -> Booking:
+        request_hash = hashlib.sha256(
+            json.dumps(payload.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
         existing = await self.repository.booking_by_idempotency_key(idempotency_key)
         if existing:
+            if existing.idempotency_request_hash not in {"legacy", request_hash}:
+                raise DomainError(
+                    "IDEMPOTENCY_CONFLICT",
+                    "The idempotency key was already used for a different booking request",
+                    409,
+                )
             return existing
         if payload.window.start >= payload.window.end or payload.window.start <= datetime.now(UTC):
             raise DomainError("INVALID_BOOKING_WINDOW", "Booking window must be in the future", 422)
@@ -179,6 +190,7 @@ class BookingService:
         booking = Booking(
             reference=f"BR-{secrets.token_hex(5).upper()}",
             idempotency_key=idempotency_key,
+            idempotency_request_hash=request_hash,
             customer_id=customer.id,
             address_id=address.id,
             legal_entity_id=entity.id,
