@@ -16,6 +16,7 @@ node_modules/
 .next/
 dist/
 .turbo/
+*.tsbuildinfo
 
 # IDE / OS
 .DS_Store
@@ -26,3 +27,5 @@ dist/
 coverage/
 .coverage
 htmlcov/
+test-results/
+playwright-report/
