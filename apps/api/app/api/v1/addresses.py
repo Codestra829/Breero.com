@@ -1,19 +1,15 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.session import get_db
+from app.domains.booking.schemas import AddressValidateRequest, AddressValidationResponse
+from app.domains.booking.service import AddressService
 
 router = APIRouter()
 
 
-class AddressValidateRequest(BaseModel):
-    address: str
-
-
-@router.post("/validate")
-async def validate_address(payload: AddressValidateRequest) -> dict:
-    return {
-        "serviceable": False,
-        "formatted_address": payload.address,
-        "address_id": None,
-        "service_area_id": None,
-        "legal_entity_code": None,
-    }
+@router.post("/validate", response_model=AddressValidationResponse)
+async def validate_address(
+    payload: AddressValidateRequest, session: AsyncSession = Depends(get_db)
+) -> AddressValidationResponse:
+    return await AddressService(session).validate(payload)

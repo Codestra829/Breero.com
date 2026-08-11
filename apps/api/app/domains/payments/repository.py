@@ -57,11 +57,21 @@ class PaymentRepository:
         return event is not None
 
     async def add_event(
-        self, *, provider: str, event_id: str, event_type: str,
-        payload: dict[str, Any], payment_id: uuid.UUID | None,
+        self,
+        *,
+        provider: str,
+        event_id: str,
+        event_type: str,
+        payload: dict[str, Any],
+        payment_id: uuid.UUID | None,
     ) -> None:
-        self.session.add(PaymentEvent(
-            provider=provider, provider_event_id=event_id, event_type=event_type,
-            payload=payload, payment_id=payment_id,
-        ))
+        self.session.add(
+            PaymentEvent(
+                provider=provider,
+                provider_event_id=event_id,
+                event_type=event_type,
+                payload=payload,
+                payment_id=payment_id,
+            )
+        )
         await self.session.flush()

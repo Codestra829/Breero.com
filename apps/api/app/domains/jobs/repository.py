@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import uuid
 
 from sqlalchemy import select
@@ -18,7 +19,7 @@ class JobRepository:
             query = query.with_for_update()
         return await self.session.scalar(query)
 
-    async def list(self, *, status=None, vendor_id=None, worker_id=None, limit=100) -> list[Job]:
+    async def list(self, *, status=None, vendor_id=None, worker_id=None, limit=100) -> builtins.list[Job]:
         query = select(Job).order_by(Job.scheduled_start).limit(min(limit, 200))
         if status:
             query = query.where(Job.status == status)
@@ -26,7 +27,7 @@ class JobRepository:
             query = query.where(Job.vendor_id == vendor_id)
         if worker_id:
             query = query.where(Job.worker_id == worker_id)
-        return list((await self.session.scalars(query)).all())
+        return builtins.list((await self.session.scalars(query)).all())
 
     def add_event(self, event: JobEvent) -> None:
         self.session.add(event)
@@ -37,8 +38,8 @@ class JobRepository:
             query = query.with_for_update()
         return await self.session.scalar(query)
 
-    async def list_work_requests(self, job_id: uuid.UUID) -> list[WorkRequest]:
+    async def list_work_requests(self, job_id: uuid.UUID) -> builtins.list[WorkRequest]:
         result = await self.session.scalars(
             select(WorkRequest).where(WorkRequest.job_id == job_id).order_by(WorkRequest.created_at)
         )
-        return list(result.all())
+        return builtins.list(result.all())

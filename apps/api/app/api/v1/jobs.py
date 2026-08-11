@@ -19,7 +19,7 @@ from app.domains.jobs.schemas import (
     WorkRequestRead,
 )
 from app.domains.jobs.service import JobService
-from app.domains.workforce.models import Worker
+from app.domains.workforce.models import Vendor, Worker
 
 router = APIRouter()
 
@@ -51,7 +51,7 @@ async def list_jobs(
 async def get_job(
     job_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    _: User = Depends(
+    user: User = Depends(
         require_roles(
             UserRole.operations, UserRole.admin, UserRole.vendor_admin, UserRole.technician
         )
@@ -62,6 +62,14 @@ async def get_job(
     job = await JobRepository(session).get(job_id)
     if not job:
         raise HTTPException(404, "Job not found")
+    if user.role == UserRole.technician:
+        worker = await worker_for_user(session, user.id)
+        if job.worker_id != worker.id:
+            raise HTTPException(403, "Technician is not assigned to this job")
+    elif user.role == UserRole.vendor_admin:
+        vendor = await session.scalar(select(Vendor).where(Vendor.owner_user_id == user.id))
+        if not vendor or job.vendor_id != vendor.id:
+            raise HTTPException(403, "Job belongs to another vendor")
     return job
 
 
@@ -95,7 +103,6 @@ async def technician_command(
         "arrive": JobStatus.ON_SITE,
         "diagnose": JobStatus.DIAGNOSING,
         "start": JobStatus.IN_PROGRESS,
-        "complete": JobStatus.COMPLETED,
     }
     if command not in targets:
         raise HTTPException(422, "Unknown technician command")
@@ -143,7 +150,7 @@ async def create_work_request(
 async def list_work_requests(
     job_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-    _: User = Depends(
+    user: User = Depends(
         require_roles(
             UserRole.operations,
             UserRole.admin,
@@ -153,6 +160,23 @@ async def list_work_requests(
         )
     ),
 ):
+    from fastapi import HTTPException
+
+    job = await JobRepository(session).get(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    if user.role == UserRole.customer:
+        customer = await session.scalar(select(Customer).where(Customer.email == user.email))
+        if not customer or job.customer_id != customer.id:
+            raise HTTPException(403, "Job belongs to another customer")
+    elif user.role == UserRole.technician:
+        worker = await worker_for_user(session, user.id)
+        if job.worker_id != worker.id:
+            raise HTTPException(403, "Technician is not assigned to this job")
+    elif user.role == UserRole.vendor_admin:
+        vendor = await session.scalar(select(Vendor).where(Vendor.owner_user_id == user.id))
+        if not vendor or job.vendor_id != vendor.id:
+            raise HTTPException(403, "Job belongs to another vendor")
     return await JobRepository(session).list_work_requests(job_id)
 
 
@@ -165,7 +189,7 @@ async def decide_work_request(
 ):
     from fastapi import HTTPException
 
-    customer = await session.scalar(select(Customer).where(Customer.user_id == user.id))
+    customer = await session.scalar(select(Customer).where(Customer.email == user.email))
     if not customer:
         raise HTTPException(403, "Account is not linked to a customer")
     return await JobService(session).decide_work_request(request_id, payload.approve, customer.id)

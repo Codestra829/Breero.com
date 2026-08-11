@@ -25,6 +25,13 @@ API: `http://localhost:8000`
 Docs: `http://localhost:8000/docs`
 Health: `http://localhost:8000/health`
 
+Apply migrations and load deterministic development data with:
+
+```bash
+docker compose run --rm api alembic upgrade head
+docker compose run --rm api python -m app.seed
+```
+
 ## First vertical slice
 
 1. `POST /api/v1/addresses/validate`
@@ -33,4 +40,16 @@ Health: `http://localhost:8000/health`
 4. `POST /api/v1/availability/search`
 5. `POST /api/v1/bookings`
 
-The current endpoints are scaffolds; domain services, repositories, persistence models, migrations and tests are the next implementation step.
+## Implemented domains
+
+- JWT authentication and server-side customer, vendor, technician, operations, finance and admin RBAC
+- catalog, dynamic questions, PostGIS service areas, availability and guest booking
+- Stripe payment intents, verified/idempotent webhooks and booking-to-job creation
+- vendors, workers, matching, offers, assignments and controlled job transitions
+- technician diagnostics, additional-work quotes, customer decisions and completion evidence
+- vendor earnings, finance-only payout batches and approval
+- Celery expiry/outbox workers plus a retryable Odoo JSON-RPC adapter
+
+The generated OpenAPI document at `/openapi.json` is the canonical frontend contract. Provider
+credentials are optional for local catalog/booking development and required only when exercising
+their adapters.

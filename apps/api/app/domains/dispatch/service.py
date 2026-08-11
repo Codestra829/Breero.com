@@ -33,7 +33,7 @@ class DispatchService:
         candidates = await self.repo.candidate_workers([], limit=10)
         if not candidates:
             if job.status != JobStatus.MATCHING:
-                previous = job.status
+                previous: JobStatus = job.status
                 job.status = JobStatus.MATCHING
                 self.jobs.add_event(
                     JobEvent(

@@ -1,14 +1,22 @@
 import uuid
+from typing import NoReturn
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.domains.payments.exceptions import (
-    IdempotencyConflict, InvalidPaymentState, InvalidWebhook, PaymentError, PaymentNotFound,
+    IdempotencyConflict,
+    InvalidPaymentState,
+    InvalidWebhook,
+    PaymentError,
+    PaymentNotFound,
 )
 from app.domains.payments.schemas import (
-    CaptureRequest, PaymentIntentCreate, PaymentView, WebhookResult,
+    CaptureRequest,
+    PaymentIntentCreate,
+    PaymentView,
+    WebhookResult,
 )
 from app.domains.payments.service import PaymentService
 from app.integrations.stripe import StripeAdapter
@@ -26,7 +34,7 @@ def get_service(
     return PaymentService(db, provider)
 
 
-def _raise_payment_error(exc: PaymentError) -> None:
+def _raise_payment_error(exc: PaymentError) -> NoReturn:
     if isinstance(exc, PaymentNotFound):
         code = status.HTTP_404_NOT_FOUND
     elif isinstance(exc, IdempotencyConflict):
@@ -62,7 +70,8 @@ async def get_payment(
 
 @router.post("/{payment_id}/capture", response_model=PaymentView)
 async def capture_payment(
-    payment_id: uuid.UUID, payload: CaptureRequest,
+    payment_id: uuid.UUID,
+    payload: CaptureRequest,
     idempotency_key: str = Header(min_length=8, max_length=255, alias="Idempotency-Key"),
     service: PaymentService = Depends(get_service),
 ) -> PaymentView:
@@ -74,7 +83,8 @@ async def capture_payment(
 
 @router.post("/webhooks/stripe", response_model=WebhookResult)
 async def stripe_webhook(
-    request: Request, stripe_signature: str = Header(alias="Stripe-Signature"),
+    request: Request,
+    stripe_signature: str = Header(alias="Stripe-Signature"),
     service: PaymentService = Depends(get_service),
 ) -> WebhookResult:
     try:

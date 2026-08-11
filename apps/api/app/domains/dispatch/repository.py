@@ -1,7 +1,9 @@
 import uuid
 from datetime import datetime
+from typing import cast
 
 from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.workforce.models import Vendor, VendorStatus, Worker, WorkerStatus
@@ -48,4 +50,4 @@ class DispatchRepository:
             .where(DispatchOffer.status == OfferStatus.PENDING, DispatchOffer.expires_at <= now)
             .values(status=OfferStatus.EXPIRED)
         )
-        return result.rowcount or 0
+        return cast(CursorResult, result).rowcount or 0

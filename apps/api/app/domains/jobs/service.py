@@ -2,7 +2,12 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.domains.booking.models import Booking
+from app.domains.common.outbox import EventStatus, IntegrationEvent
+from app.domains.finance.models import EarningStatus, VendorEarning
 
 from .models import Job, JobEvent, JobStatus, WorkRequest, WorkRequestStatus
 from .repository import JobRepository
@@ -45,11 +50,14 @@ class JobService:
             raise HTTPException(
                 409, f"Cannot transition job from {job.status.value} to {target.value}"
             )
+        if target == JobStatus.COMPLETED:
+            self._validate_completion(job)
         previous = job.status
         job.status = target
         job.version += 1
         if target == JobStatus.COMPLETED:
             job.completed_at = datetime.now(UTC)
+            await self._record_completion_effects(job)
         self.repo.add_event(
             JobEvent(
                 job_id=job.id,
@@ -82,11 +90,14 @@ class JobService:
             )
         previous = job.status
         setattr(job, notes_field, notes)
+        if target == JobStatus.COMPLETED:
+            self._validate_completion(job)
         if target != job.status:
             job.status = target
             job.version += 1
             if target == JobStatus.COMPLETED:
                 job.completed_at = datetime.now(UTC)
+                await self._record_completion_effects(job)
             self.repo.add_event(
                 JobEvent(
                     job_id=job.id,
@@ -100,6 +111,46 @@ class JobService:
         await self.session.commit()
         await self.session.refresh(job)
         return job
+
+    @staticmethod
+    def _validate_completion(job: Job) -> None:
+        if not job.vendor_id or not job.worker_id:
+            raise HTTPException(409, "Job must be assigned before completion")
+        if not job.diagnostic_notes or not job.completion_notes:
+            raise HTTPException(409, "Diagnostic and completion notes are required")
+
+    async def _record_completion_effects(self, job: Job) -> None:
+        existing = await self.session.scalar(
+            select(VendorEarning).where(VendorEarning.job_id == job.id)
+        )
+        if not existing:
+            booking = await self.session.get(Booking, job.booking_id)
+            if not booking:
+                raise HTTPException(409, "Job booking is unavailable")
+            gross = int(booking.total_amount * 100 * 70 / 100)
+            self.session.add(
+                VendorEarning(
+                    vendor_id=job.vendor_id,
+                    job_id=job.id,
+                    gross_minor=gross,
+                    fee_minor=0,
+                    net_minor=gross,
+                    currency=booking.currency,
+                    status=EarningStatus.PENDING,
+                    available_at=datetime.now(UTC),
+                )
+            )
+        self.session.add(
+            IntegrationEvent(
+                aggregate_type="job",
+                aggregate_id=job.id,
+                event_type="job.completed",
+                payload={"job_id": str(job.id), "vendor_id": str(job.vendor_id)},
+                status=EventStatus.PENDING,
+                attempts=0,
+                available_at=datetime.now(UTC),
+            )
+        )
 
     async def create_work_request(
         self, job_id: uuid.UUID, payload: WorkRequestCreate, worker_id: uuid.UUID

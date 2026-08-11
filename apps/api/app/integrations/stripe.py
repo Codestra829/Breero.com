@@ -14,12 +14,20 @@ from app.domains.payments.schemas import ProviderIntent
 
 class PaymentProvider(Protocol):
     async def create_intent(
-        self, *, amount_minor: int, currency: str, capture_method: str,
-        metadata: dict[str, str], idempotency_key: str,
+        self,
+        *,
+        amount_minor: int,
+        currency: str,
+        capture_method: str,
+        metadata: dict[str, str],
+        idempotency_key: str,
     ) -> ProviderIntent: ...
 
     async def capture_intent(
-        self, provider_payment_id: str, *, amount_minor: int | None,
+        self,
+        provider_payment_id: str,
+        *,
+        amount_minor: int | None,
         idempotency_key: str,
     ) -> ProviderIntent: ...
 
@@ -46,8 +54,10 @@ class StripeAdapter:
             raise PaymentError("Stripe is not configured")
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(
-                f"{self.api_base}{path}", data=data,
-                auth=(self.secret_key, ""), headers={"Idempotency-Key": idempotency_key},
+                f"{self.api_base}{path}",
+                data=data,
+                auth=(self.secret_key, ""),
+                headers={"Idempotency-Key": idempotency_key},
             )
         if response.is_error:
             try:
@@ -58,19 +68,29 @@ class StripeAdapter:
         return response.json()
 
     async def create_intent(
-        self, *, amount_minor: int, currency: str, capture_method: str,
-        metadata: dict[str, str], idempotency_key: str,
+        self,
+        *,
+        amount_minor: int,
+        currency: str,
+        capture_method: str,
+        metadata: dict[str, str],
+        idempotency_key: str,
     ) -> ProviderIntent:
         data: dict[str, Any] = {
-            "amount": amount_minor, "currency": currency,
-            "capture_method": capture_method, "automatic_payment_methods[enabled]": "true",
+            "amount": amount_minor,
+            "currency": currency,
+            "capture_method": capture_method,
+            "automatic_payment_methods[enabled]": "true",
         }
         data.update({f"metadata[{key}]": value for key, value in metadata.items()})
         raw = await self._post("/payment_intents", data, idempotency_key)
         return self._to_intent(raw)
 
     async def capture_intent(
-        self, provider_payment_id: str, *, amount_minor: int | None,
+        self,
+        provider_payment_id: str,
+        *,
+        amount_minor: int | None,
         idempotency_key: str,
     ) -> ProviderIntent:
         data = {"amount_to_capture": amount_minor} if amount_minor is not None else {}
@@ -109,7 +129,9 @@ class StripeAdapter:
     @staticmethod
     def _to_intent(raw: dict[str, Any]) -> ProviderIntent:
         return ProviderIntent(
-            id=raw["id"], status=raw.get("status", ""),
-            client_secret=raw.get("client_secret"), amount_received=raw.get("amount_received", 0),
+            id=raw["id"],
+            status=raw.get("status", ""),
+            client_secret=raw.get("client_secret"),
+            amount_received=raw.get("amount_received", 0),
             raw=raw,
         )

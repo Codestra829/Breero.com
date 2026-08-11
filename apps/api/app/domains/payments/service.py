@@ -1,10 +1,15 @@
 import hashlib
 import json
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domains.booking.models import Booking, BookingStatus
+from app.domains.common.outbox import EventStatus, IntegrationEvent
+from app.domains.jobs.models import Job, JobEvent, JobStatus
 from app.integrations.stripe import PaymentProvider
 
 from .exceptions import IdempotencyConflict, InvalidPaymentState, PaymentNotFound
@@ -44,24 +49,44 @@ class PaymentService:
                 raise PaymentNotFound("Stored idempotent payment no longer exists")
             return self._view(payment)
 
+        booking = await self.session.scalar(
+            select(Booking).where(Booking.id == payload.booking_id).with_for_update()
+        )
+        if not booking:
+            raise PaymentNotFound("Booking not found")
+        expected_minor = int(booking.total_amount * 100)
+        if (
+            payload.amount_minor != expected_minor
+            or payload.currency.upper() != booking.currency.upper()
+        ):
+            raise InvalidPaymentState("Payment amount or currency does not match the booking")
+        if booking.status != BookingStatus.PENDING_PAYMENT:
+            raise InvalidPaymentState("Booking is not awaiting payment")
+
         record = IdempotencyRecord(
             operation="create_intent", idempotency_key=key, request_hash=request_hash
         )
         await self.repo.add_idempotency(record)
         provider_intent = await self.provider.create_intent(
-            amount_minor=payload.amount_minor, currency=payload.currency,
+            amount_minor=payload.amount_minor,
+            currency=payload.currency,
             capture_method=payload.capture_method,
             metadata={**payload.metadata, "booking_id": str(payload.booking_id)},
             idempotency_key=key,
         )
-        payment = await self.repo.add(Payment(
-            booking_id=payload.booking_id, provider_payment_id=provider_intent.id,
-            status=STRIPE_STATUS.get(provider_intent.status, PaymentStatus.CREATED),
-            amount_minor=payload.amount_minor, currency=payload.currency,
-            captured_amount_minor=provider_intent.amount_received,
-            provider_client_secret=provider_intent.client_secret,
-            metadata_=payload.metadata,
-        ))
+        payment = await self.repo.add(
+            Payment(
+                booking_id=payload.booking_id,
+                provider_payment_id=provider_intent.id,
+                provider="stripe",
+                status=STRIPE_STATUS.get(provider_intent.status, PaymentStatus.CREATED),
+                amount_minor=payload.amount_minor,
+                currency=payload.currency,
+                captured_amount_minor=provider_intent.amount_received,
+                provider_client_secret=provider_intent.client_secret,
+                metadata_=payload.metadata,
+            )
+        )
         record.response_code = 201
         record.response_body = {"id": str(payment.id)}
         await self.session.commit()
@@ -73,7 +98,9 @@ class PaymentService:
             raise PaymentNotFound("Payment not found")
         return self._view(payment)
 
-    async def capture(self, payment_id: uuid.UUID, amount_minor: int | None, key: str) -> PaymentView:
+    async def capture(
+        self, payment_id: uuid.UUID, amount_minor: int | None, key: str
+    ) -> PaymentView:
         payment = await self.repo.get(payment_id, lock=True)
         if payment is None:
             raise PaymentNotFound("Payment not found")
@@ -88,6 +115,8 @@ class PaymentService:
         )
         payment.status = STRIPE_STATUS.get(intent.status, payment.status)
         payment.captured_amount_minor = intent.amount_received
+        if payment.status == PaymentStatus.CAPTURED:
+            await self._confirm_booking_and_create_job(payment)
         await self.session.commit()
         return self._view(payment)
 
@@ -99,7 +128,9 @@ class PaymentService:
             return event_id, True
         obj: dict[str, Any] = event.get("data", {}).get("object", {})
         provider_id = obj.get("id") if obj.get("object") == "payment_intent" else None
-        payment = await self.repo.get_by_provider_id(provider_id, lock=True) if provider_id else None
+        payment = (
+            await self.repo.get_by_provider_id(provider_id, lock=True) if provider_id else None
+        )
         if payment:
             if event_type == "payment_intent.payment_failed":
                 payment.status = PaymentStatus.FAILED
@@ -111,12 +142,64 @@ class PaymentService:
                 payment.captured_amount_minor = obj.get(
                     "amount_received", payment.captured_amount_minor
                 )
+                if payment.status == PaymentStatus.CAPTURED:
+                    await self._confirm_booking_and_create_job(payment)
         await self.repo.add_event(
-            provider="stripe", event_id=event_id, event_type=event_type,
-            payload=event, payment_id=payment.id if payment else None,
+            provider="stripe",
+            event_id=event_id,
+            event_type=event_type,
+            payload=event,
+            payment_id=payment.id if payment else None,
         )
         await self.session.commit()
         return event_id, False
+
+    async def _confirm_booking_and_create_job(self, payment: Payment) -> None:
+        booking = await self.session.scalar(
+            select(Booking).where(Booking.id == payment.booking_id).with_for_update()
+        )
+        if not booking:
+            raise PaymentNotFound("Payment references an unknown booking")
+        if booking.status == BookingStatus.CONFIRMED:
+            return
+        if booking.status != BookingStatus.PENDING_PAYMENT:
+            raise InvalidPaymentState("Booking cannot be confirmed from its current state")
+        booking.status = BookingStatus.CONFIRMED
+        job = await self.session.scalar(select(Job).where(Job.booking_id == booking.id))
+        if not job:
+            job = Job(
+                booking_id=booking.id,
+                customer_id=booking.customer_id,
+                service_id=booking.service_id,
+                address_id=booking.address_id,
+                status=JobStatus.CREATED,
+                scheduled_start=booking.window_start,
+                scheduled_end=booking.window_end,
+                version=1,
+            )
+            self.session.add(job)
+            await self.session.flush()
+            self.session.add(
+                JobEvent(
+                    job_id=job.id,
+                    from_status=None,
+                    to_status=JobStatus.CREATED,
+                    actor_id=None,
+                    actor_type="system",
+                    reason="payment_captured",
+                )
+            )
+            self.session.add(
+                IntegrationEvent(
+                    aggregate_type="job",
+                    aggregate_id=job.id,
+                    event_type="job.created",
+                    payload={"job_id": str(job.id), "booking_id": str(booking.id)},
+                    status=EventStatus.PENDING,
+                    attempts=0,
+                    available_at=datetime.now(UTC),
+                )
+            )
 
     @staticmethod
     def _hash(value: dict[str, Any]) -> str:
@@ -126,9 +209,15 @@ class PaymentService:
     @staticmethod
     def _view(payment: Payment) -> PaymentView:
         return PaymentView(
-            id=payment.id, booking_id=payment.booking_id, provider=payment.provider,
-            status=payment.status, amount_minor=payment.amount_minor, currency=payment.currency,
+            id=payment.id,
+            booking_id=payment.booking_id,
+            provider=payment.provider,
+            status=payment.status,
+            amount_minor=payment.amount_minor,
+            currency=payment.currency,
             captured_amount_minor=payment.captured_amount_minor,
-            client_secret=payment.provider_client_secret, failure_code=payment.failure_code,
-            created_at=payment.created_at, updated_at=payment.updated_at,
+            client_secret=payment.provider_client_secret,
+            failure_code=payment.failure_code,
+            created_at=payment.created_at,
+            updated_at=payment.updated_at,
         )
