@@ -9,7 +9,7 @@ from typing import Any, Protocol
 import httpx
 
 from app.domains.payments.exceptions import InvalidWebhook, PaymentError
-from app.domains.payments.schemas import ProviderIntent
+from app.domains.payments.schemas import ProviderIntent, ProviderRefund
 
 
 class PaymentProvider(Protocol):
@@ -32,6 +32,10 @@ class PaymentProvider(Protocol):
     ) -> ProviderIntent: ...
 
     def verify_webhook(self, body: bytes, signature: str) -> dict[str, Any]: ...
+
+    async def create_refund(
+        self, provider_payment_id: str, *, amount_minor: int, idempotency_key: str
+    ) -> ProviderRefund: ...
 
 
 @dataclass(slots=True)
@@ -98,6 +102,16 @@ class StripeAdapter:
             f"/payment_intents/{provider_payment_id}/capture", data, idempotency_key
         )
         return self._to_intent(raw)
+
+    async def create_refund(
+        self, provider_payment_id: str, *, amount_minor: int, idempotency_key: str
+    ) -> ProviderRefund:
+        raw = await self._post(
+            "/refunds",
+            {"payment_intent": provider_payment_id, "amount": amount_minor},
+            idempotency_key,
+        )
+        return ProviderRefund(id=raw["id"], status=raw.get("status", "pending"))
 
     def verify_webhook(self, body: bytes, signature: str) -> dict[str, Any]:
         if not self.webhook_secret:

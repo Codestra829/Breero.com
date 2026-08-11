@@ -6,6 +6,7 @@ from sqlalchemy import select
 from app.db.session import SessionLocal
 from app.domains.booking.models import Booking, BookingStatus
 from app.domains.common.outbox import EventStatus, IntegrationEvent
+from app.integrations.email import EmailAdapter
 from app.integrations.odoo import OdooAdapter
 from app.workers.celery_app import celery_app
 
@@ -57,11 +58,22 @@ def publish_outbox() -> int:
                 ).all()
             )
             adapter = OdooAdapter()
+            email = EmailAdapter()
+            notification_events = {
+                "email_verification_requested",
+                "password_reset_requested",
+                "password_changed",
+                "payment_captured",
+                "refund_created",
+            }
             for event in events:
                 event.status = EventStatus.PROCESSING
                 event.attempts += 1
                 try:
-                    await adapter.execute("breero.event", "create", [[event.payload]])
+                    if event.event_type in notification_events:
+                        await email.send(event.event_type, event.payload)
+                    else:
+                        await adapter.execute("breero.event", "create", [[event.payload]])
                     event.status = EventStatus.DELIVERED
                     event.delivered_at = datetime.now(UTC)
                 except Exception as exc:

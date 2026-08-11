@@ -12,6 +12,7 @@ from fastapi import HTTPException, status
 
 PBKDF2_ITERATIONS = 600_000
 TOKEN_TTL_SECONDS = 3600
+REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 3600
 
 
 def hash_password(password: str) -> str:
@@ -33,6 +34,14 @@ def verify_password(password: str, encoded: str) -> bool:
         return False
 
 
+def new_opaque_token() -> str:
+    return secrets.token_urlsafe(48)
+
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 def _b64(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
@@ -48,12 +57,21 @@ def _secret() -> bytes:
     return value.encode()
 
 
-def create_access_token(user_id: uuid.UUID, role: str, ttl: int = TOKEN_TTL_SECONDS) -> str:
+def create_access_token(
+    user_id: uuid.UUID, role: str, ttl: int = TOKEN_TTL_SECONDS, credential_version: int = 1
+) -> str:
     now = int(time.time())
     header = _b64(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
     payload = _b64(
         json.dumps(
-            {"sub": str(user_id), "role": role, "iat": now, "exp": now + ttl}, separators=(",", ":")
+            {
+                "sub": str(user_id),
+                "role": role,
+                "cv": credential_version,
+                "iat": now,
+                "exp": now + ttl,
+            },
+            separators=(",", ":"),
         ).encode()
     )
     message = f"{header}.{payload}"

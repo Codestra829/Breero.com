@@ -3,7 +3,18 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Enum, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,6 +29,12 @@ class PaymentStatus(str, enum.Enum):
     FAILED = "failed"
     CANCELED = "canceled"
     REFUNDED = "refunded"
+    PARTIALLY_REFUNDED = "partially_refunded"
+
+
+class PaymentPurpose(str, enum.Enum):
+    BOOKING_DIAGNOSTIC = "BOOKING_DIAGNOSTIC"
+    QUOTE_ADDITIONAL_WORK = "QUOTE_ADDITIONAL_WORK"
 
 
 class Payment(Base):
@@ -25,10 +42,20 @@ class Payment(Base):
     __table_args__ = (
         Index("ix_payments_booking_id_created_at", "booking_id", "created_at"),
         UniqueConstraint("provider", "provider_payment_id", name="uq_payments_provider_payment_id"),
+        CheckConstraint(
+            "(payment_purpose = 'BOOKING_DIAGNOSTIC' AND booking_id IS NOT NULL AND quote_id IS NULL) OR (payment_purpose = 'QUOTE_ADDITIONAL_WORK' AND booking_id IS NULL AND quote_id IS NOT NULL)",
+            name="valid_payment_reference",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    booking_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    booking_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    quote_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
+    payment_purpose: Mapped[PaymentPurpose] = mapped_column(
+        Enum(PaymentPurpose, name="payment_purpose"),
+        nullable=False,
+        default=PaymentPurpose.BOOKING_DIAGNOSTIC,
+    )
     provider: Mapped[str] = mapped_column(String(32), nullable=False, default="stripe")
     provider_payment_id: Mapped[str | None] = mapped_column(String(255))
     status: Mapped[PaymentStatus] = mapped_column(
@@ -50,6 +77,32 @@ class Payment(Base):
     )
 
 
+class RefundStatus(str, enum.Enum):
+    PENDING = "pending"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELED = "canceled"
+
+
+class Refund(Base):
+    __tablename__ = "refunds"
+    __table_args__ = (
+        UniqueConstraint("payment_id", "idempotency_key", name="uq_refunds_payment_key"),
+        UniqueConstraint("provider_refund_id", name="uq_refunds_provider_id"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    payment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("payments.id"), index=True)
+    amount_minor: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[RefundStatus] = mapped_column(
+        Enum(RefundStatus, name="refund_status"), nullable=False
+    )
+    provider_refund_id: Mapped[str | None] = mapped_column(String(255))
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(500))
+    created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class PaymentEvent(Base):
     __tablename__ = "payment_events"
     __table_args__ = (
@@ -62,9 +115,10 @@ class PaymentEvent(Base):
     event_type: Mapped[str] = mapped_column(String(120), nullable=False)
     payment_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    processed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="processing")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class IdempotencyRecord(Base):

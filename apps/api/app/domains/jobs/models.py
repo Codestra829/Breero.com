@@ -26,10 +26,13 @@ class JobStatus(str, enum.Enum):
 class WorkRequestStatus(str, enum.Enum):
     DRAFT = "DRAFT"
     SUBMITTED = "SUBMITTED"
+    PENDING_CUSTOMER = "PENDING_CUSTOMER"
+    APPROVED_PENDING_PAYMENT = "APPROVED_PENDING_PAYMENT"
     APPROVED = "APPROVED"
     DECLINED = "DECLINED"
     PAID = "PAID"
     CANCELLED = "CANCELLED"
+    EXPIRED = "EXPIRED"
 
 
 class Job(Base):

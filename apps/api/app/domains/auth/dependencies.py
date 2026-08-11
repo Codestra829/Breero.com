@@ -28,7 +28,7 @@ async def current_user(
     except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=401, detail="Invalid token") from exc
     user = await UserRepository(session).by_id(user_id)
-    if not user or not user.is_active:
+    if not user or not user.is_active or claims.get("cv", 1) != user.credential_version:
         raise HTTPException(status_code=401, detail="Invalid or inactive account")
     return user
 

@@ -173,6 +173,8 @@ class BookingService:
                 phone=payload.customer.phone,
             )
             await self.repository.add(customer)
+        if customer.user_id and address.customer_id is None:
+            address.customer_id = customer.id
         booking = Booking(
             reference=f"BR-{secrets.token_hex(5).upper()}",
             idempotency_key=idempotency_key,
