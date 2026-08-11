@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +25,8 @@ class Settings(BaseSettings):
     odoo_database: str = ""
     odoo_username: str = ""
     odoo_api_key: str = ""
+    payout_api_key: str = ""
+    metrics_enabled: bool = True
     payout_provider: str = ""
     smtp_host: str = ""
     smtp_port: int = 587
@@ -39,6 +42,51 @@ class Settings(BaseSettings):
     @property
     def allowed_origins(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @model_validator(mode="after")
+    def validate_production(self) -> "Settings":
+        if self.app_env.lower() not in {"production", "staging"}:
+            return self
+        required = {
+            "DATABASE_URL": self.database_url,
+            "REDIS_URL": self.redis_url,
+            "JWT_SECRET": self.jwt_secret,
+            "JWT_REFRESH_SECRET": self.jwt_refresh_secret,
+            "STRIPE_SECRET_KEY": self.stripe_secret_key,
+            "STRIPE_WEBHOOK_SECRET": self.stripe_webhook_secret,
+            "GEOCODING_API_KEY": self.geocoding_api_key,
+            "ODOO_URL": self.odoo_url,
+            "ODOO_DATABASE": self.odoo_database,
+            "ODOO_USERNAME": self.odoo_username,
+            "ODOO_API_KEY": self.odoo_api_key,
+            "SMTP_HOST": self.smtp_host,
+            "SMTP_USERNAME": self.smtp_username,
+            "SMTP_PASSWORD": self.smtp_password,
+            "SMTP_FROM_EMAIL": self.smtp_from_email,
+            "SMS_PROVIDER": self.sms_provider,
+            "SMS_API_KEY": self.sms_api_key,
+            "PAYOUT_PROVIDER": self.payout_provider,
+            "PAYOUT_API_KEY": self.payout_api_key,
+        }
+        insecure = {
+            "development-only-change-me",
+            "development-only-change-me-too",
+            "change-me",
+            "change-me-too",
+            "breero",
+        }
+        missing = [name for name, value in required.items() if not value or value in insecure]
+        if len(self.jwt_secret) < 32 or len(self.jwt_refresh_secret) < 32:
+            missing.append("JWT secrets (minimum 32 characters)")
+        if self.jwt_secret == self.jwt_refresh_secret:
+            missing.append("distinct JWT access and refresh secrets")
+        if "breero:breero@" in self.database_url:
+            missing.append("non-default DATABASE_URL credentials")
+        if "*" in self.allowed_origins:
+            missing.append("explicit CORS_ORIGINS")
+        if missing:
+            raise ValueError("unsafe production configuration: " + ", ".join(sorted(set(missing))))
+        return self
 
 
 @lru_cache

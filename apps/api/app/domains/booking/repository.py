@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from geoalchemy2.functions import ST_Covers
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.booking.models import (
@@ -65,6 +65,13 @@ class BookingRepository:
             Booking.status.in_(["PENDING_PAYMENT", "CONFIRMED"]),
         )
         return int(await self.session.scalar(stmt) or 0)
+
+    async def lock_slot(self, service_id: uuid.UUID, start: datetime, end: datetime) -> None:
+        """Serialize capacity decisions for one service/window across API processes."""
+        key = f"booking-slot:{service_id}:{start.isoformat()}:{end.isoformat()}"
+        await self.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": key}
+        )
 
     async def booking_by_idempotency_key(self, key: str) -> Booking | None:
         return await self.session.scalar(select(Booking).where(Booking.idempotency_key == key))
