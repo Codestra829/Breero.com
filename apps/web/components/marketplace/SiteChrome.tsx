@@ -1,0 +1,3 @@
+import Link from "next/link";
+export function Header(){return <header className="shell topbar"><Link className="brand" href="/">BREERO</Link><nav className="nav" aria-label="Primary"><Link href="/services">Services</Link><a href="#how">How it works</a><Link className="button" href="/booking">Book a service</Link></nav></header>}
+export function Footer(){return <footer className="footer"><div className="shell split"><div><span className="brand">BREERO</span><p>Trusted help for the place you call home.</p></div><div><p><Link href="/services">Browse services</Link></p><p><a href="mailto:help@breero.com">Customer support</a></p><p>© 2026 BREERO</p></div></div></footer>}

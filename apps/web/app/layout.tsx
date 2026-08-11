@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DM_Sans, Fraunces } from "next/font/google";
 import "@breero/ui/styles.css";
 import "./globals.css";
+import "./marketplace.css";
 import { AppShell } from "@/components/app-shell";
 
 const sans = DM_Sans({ subsets: ["latin"], variable: "--font-br-sans", display: "swap" });
