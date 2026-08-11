@@ -33,4 +33,26 @@ describe("ApiTransport", () => {
     const fetcher = vi.fn((_url: URL | RequestInfo, init?: RequestInit) => new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")))));
     await expect(new ApiTransport({ baseUrl: "https://api.example.test", timeoutMs: 5, fetch: fetcher as typeof fetch }).request("slow", { retry: false })).rejects.toMatchObject({ kind: "timeout" });
   });
+
+  it("refreshes once after a 401 and retries with the rotated access token", async () => {
+    let token = "expired";
+    const fetcher = vi.fn(async (_url: URL | RequestInfo, init?: RequestInit) => {
+      const auth = new Headers(init?.headers).get("authorization");
+      return auth === "Bearer rotated" ? json({ recovered: true }) : json({ detail: "Expired" }, { status: 401 });
+    });
+    const refresh = vi.fn(async () => { token = "rotated"; return token; });
+    const transport = new ApiTransport({ baseUrl: "https://api.example.test", fetch: fetcher as typeof fetch, getAccessToken: () => token, refreshAccessToken: refresh });
+    await expect(transport.request("auth/me")).resolves.toEqual({ recovered: true });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("ends the session without a retry loop when refresh fails", async () => {
+    const expired = vi.fn(async () => json({ detail: "Expired" }, { status: 401 }));
+    const unauthorized = vi.fn();
+    const transport = new ApiTransport({ baseUrl: "https://api.example.test", fetch: expired as typeof fetch, refreshAccessToken: async () => null, onUnauthorized: unauthorized });
+    await expect(transport.request("auth/me")).rejects.toMatchObject({ kind: "authentication" });
+    expect(expired).toHaveBeenCalledTimes(1);
+    expect(unauthorized).toHaveBeenCalledTimes(1);
+  });
 });

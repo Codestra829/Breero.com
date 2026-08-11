@@ -45,24 +45,35 @@ export interface Booking {
 export interface CustomerBookingList { items: Booking[] }
 
 export type UserRole = "customer" | "partner" | "technician" | "operations" | "finance" | "admin";
-export interface User { id: UUID; email: string; full_name: string; role: UserRole; is_active: boolean }
+export interface User { id: UUID; email: string; full_name: string; role: UserRole; is_active: boolean; email_verified?: boolean }
 export interface LoginRequest { email: string; password: string }
 export interface RegisterRequest extends LoginRequest { full_name: string }
-export interface AuthSession { access_token: string; token_type: "bearer"; expires_in: number; user: User }
+export interface AuthSession { access_token: string; token_type: "bearer"; expires_in: number; refresh_token?: string; refresh_expires_in?: number; user: User }
+export interface RefreshRequest { refresh_token: string }
+export interface MessageResponse { message: string }
+export interface ForgotPasswordRequest { email: string }
+export interface ResetPasswordRequest { token: string; new_password: string }
+export interface ChangePasswordRequest { current_password: string; new_password: string }
+export interface TokenRequest { token: string }
 
 export type PaymentStatus = "CREATED" | "REQUIRES_ACTION" | "PROCESSING" | "AUTHORIZED" | "CAPTURED" | "FAILED" | "CANCELLED" | "REFUNDED" | "PARTIALLY_REFUNDED";
 export interface PaymentIntentRequest {
-  booking_id: UUID; amount_minor: number; currency?: string;
-  capture_method?: "automatic" | "manual"; metadata?: Record<string, string>;
+  booking_id?: UUID; quote_id?: UUID; payment_purpose?: "BOOKING_DIAGNOSTIC" | "ADDITIONAL_WORK";
+  amount_minor: number; currency?: string; capture_method?: "automatic" | "manual"; metadata?: Record<string, string>;
 }
 export interface Payment {
-  id: UUID; booking_id: UUID; provider: string; status: PaymentStatus;
+  id: UUID; booking_id: UUID | null; quote_id?: UUID | null; payment_purpose?: "BOOKING_DIAGNOSTIC" | "ADDITIONAL_WORK"; provider: string; status: PaymentStatus;
   amount_minor: number; currency: string; captured_amount_minor: number;
   client_secret: string | null; failure_code: string | null;
   created_at: ISODateTime; updated_at: ISODateTime;
 }
 
 /** Frontend-ready contracts; quote/profile endpoints are documented as backend gaps. */
-export interface QuoteLine { id: UUID; description: string; quantity: number; unit_amount_minor: number; total_amount_minor: number }
-export interface Quote { id: UUID; booking_id: UUID; status: string; currency: string; total_amount_minor: number; expires_at: ISODateTime | null; terms: string | null; lines: QuoteLine[] }
-export interface CustomerProfile { id: UUID; email: string; first_name: string; last_name: string; phone: string | null }
+export interface QuoteLine { id: UUID; description: string; quantity: number; unit_price_minor?: number; unit_amount_minor: number; total_amount_minor: number }
+export interface Quote { id: UUID; job_id?: UUID; booking_id: UUID; status: string; description?: string; line_items?: QuoteLine[]; lines: QuoteLine[]; subtotal_minor?: number; tax_minor?: number; total_minor?: number; total_amount_minor: number; currency: string; created_at?: ISODateTime; expires_at: ISODateTime | null; terms: string | null }
+export interface CustomerProfile { id: UUID; email: string; full_name?: string; first_name?: string; last_name?: string; phone: string | null; email_verified?: boolean }
+export interface CustomerProfilePatch { full_name?: string; first_name?: string; last_name?: string; phone?: string }
+export interface CustomerAddress { id: UUID; line1: string; city: string; postal_code: string; country_code: string }
+export interface CustomerAddressInput { line1: string; city: string; postal_code: string; country_code: string; latitude: number; longitude: number }
+export interface Page<T> { items: T[]; total: number; page: number; page_size: number }
+export interface CustomerPayment { id: UUID; purpose: string; status: PaymentStatus; amount_minor: number; captured_amount_minor: number; refunded_amount_minor: number; currency: string; created_at: ISODateTime }

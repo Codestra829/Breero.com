@@ -24,6 +24,14 @@ export function createMockBreeroApi(scenario: MockScenario = {}): BreeroApi {
     auth: {
       login: () => run("auth", () => scenario.session ?? missing("session")),
       register: () => run("auth", () => scenario.session ?? missing("session")),
+      refresh: () => run("auth", () => scenario.session ?? missing("session")),
+      logout: () => run("auth", () => undefined),
+      logoutAll: (s) => run("auth", () => undefined, s),
+      forgotPassword: () => run("auth", () => ({ message: "If the account exists, reset instructions have been sent" })),
+      resetPassword: () => run("auth", () => ({ message: "Password reset" })),
+      changePassword: () => run("auth", () => ({ message: "Password changed; active sessions revoked" })),
+      verifyEmail: () => run("auth", () => ({ message: "Email verified" })),
+      resendVerification: (s) => run("auth", () => ({ message: "Verification sent if required" }), s),
       me: (s) => run<User>("auth", () => scenario.session?.user ?? missing("session.user"), s),
     },
     services: {
@@ -35,7 +43,7 @@ export function createMockBreeroApi(scenario: MockScenario = {}): BreeroApi {
     availability: { search: (_input, s) => run("availability", () => scenario.slots ?? [], s) },
     bookings: {
       create: (_input, _key, s) => run("bookings", () => scenario.bookings?.[0] ?? missing("booking"), s),
-      mine: (s) => run("bookings", () => ({ items: scenario.bookings ?? [] }), s),
+      mine: (_params, s) => run("bookings", () => ({ items: scenario.bookings ?? [], total: scenario.bookings?.length ?? 0, page: 1, page_size: 20 }), s),
       getMine: (id, s) => run("bookings", () => scenario.bookings?.find((item) => item.id === id) ?? missing(`booking ${id}`), s),
     },
     payments: {
@@ -45,10 +53,16 @@ export function createMockBreeroApi(scenario: MockScenario = {}): BreeroApi {
     customer: {
       profile: (s) => run("customer", () => profile ?? missing("profile"), s),
       updateProfile: (input, s) => run("customer", () => profile = { ...(profile ?? missing("profile")), ...input }, s),
+      addresses: (s) => run("customer", () => [], s),
+      addAddress: (input, s) => run("customer", () => ({ id: "mock-address", ...input }), s),
+      updateAddress: (id, input, s) => run("customer", () => ({ id, ...input }), s),
+      deleteAddress: (_id, s) => run("customer", () => undefined, s),
+      payments: (_params, s) => run("customer", () => ({ items: [], total: 0, page: 1, page_size: 20 }), s),
     },
     quotes: {
-      list: (s) => run("quotes", () => scenario.quotes ?? [], s),
+      list: (_params, s) => run("quotes", () => ({ items: scenario.quotes ?? [], total: scenario.quotes?.length ?? 0, page: 1, page_size: 20 }), s),
       get: (id, s) => run("quotes", () => scenario.quotes?.find((item) => item.id === id) ?? missing(`quote ${id}`), s),
+      decide: (id, approve, s) => run("quotes", () => ({ ...(scenario.quotes?.find((item) => item.id === id) ?? missing(`quote ${id}`)), status: approve ? "APPROVED" : "DECLINED" }), s),
       approve: (id, _key, s) => run("quotes", () => ({ ...(scenario.quotes?.find((item) => item.id === id) ?? missing(`quote ${id}`)), status: "APPROVED" }), s),
     },
   };

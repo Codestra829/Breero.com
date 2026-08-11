@@ -1,7 +1,7 @@
 import { ApiError, apiErrorFromResponse } from "./errors";
 
 export type AccessTokenProvider = () => string | null | Promise<string | null>;
-export interface TransportOptions { baseUrl: string; timeoutMs?: number; getAccessToken?: AccessTokenProvider; fetch?: typeof globalThis.fetch; onUnauthorized?: () => void }
+export interface TransportOptions { baseUrl: string; timeoutMs?: number; getAccessToken?: AccessTokenProvider; refreshAccessToken?: () => Promise<string | null>; fetch?: typeof globalThis.fetch; onUnauthorized?: () => void }
 export interface RequestOptions extends Omit<RequestInit, "body"> { body?: unknown; timeoutMs?: number; retry?: boolean }
 export interface Transport { request<T>(path: string, options?: RequestOptions): Promise<T> }
 
@@ -27,6 +27,11 @@ export class ApiTransport implements Transport {
       try { return await this.execute<T>(path, method, options); }
       catch (error) {
         lastError = error;
+        if (error instanceof ApiError && error.kind === "authentication" && this.options.refreshAccessToken && options.retry !== false) {
+          const token = await this.options.refreshAccessToken();
+          if (token) return this.execute<T>(path, method, { ...options, retry: false });
+          this.options.onUnauthorized?.();
+        }
         if (!(error instanceof ApiError) || !["network", "server", "unavailable"].includes(error.kind)) throw error;
       }
     }
@@ -48,7 +53,6 @@ export class ApiTransport implements Transport {
       const response = await this.fetcher(url, { ...options, method, headers, body: options.body === undefined ? undefined : JSON.stringify(options.body), signal: controller.signal });
       if (!response.ok) {
         const error = await apiErrorFromResponse(response);
-        if (error.kind === "authentication") this.options.onUnauthorized?.();
         throw error;
       }
       if (response.status === 204) return undefined as T;
