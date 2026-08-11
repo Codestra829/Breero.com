@@ -1,18 +1,26 @@
-FROM python:3.12-slim
+FROM python:3.12.11-slim-bookworm AS builder
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+WORKDIR /build
+COPY pyproject.toml ./
+RUN python -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir .
+
+FROM python:3.12.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PATH=/opt/venv/bin:$PATH
+
+RUN apt-get update && \
+    apt-get upgrade -y --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir .
-
-COPY . .
-
-RUN addgroup --system breero && adduser --system --ingroup breero breero && \
-    chown -R breero:breero /app
+COPY --from=builder /opt/venv /opt/venv
+RUN addgroup --system --gid 10001 breero && \
+    adduser --system --uid 10001 --ingroup breero --no-create-home breero
+COPY --chown=breero:breero . .
 
 USER breero
 

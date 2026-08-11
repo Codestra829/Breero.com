@@ -127,6 +127,7 @@ class BookingService:
             raise DomainError(
                 "ADDRESS_NOT_SERVICEABLE", "Address is outside an active service area", 422
             )
+        await self.repository.lock_slot(payload.service_id, payload.window.start, payload.window.end)
         slots = await self.availability.search(
             AvailabilitySearchRequest(
                 service_id=payload.service_id,

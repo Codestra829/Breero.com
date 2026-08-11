@@ -4,6 +4,7 @@ from typing import NoReturn
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.domains.auth.dependencies import require_roles
 from app.domains.auth.models import User, UserRole
@@ -55,6 +56,7 @@ async def create_intent(
     payload: PaymentIntentCreate,
     idempotency_key: str = Header(min_length=8, max_length=255, alias="Idempotency-Key"),
     service: PaymentService = Depends(get_service),
+    _rate_limit: None = Depends(rate_limit("payment-create", 20, 60)),
 ) -> PaymentView:
     try:
         return await service.create_intent(payload, idempotency_key)
@@ -64,7 +66,9 @@ async def create_intent(
 
 @router.get("/{payment_id}", response_model=PaymentView)
 async def get_payment(
-    payment_id: uuid.UUID, service: PaymentService = Depends(get_service)
+    payment_id: uuid.UUID,
+    service: PaymentService = Depends(get_service),
+    _user: User = Depends(require_roles(UserRole.operations, UserRole.finance, UserRole.admin)),
 ) -> PaymentView:
     try:
         return await service.get(payment_id)
@@ -78,6 +82,7 @@ async def capture_payment(
     payload: CaptureRequest,
     idempotency_key: str = Header(min_length=8, max_length=255, alias="Idempotency-Key"),
     service: PaymentService = Depends(get_service),
+    _user: User = Depends(require_roles(UserRole.operations, UserRole.finance, UserRole.admin)),
 ) -> PaymentView:
     try:
         return await service.capture(payment_id, payload.amount_minor, idempotency_key)
@@ -90,6 +95,7 @@ async def stripe_webhook(
     request: Request,
     stripe_signature: str = Header(alias="Stripe-Signature"),
     service: PaymentService = Depends(get_service),
+    _rate_limit: None = Depends(rate_limit("stripe-webhook", 300, 60)),
 ) -> WebhookResult:
     try:
         event_id, duplicate = await service.process_webhook(await request.body(), stripe_signature)

@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.domains.auth.dependencies import current_user
 from app.domains.auth.models import User
@@ -29,14 +30,20 @@ def client(request: Request) -> tuple[str | None, str | None]:
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
 async def register(
-    data: RegisterRequest, request: Request, session: Annotated[AsyncSession, Depends(get_db)]
+    data: RegisterRequest,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[None, Depends(rate_limit("register", 5, 60))],
 ) -> TokenResponse:
     return await AuthService(session).register(data, *client(request))
 
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
-    data: LoginRequest, request: Request, session: Annotated[AsyncSession, Depends(get_db)]
+    data: LoginRequest,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[None, Depends(rate_limit("login", 10, 60))],
 ) -> TokenResponse:
     return await AuthService(session).login(data, *client(request))
 

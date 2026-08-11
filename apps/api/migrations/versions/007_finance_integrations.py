@@ -1,12 +1,12 @@
 """configurable finance and resilient integrations
 
-Revision ID: 006_finance_integrations
-Revises: 005_booking_integrations
+Revision ID: 007_finance_integrations
+Revises: 006_auth_customer_payments
 """
 from alembic import op
 
-revision = "006_finance_integrations"
-down_revision = "005_booking_integrations"
+revision = "007_finance_integrations"
+down_revision = "006_auth_customer_payments"
 branch_labels = None
 depends_on = None
 

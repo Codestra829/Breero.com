@@ -1,6 +1,9 @@
+import time
 import uuid
 
-from fastapi import FastAPI, Request
+import redis.asyncio as redis
+import structlog
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
@@ -9,7 +12,9 @@ from app.config import settings
 from app.core.errors import install_error_handlers
 from app.db.session import engine
 
-app = FastAPI(title=settings.app_name, version="0.9.0")
+EXPECTED_SCHEMA_REVISION = "008_production_readiness"
+logger = structlog.get_logger()
+app = FastAPI(title=settings.app_name, version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
@@ -24,8 +29,26 @@ app.include_router(api_router, prefix=settings.api_v1_prefix)
 @app.middleware("http")
 async def request_context(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
-    response = await call_next(request)
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception("request_failed", request_id=request_id, method=request.method, path=request.url.path)
+        raise
+    duration_ms = round((time.perf_counter() - started) * 1000, 2)
     response.headers["X-Request-ID"] = request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    logger.info(
+        "request_completed",
+        request_id=request_id,
+        method=request.method,
+        path=request.url.path,
+        status=response.status_code,
+        duration=duration_ms,
+    )
     return response
 
 
@@ -41,6 +64,21 @@ async def live() -> dict[str, str]:
 
 @app.get("/health/ready", tags=["health"])
 async def ready() -> dict[str, str]:
-    async with engine.connect() as connection:
-        await connection.execute(text("SELECT 1"))
-    return {"status": "ready"}
+    checks: dict[str, str] = {}
+    try:
+        async with engine.connect() as connection:
+            revision = await connection.scalar(text("SELECT version_num FROM alembic_version"))
+            checks["postgres"] = "ok"
+            checks["schema"] = "ok" if revision == EXPECTED_SCHEMA_REVISION else "outdated"
+        client = redis.from_url(settings.redis_url, socket_connect_timeout=1, socket_timeout=1)
+        try:
+            await client.ping()
+            checks["redis"] = "ok"
+        finally:
+            await client.aclose()
+    except Exception as exc:
+        logger.warning("readiness_failed", error=type(exc).__name__)
+        raise HTTPException(503, "dependency unavailable") from exc
+    if checks.get("schema") != "ok":
+        raise HTTPException(503, detail={"status": "not_ready", "checks": checks})
+    return {"status": "ready", **checks}
