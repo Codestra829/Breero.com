@@ -4,7 +4,7 @@ on:
   pull_request:
     paths: ["apps/api/**", "docker-compose.production.yml", ".github/workflows/backend-production.yml"]
   push:
-    branches: ["codex/backend-production-final"]
+    branches: ["codex/backend-master-final"]
 
 jobs:
   quality:
@@ -40,8 +40,22 @@ jobs:
       - run: ruff check .
       - run: mypy app
       - run: alembic upgrade head
+      - run: alembic check
       - run: python scripts/check_schema_drift.py
       - run: pytest -q
+      - name: Validate upgrade paths from prior canonical and split heads
+        env:
+          PGPASSWORD: test-only
+        run: |
+          for scenario in baseline auth finance; do
+            createdb -h localhost -U breero "breero_${scenario}"
+          done
+          DATABASE_URL=postgresql+psycopg://breero:test-only@localhost:5432/breero_baseline alembic upgrade 005_booking_integrations
+          DATABASE_URL=postgresql+psycopg://breero:test-only@localhost:5432/breero_baseline alembic upgrade head
+          DATABASE_URL=postgresql+psycopg://breero:test-only@localhost:5432/breero_auth alembic upgrade 006_auth_customer_payments
+          DATABASE_URL=postgresql+psycopg://breero:test-only@localhost:5432/breero_auth alembic upgrade head
+          DATABASE_URL=postgresql+psycopg://breero:test-only@localhost:5432/breero_finance alembic upgrade 006_finance_integrations
+          DATABASE_URL=postgresql+psycopg://breero:test-only@localhost:5432/breero_finance alembic upgrade head
       - run: python scripts/generate_openapi.py
       - run: test -s openapi.json
       - run: pip-audit

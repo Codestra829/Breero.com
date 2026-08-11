@@ -7,6 +7,17 @@ PostgreSQL, Redis, and API ports are published on all host interfaces. The repla
 topology fixes exposure, but must not be started until an operator approves cleanup,
 backup, shared-Caddy networking, secrets, and rollback.
 
+This is earlier evidence. Re-run the read-only host inventory immediately before launch; free
+space and running containers are volatile operational state.
+
+## Provider launch state
+
+Credential-free tests use fake geocoding, email, SMS, payout, Stripe-event, and Odoo adapters.
+Production must provide unique JWT access/refresh secrets and Stripe secret/webhook credentials.
+Geocoding, Odoo, email, SMS, and payout integrations may be explicitly disabled only when the
+corresponding capability is intentionally unavailable; missing credentials must never silently
+select a fake provider in production. Status APIs expose configured/enabled booleans only.
+
 ## Acceptance evidence (2026-08-11, isolated host network)
 
 - Fresh database and prior `005_booking_integrations` database both migrated to
