@@ -16,6 +16,14 @@ class GeocodedAddress:
     latitude: float
     longitude: float
     provider: str
+    provider_reference: str | None = None
+    confidence: float | None = None
+    quality: str | None = None
+
+
+class FakeGeocodingAdapter:
+    def __init__(self, result: GeocodedAddress): self.result = result
+    async def geocode(self, address: str) -> GeocodedAddress: return self.result
 
 
 class GeocodingAdapter:
@@ -45,4 +53,7 @@ class GeocodingAdapter:
             latitude=float(props["lat"]),
             longitude=float(props["lon"]),
             provider="geoapify",
+            provider_reference=props.get("place_id"),
+            confidence=props.get("rank", {}).get("confidence"),
+            quality=props.get("rank", {}).get("match_type"),
         )

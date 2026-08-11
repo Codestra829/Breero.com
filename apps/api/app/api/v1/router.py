@@ -7,6 +7,7 @@ from app.api.v1 import (
     bookings,
     customers,
     finance,
+    integrations,
     jobs,
     operations,
     payments,
@@ -26,3 +27,4 @@ api_router.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
 api_router.include_router(vendors.router, prefix="/vendors", tags=["vendors"])
 api_router.include_router(operations.router, prefix="/operations", tags=["operations"])
 api_router.include_router(finance.router, prefix="/finance", tags=["finance"])
+api_router.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
