@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "start": "next start",
     "build": "next build",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
@@ -10,6 +11,8 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@breero/api-client": "workspace:*",
+    "@breero/types": "workspace:*",
     "@breero/ui": "workspace:*",
     "next": "^15.1.0",
     "react": "^19.0.0",
@@ -17,7 +20,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
-    "@playwright/test": "^1.49.0",
+    "@playwright/test": "^1.49.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/node": "^22.0.0",
