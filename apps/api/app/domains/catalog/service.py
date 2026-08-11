@@ -18,9 +18,13 @@ class CatalogService:
         service = await self.catalog.active_detail(identifier)
         if not service:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
-        active_questions = [question for question in service.questions if question.is_active]
-        service.questions = active_questions
-        return ServiceDetail.model_validate(service)
+        result = ServiceDetail.model_validate(service)
+        result.questions = [
+            question
+            for question, model in zip(result.questions, service.questions, strict=True)
+            if model.is_active
+        ]
+        return result
 
     async def create(self, data: ServiceWrite) -> ServiceDetail:
         if await self.catalog.by_slug(data.slug):

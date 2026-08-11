@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.auth.models import User, UserRole
@@ -23,15 +24,21 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
             )
-        user = await self.users.add(
-            User(
-                email=email,
-                full_name=data.full_name.strip(),
-                password_hash=hash_password(data.password),
-                role=UserRole.customer,
+        try:
+            user = await self.users.add(
+                User(
+                    email=email,
+                    full_name=data.full_name.strip(),
+                    password_hash=hash_password(data.password),
+                    role=UserRole.customer,
+                )
             )
-        )
-        await self.session.commit()
+            await self.session.commit()
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
+            ) from exc
         await self.session.refresh(user)
         return self._token(user)
 
