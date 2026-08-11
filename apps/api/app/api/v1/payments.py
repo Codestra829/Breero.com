@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.rate_limit import rate_limit
 from app.db.session import get_db
+from app.domains.auth.dependencies import require_roles
+from app.domains.auth.models import User, UserRole
 from app.domains.payments.exceptions import (
     IdempotencyConflict,
     InvalidPaymentState,
@@ -62,7 +64,9 @@ async def create_intent(
 
 @router.get("/{payment_id}", response_model=PaymentView)
 async def get_payment(
-    payment_id: uuid.UUID, service: PaymentService = Depends(get_service)
+    payment_id: uuid.UUID,
+    service: PaymentService = Depends(get_service),
+    _user: User = Depends(require_roles(UserRole.operations, UserRole.finance, UserRole.admin)),
 ) -> PaymentView:
     try:
         return await service.get(payment_id)
@@ -76,6 +80,7 @@ async def capture_payment(
     payload: CaptureRequest,
     idempotency_key: str = Header(min_length=8, max_length=255, alias="Idempotency-Key"),
     service: PaymentService = Depends(get_service),
+    _user: User = Depends(require_roles(UserRole.operations, UserRole.finance, UserRole.admin)),
 ) -> PaymentView:
     try:
         return await service.capture(payment_id, payload.amount_minor, idempotency_key)
