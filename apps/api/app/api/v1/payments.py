@@ -1,0 +1,84 @@
+import uuid
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.session import get_db
+from app.domains.payments.exceptions import (
+    IdempotencyConflict, InvalidPaymentState, InvalidWebhook, PaymentError, PaymentNotFound,
+)
+from app.domains.payments.schemas import (
+    CaptureRequest, PaymentIntentCreate, PaymentView, WebhookResult,
+)
+from app.domains.payments.service import PaymentService
+from app.integrations.stripe import StripeAdapter
+
+router = APIRouter()
+
+
+def get_provider() -> StripeAdapter:
+    return StripeAdapter.from_environment()
+
+
+def get_service(
+    db: AsyncSession = Depends(get_db), provider: StripeAdapter = Depends(get_provider)
+) -> PaymentService:
+    return PaymentService(db, provider)
+
+
+def _raise_payment_error(exc: PaymentError) -> None:
+    if isinstance(exc, PaymentNotFound):
+        code = status.HTTP_404_NOT_FOUND
+    elif isinstance(exc, IdempotencyConflict):
+        code = status.HTTP_409_CONFLICT
+    elif isinstance(exc, (InvalidPaymentState, InvalidWebhook)):
+        code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    else:
+        code = status.HTTP_502_BAD_GATEWAY
+    raise HTTPException(status_code=code, detail=str(exc)) from exc
+
+
+@router.post("/intents", response_model=PaymentView, status_code=status.HTTP_201_CREATED)
+async def create_intent(
+    payload: PaymentIntentCreate,
+    idempotency_key: str = Header(min_length=8, max_length=255, alias="Idempotency-Key"),
+    service: PaymentService = Depends(get_service),
+) -> PaymentView:
+    try:
+        return await service.create_intent(payload, idempotency_key)
+    except PaymentError as exc:
+        _raise_payment_error(exc)
+
+
+@router.get("/{payment_id}", response_model=PaymentView)
+async def get_payment(
+    payment_id: uuid.UUID, service: PaymentService = Depends(get_service)
+) -> PaymentView:
+    try:
+        return await service.get(payment_id)
+    except PaymentError as exc:
+        _raise_payment_error(exc)
+
+
+@router.post("/{payment_id}/capture", response_model=PaymentView)
+async def capture_payment(
+    payment_id: uuid.UUID, payload: CaptureRequest,
+    idempotency_key: str = Header(min_length=8, max_length=255, alias="Idempotency-Key"),
+    service: PaymentService = Depends(get_service),
+) -> PaymentView:
+    try:
+        return await service.capture(payment_id, payload.amount_minor, idempotency_key)
+    except PaymentError as exc:
+        _raise_payment_error(exc)
+
+
+@router.post("/webhooks/stripe", response_model=WebhookResult)
+async def stripe_webhook(
+    request: Request, stripe_signature: str = Header(alias="Stripe-Signature"),
+    service: PaymentService = Depends(get_service),
+) -> WebhookResult:
+    try:
+        event_id, duplicate = await service.process_webhook(await request.body(), stripe_signature)
+        return WebhookResult(event_id=event_id, duplicate=duplicate)
+    except PaymentError as exc:
+        _raise_payment_error(exc)
