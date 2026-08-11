@@ -1,0 +1,7 @@
+import { Button, EmptyState } from "@breero/ui";
+import { BookingCard } from "@/components/account/booking-card";
+import { AccountPageHeader } from "@/components/account/page-header";
+import { bookings } from "@/lib/customer/data";
+
+export const metadata={title:"My bookings"};
+export default async function BookingsPage({searchParams}:{searchParams:Promise<{view?:string}>}){const {view="active"}=await searchParams;const shown=view==="history"?bookings.filter((b)=>["COMPLETED","CANCELLED"].includes(b.status)):view==="all"?bookings:bookings.filter((b)=>!["COMPLETED","CANCELLED"].includes(b.status));return <><AccountPageHeader eyebrow="Your services" title="Bookings" description="Track upcoming visits and revisit everything we’ve handled." action={<Button size="sm">Book something new</Button>}/><nav className="booking-filters" aria-label="Filter bookings"><a href="/account/bookings?view=active" aria-current={view==="active"?"true":undefined}>Active</a><a href="/account/bookings?view=history" aria-current={view==="history"?"true":undefined}>History</a><a href="/account/bookings?view=all" aria-current={view==="all"?"true":undefined}>All bookings</a></nav>{shown.length?<div className="booking-list">{shown.map((booking)=><BookingCard key={booking.id} booking={booking}/>)}</div>:<EmptyState title="No bookings here yet" description="When you book a service, you’ll be able to track it here." action={<Button>Explore services</Button>}/>}</>}

@@ -1,0 +1,6 @@
+import { Badge, Card, EmptyState, Price } from "@breero/ui";
+import { AccountPageHeader } from "@/components/account/page-header";
+import { bookings, formatDate, quotes } from "@/lib/customer/data";
+
+export const metadata={title:"My quotes"};
+export default function QuotesPage(){return <><AccountPageHeader eyebrow="Review & decide" title="Quotes" description="Clear costs and terms before any additional work begins."/>{quotes.length?<div className="quote-list">{quotes.map((quote)=>{const booking=bookings.find((item)=>item.id===quote.booking_id);return <a className="booking-card-link" href={`/account/quotes/${quote.id}`} key={quote.id}><Card interactive className="quote-item"><div><Badge variant={quote.status==="PENDING"?"warning":"success"}>{quote.status==="PENDING"?"Awaiting your approval":"Approved"}</Badge><h2>{booking?.service??"Service quote"}</h2><p>{quote.id} · Booking {quote.booking_id}{quote.expires_at&&` · ${quote.status==="PENDING"?"Expires":"Expired"} ${formatDate(quote.expires_at)}`}</p></div><div className="quote-item__side"><Price amount={quote.total_amount_minor/100} currency={quote.currency}/><strong>View quote →</strong></div></Card></a>})}</div>:<EmptyState title="No quotes to review" description="If a professional recommends additional work, their quote will appear here before anything changes."/>}</>}
