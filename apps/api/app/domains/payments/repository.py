@@ -1,10 +1,11 @@
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import IdempotencyRecord, Payment, PaymentEvent
+from .models import IdempotencyRecord, Payment, PaymentEvent, Refund
 
 
 class PaymentRepository:
@@ -56,6 +57,14 @@ class PaymentRepository:
         )
         return event is not None
 
+    async def get_event(self, provider: str, event_id: str) -> PaymentEvent | None:
+        return await self.session.scalar(
+            select(PaymentEvent).where(
+                PaymentEvent.provider == provider,
+                PaymentEvent.provider_event_id == event_id,
+            )
+        )
+
     async def add_event(
         self,
         *,
@@ -72,6 +81,18 @@ class PaymentRepository:
                 event_type=event_type,
                 payload=payload,
                 payment_id=payment_id,
+                status="processed",
+                processed_at=datetime.now(UTC),
             )
         )
         await self.session.flush()
+
+    async def refund_by_key(self, payment_id: uuid.UUID, key: str) -> Refund | None:
+        return await self.session.scalar(
+            select(Refund).where(Refund.payment_id == payment_id, Refund.idempotency_key == key)
+        )
+
+    async def refund_by_provider_id(self, provider_id: str) -> Refund | None:
+        return await self.session.scalar(
+            select(Refund).where(Refund.provider_refund_id == provider_id).with_for_update()
+        )

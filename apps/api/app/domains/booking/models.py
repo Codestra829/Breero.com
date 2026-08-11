@@ -56,6 +56,9 @@ class Address(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     location: Mapped[object] = mapped_column(Geometry("POINT", srid=4326), nullable=False)
     service_area_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("service_areas.id"))
     geocoding_provider: Mapped[str] = mapped_column(String(40), default="provided")
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="CASCADE"), index=True
+    )
 
 
 class AvailabilityRule(UUIDPrimaryKeyMixin, TimestampMixin, Base):

@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime
+from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -127,7 +128,11 @@ class JobService:
             booking = await self.session.get(Booking, job.booking_id)
             if not booking:
                 raise HTTPException(409, "Job booking is unavailable")
-            gross = int(booking.total_amount * 100 * 70 / 100)
+            gross = int(
+                (booking.total_amount * Decimal("70")).quantize(
+                    Decimal("1"), rounding=ROUND_HALF_UP
+                )
+            )
             self.session.add(
                 VendorEarning(
                     vendor_id=job.vendor_id,
@@ -202,9 +207,11 @@ class JobService:
         job = await self.repo.get(request.job_id, lock=True)
         if not job or job.customer_id != customer_id:
             raise HTTPException(403, "Not permitted to decide this request")
-        if request.status != WorkRequestStatus.SUBMITTED:
+        if request.status != WorkRequestStatus.PENDING_CUSTOMER:
             raise HTTPException(409, "Work request has already been decided")
-        request.status = WorkRequestStatus.APPROVED if approve else WorkRequestStatus.DECLINED
+        request.status = (
+            WorkRequestStatus.APPROVED_PENDING_PAYMENT if approve else WorkRequestStatus.DECLINED
+        )
         request.customer_decided_at = datetime.now(UTC)
         if not approve:
             previous = job.status
@@ -220,6 +227,24 @@ class JobService:
                     reason="additional_work_declined",
                 )
             )
+        await self.session.commit()
+        await self.session.refresh(request)
+        return request
+
+    async def review_work_request(self, request_id: uuid.UUID, approve: bool) -> WorkRequest:
+        request = await self.repo.get_work_request(request_id, lock=True)
+        if not request:
+            raise HTTPException(404, "Work request not found")
+        if request.status != WorkRequestStatus.SUBMITTED:
+            raise HTTPException(409, "Work request has already been reviewed")
+        request.status = (
+            WorkRequestStatus.PENDING_CUSTOMER if approve else WorkRequestStatus.DECLINED
+        )
+        if not approve:
+            job = await self.repo.get(request.job_id, lock=True)
+            if job and job.status == JobStatus.AWAITING_APPROVAL:
+                job.status = JobStatus.IN_PROGRESS
+                job.version += 1
         await self.session.commit()
         await self.session.refresh(request)
         return request

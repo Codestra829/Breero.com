@@ -7,6 +7,8 @@ from app.domains.auth.security import (
     create_access_token,
     decode_access_token,
     hash_password,
+    hash_token,
+    new_opaque_token,
     verify_password,
 )
 
@@ -32,3 +34,19 @@ def test_tampered_access_token_is_rejected(monkeypatch: pytest.MonkeyPatch) -> N
     with pytest.raises(HTTPException) as error:
         decode_access_token(token[:-1] + ("a" if token[-1] != "a" else "b"))
     assert error.value.status_code == 401
+
+
+def test_opaque_tokens_are_random_and_only_hashes_need_persisting() -> None:
+    first, second = new_opaque_token(), new_opaque_token()
+    assert first != second
+    assert len(first) >= 32
+    assert hash_token(first) != first
+    assert len(hash_token(first)) == 64
+
+
+def test_access_token_contains_credential_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("JWT_SECRET", "test-secret-that-is-not-for-production")
+    claims = decode_access_token(
+        create_access_token(uuid.uuid4(), "customer", credential_version=7)
+    )
+    assert claims["cv"] == 7

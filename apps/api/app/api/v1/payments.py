@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.domains.auth.dependencies import require_roles
+from app.domains.auth.models import User, UserRole
 from app.domains.payments.exceptions import (
     IdempotencyConflict,
     InvalidPaymentState,
@@ -16,6 +18,8 @@ from app.domains.payments.schemas import (
     CaptureRequest,
     PaymentIntentCreate,
     PaymentView,
+    RefundCreate,
+    RefundView,
     WebhookResult,
 )
 from app.domains.payments.service import PaymentService
@@ -90,5 +94,21 @@ async def stripe_webhook(
     try:
         event_id, duplicate = await service.process_webhook(await request.body(), stripe_signature)
         return WebhookResult(event_id=event_id, duplicate=duplicate)
+    except PaymentError as exc:
+        _raise_payment_error(exc)
+
+
+@router.post("/{payment_id}/refunds", response_model=RefundView, status_code=201)
+async def create_refund(
+    payment_id: uuid.UUID,
+    payload: RefundCreate,
+    idempotency_key: str = Header(min_length=8, max_length=255, alias="Idempotency-Key"),
+    service: PaymentService = Depends(get_service),
+    user: User = Depends(require_roles(UserRole.finance, UserRole.admin)),
+) -> RefundView:
+    try:
+        return await service.refund(
+            payment_id, payload.amount_minor, idempotency_key, user.id, payload.reason
+        )
     except PaymentError as exc:
         _raise_payment_error(exc)

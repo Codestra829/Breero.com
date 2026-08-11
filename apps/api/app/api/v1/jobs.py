@@ -166,7 +166,7 @@ async def list_work_requests(
     if not job:
         raise HTTPException(404, "Job not found")
     if user.role == UserRole.customer:
-        customer = await session.scalar(select(Customer).where(Customer.email == user.email))
+        customer = await session.scalar(select(Customer).where(Customer.user_id == user.id))
         if not customer or job.customer_id != customer.id:
             raise HTTPException(403, "Job belongs to another customer")
     elif user.role == UserRole.technician:
@@ -189,7 +189,17 @@ async def decide_work_request(
 ):
     from fastapi import HTTPException
 
-    customer = await session.scalar(select(Customer).where(Customer.email == user.email))
+    customer = await session.scalar(select(Customer).where(Customer.user_id == user.id))
     if not customer:
         raise HTTPException(403, "Account is not linked to a customer")
     return await JobService(session).decide_work_request(request_id, payload.approve, customer.id)
+
+
+@router.post("/work-requests/{request_id}/review", response_model=WorkRequestRead)
+async def review_work_request(
+    request_id: uuid.UUID,
+    payload: WorkRequestDecision,
+    session: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(UserRole.operations, UserRole.admin)),
+):
+    return await JobService(session).review_work_request(request_id, payload.approve)
