@@ -6,7 +6,7 @@
 
 ## Backend contract reviewed
 
-The public contract URL `https://api.breero.com/api/v1/openapi.json` did not resolve during integration on 11 August 2026. Contract alignment therefore used the backend source at `origin/codex/backend-auth-payments-final` (`174e2db`) and specifically its v1 router, auth schemas, customer routes, booking schemas, job work-request routes, and payment schemas. A live OpenAPI/staging run is still a release gate.
+The public contract URL `https://api.breero.com/api/v1/openapi.json` did not resolve during integration. Contract alignment on 12 August 2026 therefore used the authoritative source at `origin/codex/backend-master-final` (`9f43287`), specifically its v1 router, auth schemas, customer routes, booking schemas, customer-owned quote decision route, and payment schemas. A deployed OpenAPI/staging run remains a release gate.
 
 The centralized client covers auth registration/login/refresh/logout/password/email lifecycle, services/questions, address validation, availability, booking creation, customer bookings/profile/addresses/quotes/payments, quote decisions, and payment intents/status. Customer-safe payment history uses `/customer/payments`; the generic payment endpoint is not used for account history.
 
@@ -21,15 +21,15 @@ The current backend returns refresh tokens in JSON rather than an HTTP-only cook
 ## Known staging blockers
 
 - Public API DNS/OpenAPI and live CORS could not be verified.
-- Account page presentation is complete, but several account routes still render the contract-shaped fixture dataset directly. They must be converted to authenticated live loaders before staging acceptance.
-- Saved-address mutation UI is intentionally disabled until it is wired to the implemented client operations.
+- Account dashboard, bookings, quotes, payments, profile, receipts, and saved-address reads now use authenticated live client operations. Contract-shaped fixtures remain only behind the explicit mock test adapter.
+- Saved-address creation/editing remains intentionally deferred because the backend requires coordinates; the booking address-validation flow is the safe source for serviceable address coordinates.
 - Payment provider handoff is represented by intent creation and an authoritative pending state; Stripe Elements/Checkout and a customer-safe backend confirmation endpoint remain required.
-- Quote approval calls the real backend decision route through the client, but the static account route must be moved to live data and additional-payment confirmation must be exercised against staging.
+- Quote approval calls the customer-owned backend decision route and additional-payment intent creation uses `quote_id` plus `ADDITIONAL_WORK`; provider UI and webhook-backed confirmation must still be exercised against staging.
 
 ## Staging gate
 
 1. Deploy the backend contract that includes the auth/customer lifecycle and publish `/api/v1/openapi.json`.
-2. Set `NEXT_PUBLIC_API_BASE_URL=https://api.breero.com/api/v1`; do not set mock or E2E override variables.
+2. Confirm `NEXT_PUBLIC_API_BASE_URL=https://api.breero.com/api/v1` (the production-safe default) or set the staging API origin; do not set mock or E2E override variables.
 3. Configure exact CORS origins for the staging web origin and confirm auth refresh rotation.
 4. Configure the Stripe publishable key and customer-safe post-payment status operation.
 5. Run frozen install, lint, typecheck, unit tests, production build, Playwright against `E2E_BASE_URL`, and an OpenAPI operation check.
