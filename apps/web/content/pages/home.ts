@@ -1,0 +1,1 @@
+import { brand } from "../brand"; export const homePage={eyebrow:"Home care, handled",headline:brand.headline,description:brand.description,sections:["services","trust","howItWorks","whyBreero","locations","partners","faq","finalCta"]} as const;

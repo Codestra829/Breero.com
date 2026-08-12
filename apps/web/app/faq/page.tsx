@@ -1,0 +1,1 @@
+import { SupportPage,supportMetadata } from "@/components/marketing/SupportPage";import { FAQ } from "@/components/marketing/FAQ";export const metadata=supportMetadata("faq");export default function Page(){return <><SupportPage slug="faq"/><section className="mk-section"><div className="mk-container mk-narrow"><FAQ/></div></section></>}

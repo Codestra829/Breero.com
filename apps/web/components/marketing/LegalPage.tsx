@@ -1,0 +1,1 @@
+export function LegalPage({title,updated,children}:{title:string;updated:string;children:React.ReactNode}){return <article className="mk-section"><div className="mk-container mk-narrow"><p className="mk-eyebrow">BREERO legal</p><h1>{title}</h1><p>Last updated: {updated}</p><div className="mk-legal">{children}</div></div></article>}

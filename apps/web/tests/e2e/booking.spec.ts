@@ -4,7 +4,7 @@ for (const width of [375, 430, 768, 1024, 1280, 1440])
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
     await expect(
-      page.getByRole("heading", { name: /one less thing/i }),
+      page.getByRole("heading", { name: /home services, without the hassle/i }),
     ).toBeVisible();
     expect(
       await page.evaluate(
