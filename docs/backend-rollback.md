@@ -16,3 +16,7 @@ must target a new isolated database before any destructive decision.
 The application-only rehearsal succeeded from the 62-path final candidate to the compatible
 60-path prior image and back. Readiness returned 200 for both images, the database remained at 009,
 and the worker rejoined after the final image was restored.
+
+Migration 011/012 application rollback is forward-compatible: added nullable payment and
+service-area columns and retained PostgreSQL enum values are ignored by the prior image. Reverse the
+proxy/container target first; schema downgrade is not part of an emergency rollback.

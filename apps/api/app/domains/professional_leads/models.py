@@ -11,6 +11,7 @@ from app.db.base import Base
 
 class LeadStatus(str, enum.Enum):
     AVAILABLE = "AVAILABLE"
+    RESERVED = "RESERVED"
     PURCHASED = "PURCHASED"
     CLOSED = "CLOSED"
 

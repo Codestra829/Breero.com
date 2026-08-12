@@ -11,8 +11,9 @@ class AddressValidateRequest(BaseModel):
     address: str = Field(min_length=5, max_length=500)
     line1: str | None = None
     city: str | None = None
+    state_code: str | None = Field(default=None, min_length=2, max_length=3)
     postal_code: str | None = None
-    country_code: str = Field(default="DE", min_length=2, max_length=2)
+    country_code: str = Field(default="US", min_length=2, max_length=2)
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
 

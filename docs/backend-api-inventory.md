@@ -1,6 +1,6 @@
 # Backend API inventory
 
-The canonical contract is `/openapi.json`. The final source exposes 62 paths, 69 operations, and 69
+The canonical contract is `/openapi.json`. The final source exposes 70 paths, 77 operations, and 77
 unique operation IDs. Suggested endpoint names must be mapped to these existing
 routes; they must not be duplicated.
 
@@ -20,8 +20,11 @@ routes; they must not be duplicated.
 | Finance/payouts | `/api/v1/finance/*` | Present, role protected |
 | Integration administration | `/api/v1/integrations/*` | Present, role protected |
 | Health | `/health`, `/health/live`, `/health/ready` | Present |
-| Professional paid leads | — | Not present in canonical contract |
-| Lead disputes | — | Not present in canonical contract |
+| Public service requests | `POST /api/v1/service-requests` | Present |
+| Contact intake | `POST /api/v1/contact` | Present |
+| Provider interest | `POST /api/v1/provider-interest` | Present |
+| Professional paid leads | `/api/v1/provider/leads*` | Present, provider protected |
+| Lead disputes | `/api/v1/provider/leads/{lead_id}/disputes*` | Present, owner protected |
 | Customer booking cancellation | `POST /api/v1/customer/bookings/{booking_id}/cancel` | Present |
 | Customer payment detail | `GET /api/v1/customer/payments/{payment_id}` | Present |
 
@@ -29,5 +32,6 @@ The customer payment response deliberately excludes the Stripe client secret. Ca
 owner-scoped, audited, revokes the guest token, and rejects bookings whose job has progressed beyond
 the pre-dispatch states. It does not invent an automatic refund decision.
 
-Paid professional leads and disputes remain product/API gaps: current dispatch offers are assignment
-offers, not purchased leads, and therefore must not be relabelled or given fabricated prices.
+Professional lead payments use the canonical payment ledger with purpose `PROFESSIONAL_LEAD`.
+Server-owned price, currency, provider eligibility, Stripe intent, webhook settlement, and refund
+state are linked to the purchase; dispatch offers remain a separate assignment concept.

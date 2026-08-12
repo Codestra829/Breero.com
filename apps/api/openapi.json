@@ -105,7 +105,7 @@
             "title": "City"
           },
           "country_code": {
-            "default": "DE",
+            "default": "US",
             "maxLength": 2,
             "minLength": 2,
             "title": "Country Code",
@@ -158,6 +158,19 @@
               }
             ],
             "title": "Postal Code"
+          },
+          "state_code": {
+            "anyOf": [
+              {
+                "maxLength": 3,
+                "minLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Code"
           }
         },
         "required": [
@@ -1462,6 +1475,7 @@
       "LeadStatus": {
         "enum": [
           "AVAILABLE",
+          "RESERVED",
           "PURCHASED",
           "CLOSED"
         ],
@@ -1679,6 +1693,18 @@
             "title": "Currency",
             "type": "string"
           },
+          "lead_purchase_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lead Purchase Id"
+          },
           "metadata": {
             "additionalProperties": {
               "type": "string"
@@ -1712,7 +1738,8 @@
       "PaymentPurpose": {
         "enum": [
           "BOOKING_DIAGNOSTIC",
-          "QUOTE_ADDITIONAL_WORK"
+          "QUOTE_ADDITIONAL_WORK",
+          "PROFESSIONAL_LEAD"
         ],
         "title": "PaymentPurpose",
         "type": "string"
@@ -1789,6 +1816,18 @@
             "title": "Id",
             "type": "string"
           },
+          "lead_purchase_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lead Purchase Id"
+          },
           "payment_purpose": {
             "$ref": "#/components/schemas/PaymentPurpose"
           },
@@ -1821,6 +1860,7 @@
           "id",
           "booking_id",
           "quote_id",
+          "lead_purchase_id",
           "payment_purpose",
           "provider",
           "status",
@@ -2170,6 +2210,17 @@
       },
       "PurchaseRead": {
         "properties": {
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          },
           "currency": {
             "title": "Currency",
             "type": "string"
@@ -2182,6 +2233,15 @@
           "lead_id": {
             "format": "uuid",
             "title": "Lead Id",
+            "type": "string"
+          },
+          "payment_id": {
+            "format": "uuid",
+            "title": "Payment Id",
+            "type": "string"
+          },
+          "payment_status": {
+            "title": "Payment Status",
             "type": "string"
           },
           "price_minor": {
@@ -2203,7 +2263,9 @@
           "vendor_id",
           "price_minor",
           "currency",
-          "status"
+          "status",
+          "payment_id",
+          "payment_status"
         ],
         "title": "PurchaseRead",
         "type": "object"

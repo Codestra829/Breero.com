@@ -17,6 +17,7 @@ from app.domains.professional_leads.schemas import (
 )
 from app.domains.professional_leads.service import ProfessionalLeadService
 from app.domains.workforce.models import Vendor
+from app.integrations.stripe import StripeAdapter
 
 router = APIRouter()
 
@@ -45,7 +46,9 @@ async def get_lead(lead_id: uuid.UUID, session: Annotated[AsyncSession, Depends(
 async def purchase_lead(lead_id: uuid.UUID, session: Annotated[AsyncSession, Depends(get_db)], vendor: Annotated[Vendor, Depends(provider_context)], idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None):
     if not idempotency_key:
         raise DomainError("IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key is required", 400)
-    return await ProfessionalLeadService(session).purchase(lead_id, vendor.id, idempotency_key)
+    return await ProfessionalLeadService(session, StripeAdapter.from_environment()).purchase(
+        lead_id, vendor.id, idempotency_key
+    )
 
 
 @router.post("/{lead_id}/disputes", response_model=DisputeRead)

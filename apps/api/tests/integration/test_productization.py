@@ -1,5 +1,7 @@
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from sqlalchemy import select
@@ -9,6 +11,9 @@ from app.core.errors import DomainError
 from app.db.session import SessionLocal
 from app.domains.catalog.models import Service
 from app.domains.common.outbox import EventStatus, IntegrationEvent
+from app.domains.payments.models import Payment, PaymentPurpose, PaymentStatus
+from app.domains.payments.schemas import ProviderIntent, ProviderRefund
+from app.domains.payments.service import PaymentService
 from app.domains.professional_leads.models import (
     DisputeStatus,
     LeadPurchase,
@@ -25,6 +30,25 @@ from app.domains.public_submissions.schemas import (
 )
 from app.domains.public_submissions.service import PublicSubmissionService
 from app.domains.workforce.models import Vendor, VendorStatus
+
+
+class FakeLeadStripeProvider:
+    async def create_intent(self, **_: Any) -> ProviderIntent:
+        return ProviderIntent(
+            id=f"pi_lead_{uuid.uuid4().hex}",
+            status="requires_action",
+            client_secret="pi_lead_secret_test",
+        )
+
+    async def capture_intent(self, provider_payment_id: str, **_: Any) -> ProviderIntent:
+        return ProviderIntent(id=provider_payment_id, status="succeeded")
+
+    def verify_webhook(self, body: bytes, signature: str) -> dict[str, Any]:
+        assert signature == "fake-lead-signature"
+        return json.loads(body)
+
+    async def create_refund(self, provider_payment_id: str, **_: Any) -> ProviderRefund:
+        return ProviderRefund(id=f"re_{provider_payment_id}", status="succeeded")
 
 
 @pytest.mark.asyncio
@@ -155,7 +179,7 @@ async def test_leads_enforce_eligibility_purchase_idempotency_and_dispute_window
         session.add_all([plumbing_vendor, electrical_vendor, lead])
         await session.commit()
 
-        leads = ProfessionalLeadService(session)
+        leads = ProfessionalLeadService(session, FakeLeadStripeProvider())
         assert lead.id in {item.id for item in await leads.available(plumbing_vendor)}
         assert await leads.available(electrical_vendor) == []
         with pytest.raises(DomainError, match="not found"):
@@ -163,8 +187,35 @@ async def test_leads_enforce_eligibility_purchase_idempotency_and_dispute_window
 
         purchase = await leads.purchase(lead.id, plumbing_vendor.id, f"purchase-{marker}")
         replay = await leads.purchase(lead.id, plumbing_vendor.id, f"purchase-{marker}")
-        assert replay.id == purchase.id
-        assert purchase.status == LeadPurchaseStatus.PENDING_PAYMENT
+        assert replay["id"] == purchase["id"]
+        assert purchase["status"] == LeadPurchaseStatus.PENDING_PAYMENT
+        payment = await session.get(Payment, purchase["payment_id"])
+        assert payment and payment.payment_purpose == PaymentPurpose.PROFESSIONAL_LEAD
+        assert payment.amount_minor == lead.price_minor
+        assert payment.currency == lead.currency
+        assert lead.status == LeadStatus.RESERVED
+        payment_service = PaymentService(session, leads.payment_provider)
+        event = json.dumps(
+            {
+                "id": f"evt_lead_{marker}",
+                "type": "payment_intent.succeeded",
+                "data": {
+                    "object": {
+                        "object": "payment_intent",
+                        "id": payment.provider_payment_id,
+                        "status": "succeeded",
+                        "amount_received": payment.amount_minor,
+                    }
+                },
+            }
+        ).encode()
+        await payment_service.process_webhook(event, "fake-lead-signature")
+        await session.refresh(purchase_row := await session.get(LeadPurchase, purchase["id"]))
+        await session.refresh(lead)
+        assert purchase_row.status == LeadPurchaseStatus.PAID
+        assert lead.status == LeadStatus.PURCHASED
+        await session.refresh(payment)
+        assert payment.status == PaymentStatus.CAPTURED
 
         other_lead = ProfessionalLead(
             service_category="plumbing",
@@ -188,10 +239,8 @@ async def test_leads_enforce_eligibility_purchase_idempotency_and_dispute_window
         )
         assert duplicate.id == dispute.id
         assert dispute.status == DisputeStatus.OPEN
-        assert dispute.deadline_at == purchase.created_at + timedelta(hours=72)
+        assert dispute.deadline_at == purchase_row.created_at + timedelta(hours=72)
 
-        purchase_row = await session.get(LeadPurchase, purchase.id)
-        assert purchase_row
         purchase_row.created_at = datetime.now(UTC) - timedelta(hours=73)
         await session.commit()
         with pytest.raises(DomainError, match="72-hour"):

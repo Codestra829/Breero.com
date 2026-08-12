@@ -13,3 +13,7 @@ server-only and must never appear in frontend configuration or evidence.
 
 The public confirmation means BREERO accepted the intake; it does not promise provider assignment,
 service availability, approval, earnings, or a completed job.
+
+Transactional event routes distinguish service request, contact, and provider interest. Enabled
+Odoo workers upsert by immutable `x_breero_request_id`, while `x_breero_form_route` keeps consumer,
+support/business, and provider pipelines distinguishable and outside browser routing control.

@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.errors import DomainError
+from app.domains.payments.service import PaymentService
 from app.domains.workforce.models import Vendor, VendorStatus
+from app.integrations.stripe import PaymentProvider
 
 from .models import (
     DisputeStatus,
@@ -19,8 +21,9 @@ from .models import (
 
 
 class ProfessionalLeadService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, payment_provider: PaymentProvider | None = None) -> None:
         self.session = session
+        self.payment_provider = payment_provider
 
     @staticmethod
     def _eligible(vendor: Vendor, lead: ProfessionalLead) -> bool:
@@ -49,17 +52,19 @@ class ProfessionalLeadService:
             raise DomainError("LEAD_NOT_FOUND", "Opportunity was not found", 404)
         return lead
 
-    async def purchase(self, lead_id: uuid.UUID, vendor_id: uuid.UUID, key: str) -> LeadPurchase:
+    async def purchase(self, lead_id: uuid.UUID, vendor_id: uuid.UUID, key: str) -> dict:
         if not settings.stripe_enabled:
             raise DomainError("PAYMENT_PROVIDER_UNAVAILABLE", "Lead purchasing is unavailable until payment configuration is complete", 503)
         vendor = await self.session.get(Vendor, vendor_id)
         if not vendor or vendor.status != VendorStatus.ACTIVE:
             raise DomainError("PROVIDER_NOT_ELIGIBLE", "Provider is not eligible for this opportunity", 403)
+        if not self.payment_provider:
+            raise DomainError("PAYMENT_PROVIDER_UNAVAILABLE", "Lead purchasing is unavailable until payment configuration is complete", 503)
         existing = await self.session.scalar(select(LeadPurchase).where(LeadPurchase.vendor_id == vendor_id, LeadPurchase.idempotency_key == key))
         if existing:
             if existing.lead_id != lead_id:
                 raise DomainError("IDEMPOTENCY_CONFLICT", "Key already used for another purchase", 409)
-            return existing
+            return await self._purchase_view(existing)
         lead = await self.session.scalar(select(ProfessionalLead).where(ProfessionalLead.id == lead_id).with_for_update())
         if not lead or lead.status != LeadStatus.AVAILABLE:
             raise DomainError("LEAD_UNAVAILABLE", "Opportunity is no longer available", 409)
@@ -68,11 +73,44 @@ class ProfessionalLeadService:
         if not self._eligible(vendor, lead):
             raise DomainError("PROVIDER_NOT_ELIGIBLE", "Provider is not eligible for this opportunity", 403)
         purchase = LeadPurchase(lead_id=lead.id, vendor_id=vendor_id, idempotency_key=key, price_minor=lead.price_minor, currency=lead.currency, status=LeadPurchaseStatus.PENDING_PAYMENT)
-        lead.status = LeadStatus.PURCHASED
-        lead.purchased_by_vendor_id = vendor_id
         self.session.add(purchase)
+        await self.session.flush()
+        payment = await PaymentService(self.session, self.payment_provider).create_professional_lead_intent(
+            lead_purchase_id=purchase.id,
+            amount_minor=lead.price_minor,
+            currency=lead.currency,
+            provider_id=vendor_id,
+            lead_id=lead.id,
+            key=key,
+        )
+        lead.status = LeadStatus.RESERVED
+        lead.purchased_by_vendor_id = vendor_id
         await self.session.commit()
-        return purchase
+        return self._view(purchase, payment)
+
+    async def _purchase_view(self, purchase: LeadPurchase) -> dict:
+        from app.domains.payments.models import Payment
+
+        payment = await self.session.scalar(
+            select(Payment).where(Payment.lead_purchase_id == purchase.id)
+        )
+        if not payment:
+            raise DomainError("PAYMENT_NOT_FOUND", "Lead purchase payment was not found", 409)
+        return self._view(purchase, payment)
+
+    @staticmethod
+    def _view(purchase: LeadPurchase, payment: object) -> dict:
+        return {
+            "id": purchase.id,
+            "lead_id": purchase.lead_id,
+            "vendor_id": purchase.vendor_id,
+            "price_minor": purchase.price_minor,
+            "currency": purchase.currency,
+            "status": purchase.status,
+            "payment_id": getattr(payment, "id"),
+            "payment_status": getattr(payment, "status").value,
+            "client_secret": getattr(payment, "provider_client_secret"),
+        }
 
     async def dispute(self, lead_id: uuid.UUID, vendor_id: uuid.UUID, reason: str, details: str) -> LeadDispute:
         purchase = await self.session.scalar(select(LeadPurchase).where(LeadPurchase.lead_id == lead_id, LeadPurchase.vendor_id == vendor_id))

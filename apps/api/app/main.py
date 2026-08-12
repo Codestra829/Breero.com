@@ -12,7 +12,7 @@ from app.config import settings
 from app.core.errors import install_error_handlers
 from app.db.session import engine
 
-EXPECTED_SCHEMA_REVISION = "010_productization"
+EXPECTED_SCHEMA_REVISION = "012_service_area_dimensions"
 logger = structlog.get_logger()
 app = FastAPI(title=settings.app_name, version="1.0.0")
 app.add_middleware(

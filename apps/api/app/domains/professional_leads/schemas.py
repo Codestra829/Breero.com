@@ -29,6 +29,9 @@ class PurchaseRead(BaseModel):
     price_minor: int
     currency: str
     status: LeadPurchaseStatus
+    payment_id: uuid.UUID
+    payment_status: str
+    client_secret: str | None = None
 
 
 class DisputeCreate(BaseModel):

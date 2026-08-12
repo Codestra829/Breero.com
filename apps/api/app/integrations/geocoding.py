@@ -19,6 +19,7 @@ class GeocodedAddress:
     provider_reference: str | None = None
     confidence: float | None = None
     quality: str | None = None
+    state_code: str | None = None
 
 
 class FakeGeocodingAdapter:
@@ -48,6 +49,7 @@ class GeocodingAdapter:
             formatted_address=props.get("formatted", address),
             line1=props.get("address_line1", address),
             city=props.get("city", props.get("county", "")),
+            state_code=(props.get("state_code") or props.get("state")),
             postal_code=props.get("postcode", ""),
             country_code=props.get("country_code", "").upper(),
             latitude=float(props["lat"]),

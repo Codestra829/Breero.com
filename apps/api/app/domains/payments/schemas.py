@@ -10,6 +10,7 @@ from .models import PaymentPurpose, PaymentStatus, RefundStatus
 class PaymentIntentCreate(BaseModel):
     booking_id: uuid.UUID | None = None
     quote_id: uuid.UUID | None = None
+    lead_purchase_id: uuid.UUID | None = None
     payment_purpose: PaymentPurpose = PaymentPurpose.BOOKING_DIAGNOSTIC
     amount_minor: int = Field(gt=0, le=100_000_000)
     currency: str = Field(default="usd", min_length=3, max_length=3)
@@ -28,6 +29,7 @@ class PaymentView(BaseModel):
     id: uuid.UUID
     booking_id: uuid.UUID | None
     quote_id: uuid.UUID | None
+    lead_purchase_id: uuid.UUID | None
     payment_purpose: PaymentPurpose
     provider: str
     status: PaymentStatus

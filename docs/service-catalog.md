@@ -21,3 +21,8 @@ APP_ENV=production python -m app.seed
 ```
 
 Never run test fixture factories as launch seed commands.
+
+Service-area records support polygon boundaries plus reusable country, state, city, postal-code,
+center and radius dimensions. Provider coverage remains independently represented by provider home
+location/radius and capabilities. No Cypress radius or statewide Texas claim is embedded in generic
+domain code; an approved launch-area dataset is required before any service becomes bookable.

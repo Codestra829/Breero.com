@@ -4,7 +4,7 @@
 
 - Application candidate: `e3a1c8fa94875b9a83867a385d2d9fbf91d6d788`
 - Architecture base: `337e8e9ef47378643d221fb6c97d4ebdfe69e342`
-- Runtime migration: `010_productization` (single head)
+- Runtime migration: `012_service_area_dimensions` (single head)
 - Image: `breero-api:e3a1c8fa94875b9a83867a385d2d9fbf91d6d788`
 - Image digest: `sha256:a022d9a22786eada2a2c9c9645ae608817b5667ecbb90f453a35a559c86a51b1`
 
