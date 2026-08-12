@@ -11,7 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.domains.booking.models import Booking
-from app.domains.booking.schemas import BookingConfirmation, BookingCreateRequest, BookingResponse
+from app.domains.booking.schemas import (
+    BookingConfirmation,
+    BookingCreateRequest,
+    BookingCreateResponse,
+)
 from app.domains.booking.service import BookingService
 from app.domains.payments.models import Payment, PaymentPurpose
 from app.domains.payments.schemas import PaymentIntentCreate, PaymentView
@@ -21,8 +25,8 @@ from app.integrations.stripe import StripeAdapter
 router = APIRouter()
 
 
-def to_response(booking: Booking) -> BookingResponse:
-    return BookingResponse(
+def to_response(booking: Booking) -> BookingCreateResponse:
+    return BookingCreateResponse(
         id=booking.id,
         reference=booking.reference,
         status=booking.status,
@@ -35,13 +39,13 @@ def to_response(booking: Booking) -> BookingResponse:
     )
 
 
-@router.post("", response_model=BookingResponse, status_code=201)
+@router.post("", response_model=BookingCreateResponse, status_code=201)
 async def create_booking(
     payload: BookingCreateRequest,
     idempotency_key: str = Header(min_length=8, max_length=128, alias="Idempotency-Key"),
     session: AsyncSession = Depends(get_db),
     _rate_limit: None = Depends(rate_limit("booking-create", 10, 60)),
-) -> BookingResponse:
+) -> BookingCreateResponse:
     return to_response(await BookingService(session).create(payload, idempotency_key))
 
 

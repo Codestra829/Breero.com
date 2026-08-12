@@ -1,9 +1,9 @@
 import type { BreeroApi } from "./client";
-import type { AddressValidation, AuthSession, AvailabilitySlot, Booking, CustomerProfile, Payment, Quote, ServiceDetail, ServiceSummary, User } from "@breero/types";
+import type { AddressValidation, AuthSession, AvailabilitySlot, Booking, BookingCreateResponse, CustomerProfile, Payment, Quote, ServiceDetail, ServiceSummary, User } from "@breero/types";
 
 export interface MockScenario {
   services?: ServiceDetail[]; address?: AddressValidation; slots?: AvailabilitySlot[];
-  session?: AuthSession; bookings?: Booking[]; payments?: Payment[]; quotes?: Quote[]; profile?: CustomerProfile;
+  session?: AuthSession; bookings?: Booking[]; bookingCreateResponse?: BookingCreateResponse; payments?: Payment[]; quotes?: Quote[]; profile?: CustomerProfile;
   latencyMs?: number; fail?: Partial<Record<keyof BreeroApi, Error>>;
 }
 const wait = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
@@ -42,7 +42,7 @@ export function createMockBreeroApi(scenario: MockScenario = {}): BreeroApi {
     addresses: { validate: (_input, s) => run("addresses", () => scenario.address ?? missing("address"), s) },
     availability: { search: (_input, s) => run("availability", () => scenario.slots ?? [], s) },
     bookings: {
-      create: (_input, _key, s) => run("bookings", () => scenario.bookings?.[0] ?? missing("booking"), s),
+      create: (_input, _key, s) => run("bookings", () => scenario.bookingCreateResponse ?? missing("bookingCreateResponse"), s),
       prepareGuestPayment: (_id, _token, _key, s) => run("payments", () => scenario.payments?.[0] ?? missing("payment"), s),
       guestConfirmation: (id, _token, s) => run("bookings", () => {
         const booking = scenario.bookings?.find((item) => item.id === id) ?? missing(`booking ${id}`);

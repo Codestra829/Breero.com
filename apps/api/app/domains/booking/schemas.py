@@ -87,6 +87,11 @@ class BookingResponse(BaseModel):
     window_start: datetime
     window_end: datetime
     payment_required: bool
+
+
+class BookingCreateResponse(BookingResponse):
+    """Creation-only response carrying the one-time guest credential."""
+
     guest_confirmation_token: str | None = None
 
 

@@ -451,7 +451,8 @@
         "title": "BookingCreateRequest",
         "type": "object"
       },
-      "BookingResponse": {
+      "BookingCreateResponse": {
+        "description": "Creation-only response carrying the one-time guest credential.",
         "properties": {
           "currency": {
             "title": "Currency",
@@ -467,6 +468,57 @@
               }
             ],
             "title": "Guest Confirmation Token"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "payment_required": {
+            "title": "Payment Required",
+            "type": "boolean"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BookingStatus"
+          },
+          "total_amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Amount",
+            "type": "string"
+          },
+          "window_end": {
+            "format": "date-time",
+            "title": "Window End",
+            "type": "string"
+          },
+          "window_start": {
+            "format": "date-time",
+            "title": "Window Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "reference",
+          "status",
+          "total_amount",
+          "currency",
+          "window_start",
+          "window_end",
+          "payment_required"
+        ],
+        "title": "BookingCreateResponse",
+        "type": "object"
+      },
+      "BookingResponse": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
           },
           "id": {
             "format": "uuid",
@@ -3201,7 +3253,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BookingResponse"
+                  "$ref": "#/components/schemas/BookingCreateResponse"
                 }
               }
             },

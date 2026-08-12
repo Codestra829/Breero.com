@@ -8,6 +8,7 @@ describe("mock booking journey", () => {
       address: { serviceable: true, formatted_address: "1 Main St", address_id: "addr", service_area_id: "area", legal_entity_code: "BREERO_DE" },
       slots: [{ start: "2026-08-12T09:00:00Z", end: "2026-08-12T11:00:00Z", remaining_capacity: 2 }],
       bookings: [{ id: "booking", reference: "BR-100", status: "PENDING_PAYMENT", total_amount: "89.00", currency: "EUR", window_start: "2026-08-12T09:00:00Z", window_end: "2026-08-12T11:00:00Z", payment_required: true }],
+      bookingCreateResponse: { id: "booking", reference: "BR-100", status: "PENDING_PAYMENT", total_amount: "89.00", currency: "EUR", window_start: "2026-08-12T09:00:00Z", window_end: "2026-08-12T11:00:00Z", payment_required: true, guest_confirmation_token: "test-guest-token" },
       payments: [{ id: "payment", booking_id: "booking", provider: "stripe", status: "requires_action", amount_minor: 8900, currency: "eur", captured_amount_minor: 0, client_secret: "test-only", failure_code: null, created_at: "2026-08-11T10:00:00Z", updated_at: "2026-08-11T10:00:00Z" }],
     });
     const service = (await api.services.list())[0]!;

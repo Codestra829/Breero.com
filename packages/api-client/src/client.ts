@@ -1,6 +1,6 @@
 import type {
   AddressValidation, AddressValidationRequest, AuthSession, AvailabilitySearchRequest,
-  AvailabilitySlot, Booking, BookingConfirmation, BookingCreateRequest, ChangePasswordRequest, CustomerAddress,
+  AvailabilitySlot, Booking, BookingConfirmation, BookingCreateRequest, BookingCreateResponse, ChangePasswordRequest, CustomerAddress,
   CustomerAddressInput, CustomerBookingList, CustomerPayment, CustomerProfile,
   CustomerProfilePatch, ForgotPasswordRequest, LoginRequest, MessageResponse, Page,
   Payment, PaymentIntentRequest, Quote, RefreshRequest, RegisterRequest,
@@ -23,7 +23,7 @@ export interface BreeroApi {
   addresses: { validate(input: AddressValidationRequest, signal?: AbortSignal): Promise<AddressValidation> };
   availability: { search(input: AvailabilitySearchRequest, signal?: AbortSignal): Promise<AvailabilitySlot[]> };
   bookings: {
-    create(input: BookingCreateRequest, idempotencyKey: string, signal?: AbortSignal): Promise<Booking>;
+    create(input: BookingCreateRequest, idempotencyKey: string, signal?: AbortSignal): Promise<BookingCreateResponse>;
     prepareGuestPayment(id: UUID, guestToken: string, idempotencyKey: string, signal?: AbortSignal): Promise<Payment>;
     guestConfirmation(id: UUID, guestToken: string, signal?: AbortSignal): Promise<BookingConfirmation>;
     mine(params?: PageParams, signal?: AbortSignal): Promise<Page<Booking> | CustomerBookingList>;

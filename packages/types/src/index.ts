@@ -41,8 +41,8 @@ export interface BookingCreateRequest {
 export interface Booking {
   id: UUID; reference: string; status: string; total_amount: MoneyAmount; currency: string;
   window_start: ISODateTime; window_end: ISODateTime; payment_required: boolean;
-  guest_confirmation_token?: string | null;
 }
+export interface BookingCreateResponse extends Booking { guest_confirmation_token: string | null }
 export interface BookingConfirmation {
   booking_id: UUID; reference: string; booking_status: string; payment_status: string;
   window_start: ISODateTime; window_end: ISODateTime; amount_minor: number; currency: string;

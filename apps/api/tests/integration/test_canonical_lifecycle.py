@@ -240,6 +240,14 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
             booking.id, f"Bearer {guest_token}", session, None
         )
         assert pending_confirmation.payment_status == "not_started"
+        original_expiry = booking.guest_confirmation_expires_at
+        booking.guest_confirmation_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        await session.flush()
+        with pytest.raises(HTTPException) as expired:
+            await guest_booking(session, booking.id, f"Bearer {guest_token}")
+        assert expired.value.status_code == 403
+        booking.guest_confirmation_expires_at = original_expiry
+        await session.flush()
 
         stripe = FakeStripeProvider(marker)
         payments = PaymentService(session, stripe)
@@ -254,6 +262,15 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
         )
         booking_payment = await session.get(Payment, booking_payment_view.id)
         assert booking_payment
+        booking_payment.status = PaymentStatus.FAILED
+        await session.flush()
+        failed_confirmation = await booking_confirmation(
+            booking.id, f"Bearer {guest_token}", session, None
+        )
+        assert failed_confirmation.payment_status == "failed"
+        assert failed_confirmation.next_action == "retry_payment"
+        booking_payment.status = PaymentStatus.REQUIRES_ACTION
+        await session.flush()
         await payments.process_webhook(
             succeeded_event(f"evt-booking-{marker}", booking_payment),
             "fake-verified-signature",
