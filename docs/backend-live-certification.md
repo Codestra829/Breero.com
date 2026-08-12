@@ -31,7 +31,7 @@
 - Product intake: the 12-service Texas launch taxonomy is active, legacy Berlin and certification
   fixtures are inactive, and Service Request, Contact, and Provider Interest each persisted through
   the live staging API with idempotent replay and transactional outbox creation.
-- Live frontend: `staging.breero.com` serves the immutable `059a068` frontend over hostname-matched
+- Live frontend: `staging.breero.com` serves the immutable `4485344` frontend over hostname-matched
   TLS in live API mode. Chromium, Firefox, and WebKit each submitted all three intake forms; the
   seven responsive widths from 375 through 1920 pixels passed without horizontal overflow.
 
@@ -40,7 +40,9 @@
 - Stripe test, email, SMS, geocoding, Odoo, and payout credentials were unavailable and are explicitly
   disabled. Signed webhook, sandbox payments/refunds, external geocoding, and provider UAT are blocked.
 - Booking and paid-lead browser UAT remain blocked because launch services intentionally remain
-  non-bookable until external geocoding and Stripe sandbox credentials are certified.
+  non-bookable until external geocoding and Stripe sandbox credentials are certified. The live
+  booking screen loads all 12 authoritative services, disables unavailable choices, and offers the
+  durable Service Request path instead of presenting fabricated availability.
 - Production API activation is blocked until production-only credentials and a private production
   data plane are provisioned and the Stripe/browser gates pass. `api.breero.com` deliberately returns
   a TLS-valid `503` maintenance response rather than routing production users into staging.
