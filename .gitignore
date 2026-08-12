@@ -8,6 +8,7 @@ playwright-report/
 *.tsbuildinfo
 .env.*
 !.env.example
+!.env.staging.example
 
 # Python
 __pycache__/

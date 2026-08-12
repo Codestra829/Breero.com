@@ -40,6 +40,26 @@ services:
       redis:
         condition: service_healthy
 
+  web:
+    image: ${BREERO_WEB_IMAGE:?Set BREERO_WEB_IMAGE to an immutable image digest}
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - caddy_shared
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 4s
+      retries: 5
+      start_period: 20s
+
   worker:
     <<: *app
     command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=info"]
