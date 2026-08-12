@@ -1,5 +1,9 @@
 # BREERO production runbook
 
+> The `.107` inventory in this record is historical. The approved origin is `49.12.145.207`.
+> DNS now resolves to `.207`, but live host/Caddy/container state there is not verified because
+> SSH access timed out. Use the split topology in `infra/` and `docs/docker-dns-architecture.md`.
+
 ## Current decision
 
 **NO-GO (reverified 2026-08-12 12:17 UTC).** The inspected host has only 4.3 GB free on

@@ -1,0 +1,73 @@
+name: breero-staging-backend
+
+x-api: &api
+  image: ${BREERO_STAGING_BACKEND_IMAGE:?Set immutable BREERO_STAGING_BACKEND_IMAGE digest}
+  env_file: ${BREERO_STAGING_ENV_FILE:?Set absolute staging env-file path}
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs: [/tmp:rw,noexec,nosuid,size=64m]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  networks: [backend_private]
+
+services:
+  migrate:
+    <<: *api
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    profiles: [migration]
+  api:
+    <<: *api
+    container_name: breero-staging-api
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--proxy-headers", "--forwarded-allow-ips", "172.16.0.0/12"]
+    networks: [backend_edge, backend_private]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+  worker:
+    <<: *api
+    container_name: breero-staging-worker
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=info"]
+  scheduler:
+    <<: *api
+    container_name: breero-staging-scheduler
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
+  postgres:
+    image: postgis/postgis:17-3.5@sha256:0a23a2b5e4fbd9b4c6980d20ee80dd6b63dec52669379c75a506db58a4116708
+    container_name: breero-staging-postgres
+    env_file: ${BREERO_STAGING_ENV_FILE:?Set absolute staging env-file path}
+    restart: unless-stopped
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    networks: [backend_private]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  redis:
+    image: redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
+    container_name: breero-staging-redis
+    env_file: ${BREERO_STAGING_ENV_FILE:?Set absolute staging env-file path}
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "$${REDIS_PASSWORD}"]
+    volumes: [redis_data:/data]
+    networks: [backend_private]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+networks:
+  backend_edge:
+    external: true
+    name: breero_staging_backend_edge
+  backend_private:
+    name: breero_staging_backend_private
+    internal: true
+volumes:
+  postgres_data:
+    name: breero_staging_postgres
+  redis_data:
+    name: breero_staging_redis

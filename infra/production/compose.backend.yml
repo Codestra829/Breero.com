@@ -1,23 +1,15 @@
-name: breero-staging
-
-x-logging: &logging
-  driver: json-file
-  options:
-    max-size: "20m"
-    max-file: "5"
+name: breero-production-backend
 
 x-api: &api
-  image: ${BREERO_API_IMAGE:?Set BREERO_API_IMAGE to an immutable image digest}
-  env_file: ${BREERO_STAGING_ENV_FILE:-.env.staging}
+  image: ${BREERO_BACKEND_IMAGE:?Set immutable BREERO_BACKEND_IMAGE digest}
+  env_file: ${BREERO_PRODUCTION_ENV_FILE:?Set absolute production env-file path}
   restart: unless-stopped
   init: true
   read_only: true
-  tmpfs:
-    - /tmp:rw,noexec,nosuid,size=64m
+  tmpfs: [/tmp:rw,noexec,nosuid,size=64m]
   security_opt: [no-new-privileges:true]
   cap_drop: [ALL]
-  logging: *logging
-  networks: [staging_private]
+  networks: [backend_private]
 
 services:
   migrate:
@@ -28,20 +20,22 @@ services:
 
   api:
     <<: *api
+    container_name: breero-api
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--proxy-headers", "--forwarded-allow-ips", "172.16.0.0/12"]
-    ports: ["127.0.0.1:${BREERO_STAGING_API_PORT:-18000}:8000"]
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-      start_period: 20s
+    networks: [backend_edge, backend_private]
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
 
   worker:
     <<: *api
+    container_name: breero-worker
     command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=info"]
     depends_on:
       postgres: {condition: service_healthy}
@@ -49,60 +43,49 @@ services:
 
   scheduler:
     <<: *api
+    container_name: breero-scheduler
     command: ["celery", "-A", "app.workers.celery_app:celery_app", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
 
-  web:
-    image: ${BREERO_WEB_IMAGE:?Set BREERO_WEB_IMAGE to an immutable image digest}
-    restart: unless-stopped
-    init: true
-    read_only: true
-    tmpfs: [/tmp:rw,noexec,nosuid,size=32m]
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
-    logging: *logging
-    networks: [staging_ingress]
-    ports: ["127.0.0.1:${BREERO_STAGING_WEB_PORT:-13000}:3000"]
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
-      interval: 10s
-      timeout: 4s
-      retries: 10
-      start_period: 20s
-
   postgres:
     image: postgis/postgis:17-3.5@sha256:0a23a2b5e4fbd9b4c6980d20ee80dd6b63dec52669379c75a506db58a4116708
-    env_file: ${BREERO_STAGING_ENV_FILE:-.env.staging}
+    container_name: breero-postgres
+    env_file: ${BREERO_PRODUCTION_ENV_FILE:?Set absolute production env-file path}
     restart: unless-stopped
-    volumes: [staging_postgres_data:/var/lib/postgresql/data]
-    networks: [staging_private]
-    logging: *logging
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    networks: [backend_private]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
-      retries: 20
+      retries: 10
 
   redis:
     image: redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
-    env_file: ${BREERO_STAGING_ENV_FILE:-.env.staging}
+    container_name: breero-redis
+    env_file: ${BREERO_PRODUCTION_ENV_FILE:?Set absolute production env-file path}
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "$${REDIS_PASSWORD}"]
-    volumes: [staging_redis_data:/data]
-    networks: [staging_private]
-    logging: *logging
+    volumes: [redis_data:/data]
+    networks: [backend_private]
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep PONG"]
-      interval: 5s
+      interval: 10s
       timeout: 3s
-      retries: 20
+      retries: 10
 
 networks:
-  staging_private: {internal: true}
-  staging_ingress: {}
+  backend_edge:
+    external: true
+    name: breero_backend_edge
+  backend_private:
+    name: breero_backend_private
+    internal: true
 
 volumes:
-  staging_postgres_data:
-  staging_redis_data:
+  postgres_data:
+    name: breero_postgres
+  redis_data:
+    name: breero_redis

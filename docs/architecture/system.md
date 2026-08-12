@@ -40,6 +40,6 @@ Server-side RBAC/permissions, audit logging, webhook verification, idempotency, 
 
 ## Production
 
-Backend deployment target: `49.12.145.107`.
+BREERO production and staging origin: `49.12.145.207`.
 
 Production topology: reverse proxy/TLS -> API -> PostgreSQL/PostGIS + Redis + workers/scheduler. Frontends remain independently deployable.

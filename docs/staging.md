@@ -19,18 +19,20 @@ export BREERO_STAGING_ENV_FILE=/run/secrets/breero-staging.env
 export BREERO_API_IMAGE=registry.example/breero-api@sha256:<digest>
 export BREERO_WEB_IMAGE=registry.example/breero-web@sha256:<digest>
 scripts/release/verify-compose.sh
-docker compose -f docker-compose.staging.yml --profile migration run --rm migrate
-docker compose -f docker-compose.staging.yml up -d postgres redis api worker scheduler web
-docker compose -f docker-compose.staging.yml ps
-docker compose -f docker-compose.staging.yml exec api alembic current
-docker compose -f docker-compose.staging.yml exec api alembic heads
-docker compose -f docker-compose.staging.yml exec api alembic check
+docker network create breero_staging_frontend_edge
+docker network create breero_staging_backend_edge
+docker compose -f infra/staging/compose.backend.yml --profile migration run --rm migrate
+docker compose -f infra/staging/compose.backend.yml up -d postgres redis api worker scheduler
+docker compose -f infra/staging/compose.frontend.yml up -d
+docker compose -f infra/staging/compose.backend.yml exec api alembic current
+docker compose -f infra/staging/compose.backend.yml exec api alembic heads
+docker compose -f infra/staging/compose.backend.yml exec api alembic check
 ```
 
 Expected revision is `008_production_readiness`. Confirm PostGIS and schema independently:
 
 ```sh
-docker compose -f docker-compose.staging.yml exec postgres sh -c \
+docker compose -f infra/staging/compose.backend.yml exec postgres sh -c \
   'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select postgis_version();"'
 ```
 

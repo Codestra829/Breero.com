@@ -43,6 +43,6 @@ API docs: `http://localhost:8000/docs`
 
 ## Production target
 
-Backend host: `49.12.145.107`
+Approved BREERO origin: `49.12.145.207`
 
 Production secrets are never committed to this repository.

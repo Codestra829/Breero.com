@@ -20,7 +20,9 @@ First run this exact sequence on staging. For production:
 3. Verify secrets by configured/missing status without printing values.
 4. Pull immutable images and run the Compose `migrate` profile.
 5. Verify `alembic current`, `heads`, `check`, PostGIS and critical row counts.
-6. Start private PostgreSQL/Redis, API, worker, scheduler and web; wait for health.
+6. Deploy `infra/production/compose.backend.yml`, then independently deploy
+   `infra/production/compose.frontend.yml`; wait for health. A frontend deployment must not
+   restart the backend or data services.
 7. Back up `/srv/codestra/Caddyfile`, add only approved BREERO routes, connect services to the
    existing shared Caddy network, validate the entire config, then gracefully reload.
 8. Smoke live/ready, services, address, availability, login, customer bookings and ops jobs;
@@ -28,5 +30,9 @@ First run this exact sequence on staging. For production:
 9. Observe 5xx, latency, DB pool/locks, Redis, worker/outbox/webhooks, disk, restarts, CPU and
    memory. Retain old artifacts throughout the observation window (minimum 60 minutes).
 
-Never launch a second edge proxy, publish DB/Redis, deploy `latest`, or delete the rollback
+Create only the approved external `breero_frontend_edge` and `breero_backend_edge` networks.
+The API alone joins `breero_backend_edge`; PostgreSQL, Redis, worker, and scheduler join only
+the internal `breero_backend_private` network. Only shared Caddy may publish 80/443.
+
+Never launch a second edge proxy, publish frontend/API/DB/Redis ports, deploy `latest`, or delete the rollback
 path before acceptance.

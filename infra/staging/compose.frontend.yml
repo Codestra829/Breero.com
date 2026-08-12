@@ -1,0 +1,30 @@
+name: breero-staging-frontend
+
+x-frontend: &frontend
+  image: ${BREERO_STAGING_FRONTEND_IMAGE:?Set immutable BREERO_STAGING_FRONTEND_IMAGE digest}
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs: [/tmp:rw,noexec,nosuid,size=32m]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  networks: [frontend_edge]
+
+services:
+  web:
+    <<: *frontend
+    container_name: breero-staging-web
+  customer:
+    <<: *frontend
+    container_name: breero-staging-customer
+  partners:
+    <<: *frontend
+    container_name: breero-staging-partners
+  ops:
+    <<: *frontend
+    container_name: breero-staging-ops
+
+networks:
+  frontend_edge:
+    external: true
+    name: breero_staging_frontend_edge

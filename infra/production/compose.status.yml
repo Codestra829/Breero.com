@@ -1,0 +1,15 @@
+name: breero-production-status
+services:
+  status:
+    image: ${BREERO_STATUS_IMAGE:?Set immutable BREERO_STATUS_IMAGE digest}
+    container_name: breero-status
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    networks: [frontend_edge]
+networks:
+  frontend_edge:
+    external: true
+    name: breero_frontend_edge

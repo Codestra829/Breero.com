@@ -19,8 +19,11 @@ jobs:
       NEXT_PUBLIC_APP_URL: https://staging.breero.com
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_ci_placeholder
       BREERO_STAGING_ENV_FILE: .env.staging.example
-      BREERO_API_IMAGE: registry.invalid/breero-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      BREERO_WEB_IMAGE: registry.invalid/breero-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      BREERO_BACKEND_IMAGE: registry.invalid/breero-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      BREERO_FRONTEND_IMAGE: registry.invalid/breero-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      BREERO_STAGING_BACKEND_IMAGE: registry.invalid/breero-api@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      BREERO_STAGING_FRONTEND_IMAGE: registry.invalid/breero-web@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+      BREERO_PRODUCTION_ENV_FILE: .env.staging.example
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
