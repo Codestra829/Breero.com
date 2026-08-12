@@ -27,8 +27,9 @@ def view(event: IntegrationEvent) -> dict:
 
 @router.get("/health")
 async def health(session: AsyncSession = Depends(get_db), _: User = Depends(authorized)):
-    counts = dict((await session.execute(select(IntegrationEvent.status, func.count()).where(
-        IntegrationEvent.event_type.like("breero.%")).group_by(IntegrationEvent.status))).all())
+    rows = (await session.execute(select(IntegrationEvent.status, func.count()).where(
+        IntegrationEvent.event_type.like("breero.%")).group_by(IntegrationEvent.status))).tuples()
+    counts: dict[EventStatus, int] = {status: count for status, count in rows}
     return {"enabled": settings.odoo_enabled, "configured": bool(settings.odoo_url and settings.odoo_database and settings.odoo_username and settings.odoo_api_key),
             "delivery_counts": {str(key.value): value for key, value in counts.items()}}
 
