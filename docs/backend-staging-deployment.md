@@ -42,3 +42,9 @@ membership after every update.
 Stripe, email, SMS, geocoding, Odoo, and payout are explicitly disabled because staging credentials
 were not available. There is no fake-provider fallback. Provider-dependent UAT remains blocked until
 test/sandbox credentials are installed and the corresponding enable flag is deliberately changed.
+
+## Current external origin evidence
+
+As of 2026-08-12, `api-staging.breero.com` resolves to `49.12.145.107` through Cloudflare and Google
+DNS and serves the staging API over valid TLS. `staging.breero.com` resolves to the same host but has
+no active staging frontend TLS/site route; it must not be substituted with the production frontend.

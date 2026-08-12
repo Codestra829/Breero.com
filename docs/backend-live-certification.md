@@ -24,15 +24,19 @@
   cancellation is audited, idempotent, revokes guest access, and hides cross-customer resources.
 - Rollback: compatible prior API/worker image reached readiness, then the final 62-path image was
   restored without database migration or data loss.
+- External staging API: on 2026-08-12 both Cloudflare (`1.1.1.1`) and Google (`8.8.8.8`) resolved
+  `api-staging.breero.com` to `49.12.145.107`; its hostname-matched TLS certificate, live/ready,
+  OpenAPI, and service-catalog requests passed over HTTPS.
 
 ## Blocked evidence
 
-- `api-staging.breero.com` still resolves to incorrect target `49.12.145.207`; no DNS administrator
-  credential was available. TLS and external API proof cannot pass until the A record is corrected.
 - Stripe test, email, SMS, geocoding, Odoo, and payout credentials were unavailable and are explicitly
   disabled. Signed webhook, sandbox payments/refunds, external geocoding, and provider UAT are blocked.
-- `staging.breero.com` also resolves to `.207`, so browser-to-live-API and cross-browser live UAT are
-  blocked.
+- `staging.breero.com` now resolves to `49.12.145.107` through both checked resolvers, but no staging
+  frontend TLS/site route is active. Browser-to-live-API and cross-browser live UAT remain blocked.
+- Production API activation is blocked until production-only credentials and a private production
+  data plane are provisioned and the Stripe/browser gates pass. `api.breero.com` deliberately returns
+  a TLS-valid `503` maintenance response rather than routing production users into staging.
 - The canonical contract has no paid professional-lead or lead-dispute domain. Dispatch offers are
   not misrepresented as purchased leads.
 
