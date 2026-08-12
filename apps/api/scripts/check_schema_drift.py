@@ -6,7 +6,7 @@ they are versioned migrations but are not destructive model drift.
 
 import asyncio
 
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 from app.db.base import Base
 from app.db.session import engine
@@ -23,7 +23,19 @@ from app.domains.workforce import models as _workforce  # noqa: F401
 
 def compare(connection) -> list[str]:
     inspector = inspect(connection)
-    database_tables = set(inspector.get_table_names()) - {"alembic_version", "spatial_ref_sys"}
+    extension_owned = set(
+        connection.execute(
+            text(
+                """SELECT c.relname
+                FROM pg_depend d
+                JOIN pg_class c ON c.oid = d.objid
+                WHERE d.refclassid = 'pg_extension'::regclass
+                  AND d.classid = 'pg_class'::regclass
+                  AND d.deptype = 'e'"""
+            )
+        ).scalars()
+    )
+    database_tables = set(inspector.get_table_names()) - extension_owned - {"alembic_version"}
     model_tables = set(Base.metadata.tables)
     errors = [f"unexpected table: {name}" for name in sorted(database_tables - model_tables)]
     errors += [f"missing table: {name}" for name in sorted(model_tables - database_tables)]

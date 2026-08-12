@@ -66,6 +66,8 @@ def do_run_migrations(connection) -> None:
             )
         ).scalars()
     )
+    # End the catalog-read transaction before Alembic owns the migration transaction.
+    connection.commit()
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
