@@ -142,6 +142,41 @@ async def test_failed_payment_webhook_records_failure(service: PaymentService) -
 
 
 @pytest.mark.asyncio
+async def test_webhook_settlement_failure_rolls_back_then_records_failed_event(
+    service: PaymentService,
+) -> None:
+    payment = Payment(
+        id=uuid.uuid4(),
+        booking_id=uuid.uuid4(),
+        provider_payment_id="pi_rollback",
+        payment_purpose=PaymentPurpose.BOOKING_DIAGNOSTIC,
+        amount_minor=1000,
+        captured_amount_minor=0,
+        currency="usd",
+        status=PaymentStatus.CREATED,
+    )
+    service.provider.verify_webhook.return_value = {
+        "id": "evt_rollback",
+        "type": "payment_intent.succeeded",
+        "data": {"object": {"object": "payment_intent", "id": "pi_rollback", "status": "succeeded", "amount_received": 1000}},
+    }
+    service.repo.get_by_provider_id.return_value = payment
+    service.repo.get_event.side_effect = [None, None]
+    service._settle = AsyncMock(side_effect=RuntimeError("forced settlement failure"))
+
+    with pytest.raises(Exception, match="Webhook processing failed"):
+        await service.process_webhook(b"{}", "signature")
+
+    service.session.rollback.assert_awaited_once()
+    assert any(
+        isinstance(call.args[0], PaymentEvent)
+        and call.args[0].provider_event_id == "evt_rollback"
+        and call.args[0].status == "failed"
+        for call in service.session.add.call_args_list
+    )
+
+
+@pytest.mark.asyncio
 async def test_quote_intent_requires_customer_approval(service: PaymentService) -> None:
     quote_id = uuid.uuid4()
     payment_id = uuid.uuid4()

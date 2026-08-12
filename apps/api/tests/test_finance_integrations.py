@@ -48,6 +48,22 @@ async def test_fake_payout_is_idempotent():
     assert len(gateway.transfers) == 1
 
 
+@pytest.mark.asyncio
+async def test_provider_success_then_application_crash_retry_creates_one_transfer():
+    gateway = FakePayoutGateway()
+    values = dict(
+        amount_minor=1000,
+        currency="USD",
+        destination="batch:crash-test",
+        idempotency_key="payout-batch:stable-crash-key",
+    )
+    succeeded_before_crash = await gateway.create_transfer(**values)
+    # The application dies before persisting the transfer ID. A retry has only the stable key.
+    recovered = await gateway.create_transfer(**values)
+    assert recovered.transfer_id == succeeded_before_crash.transfer_id
+    assert len(gateway.transfers) == 1
+
+
 def test_odoo_mappers_have_explicit_models_and_identifiers():
     identifier = uuid.uuid4()
     assert CustomerOdooMapper().model == "res.partner"

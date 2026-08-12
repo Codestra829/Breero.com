@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domains.booking.models import Booking, BookingStatus
 from app.domains.common.outbox import AuditLog, EventStatus, IntegrationEvent
 from app.domains.jobs.models import Job, JobEvent, JobStatus, WorkRequest, WorkRequestStatus
+from app.domains.jobs.service import JobService
 from app.integrations.stripe import PaymentProvider
 
 from .exceptions import IdempotencyConflict, InvalidPaymentState, PaymentError, PaymentNotFound
@@ -340,24 +341,18 @@ class PaymentService:
                 return
             if quote.status != WorkRequestStatus.APPROVED_PENDING_PAYMENT:
                 raise InvalidPaymentState("Quote cannot be settled from its current state")
-            quote.status = WorkRequestStatus.APPROVED
+            JobService.apply_work_request_transition(quote, WorkRequestStatus.APPROVED)
             quote.payment_id = payment.id
             job = await self.session.scalar(
                 select(Job).where(Job.id == quote.job_id).with_for_update()
             )
             if job and job.status == JobStatus.AWAITING_APPROVAL:
-                previous = job.status
-                job.status = JobStatus.IN_PROGRESS
-                job.version += 1
-                self.session.add(
-                    JobEvent(
-                        job_id=job.id,
-                        from_status=previous,
-                        to_status=job.status,
-                        actor_id=None,
-                        actor_type="system",
-                        reason="additional_work_payment_captured",
-                    )
+                JobService(self.session).apply_transition(
+                    job,
+                    JobStatus.IN_PROGRESS,
+                    None,
+                    "system",
+                    "additional_work_payment_captured",
                 )
         else:
             await self._confirm_booking_and_create_job(payment)

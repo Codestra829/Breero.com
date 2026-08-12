@@ -3,7 +3,6 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.common.outbox import AuditLog, EventStatus, IntegrationEvent
@@ -110,15 +109,10 @@ class FinanceService:
             available_at=committed_at + timedelta(days=plan.hold_days),
         )
         self.session.add(earning)
-        try:
-            await self.session.commit()
-        except IntegrityError:
-            await self.session.rollback()
-            existing = await self.repo.earning_for_job(job.id)
-            if existing:
-                return existing
-            raise
-        await self.session.refresh(earning)
+        # Transaction ownership belongs to the application command which recognizes
+        # completion. Flushing here obtains IDs and checks constraints without making
+        # the earning visible independently from the completed job and its events.
+        await self.session.flush()
         return earning
 
     async def release_eligible(self) -> int:
@@ -259,7 +253,3 @@ class FinanceService:
         await self.session.commit()
         await self.session.refresh(batch)
         return batch
-
-    async def mark_processing(self, batch_id: uuid.UUID) -> PayoutBatch:
-        # Compatibility alias; real processing always goes through the gateway.
-        return await self.submit_batch(batch_id, uuid.UUID(int=0))

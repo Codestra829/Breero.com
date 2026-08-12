@@ -28,25 +28,42 @@ TRANSITIONS: dict[JobStatus, set[JobStatus]] = {
     JobStatus.CANCELLED: set(),
 }
 
+WORK_REQUEST_TRANSITIONS: dict[WorkRequestStatus, set[WorkRequestStatus]] = {
+    WorkRequestStatus.DRAFT: {WorkRequestStatus.SUBMITTED},
+    WorkRequestStatus.SUBMITTED: {
+        WorkRequestStatus.PENDING_CUSTOMER,
+        WorkRequestStatus.DECLINED,
+    },
+    WorkRequestStatus.PENDING_CUSTOMER: {
+        WorkRequestStatus.APPROVED_PENDING_PAYMENT,
+        WorkRequestStatus.DECLINED,
+    },
+    WorkRequestStatus.APPROVED_PENDING_PAYMENT: {WorkRequestStatus.APPROVED},
+    WorkRequestStatus.APPROVED: set(),
+    WorkRequestStatus.DECLINED: set(),
+    WorkRequestStatus.PAID: set(),
+    WorkRequestStatus.CANCELLED: set(),
+    WorkRequestStatus.EXPIRED: set(),
+}
+
 
 class JobService:
     def __init__(self, session: AsyncSession):
         self.session = session
         self.repo = JobRepository(session)
 
-    async def transition(
+    def apply_transition(
         self,
-        job_id: uuid.UUID,
+        job: Job,
         target: JobStatus,
         actor_id: uuid.UUID | None,
         actor_type: str,
         reason: str | None = None,
-    ) -> Job:
-        job = await self.repo.get(job_id, lock=True)
-        if not job:
-            raise HTTPException(404, "Job not found")
+        metadata: dict | None = None,
+    ) -> bool:
+        """Apply the single authoritative in-transaction job transition."""
         if target == job.status:
-            return job
+            return False
         if target not in TRANSITIONS[job.status]:
             raise HTTPException(
                 409, f"Cannot transition job from {job.status.value} to {target.value}"
@@ -58,7 +75,6 @@ class JobService:
         job.version += 1
         if target == JobStatus.COMPLETED:
             job.completed_at = datetime.now(UTC)
-            await self._record_completion_effects(job)
         self.repo.add_event(
             JobEvent(
                 job_id=job.id,
@@ -67,11 +83,53 @@ class JobService:
                 actor_id=actor_id,
                 actor_type=actor_type,
                 reason=reason,
+                metadata_=metadata or {},
             )
         )
+        return True
+
+    @staticmethod
+    def apply_work_request_transition(
+        request: WorkRequest, target: WorkRequestStatus
+    ) -> bool:
+        """Apply the authoritative work-request lifecycle transition."""
+        if request.status == target:
+            return False
+        if target not in WORK_REQUEST_TRANSITIONS[request.status]:
+            raise HTTPException(
+                409,
+                f"Cannot transition work request from {request.status.value} to {target.value}",
+            )
+        request.status = target
+        return True
+
+    async def transition_locked(
+        self,
+        job_id: uuid.UUID,
+        target: JobStatus,
+        actor_id: uuid.UUID | None,
+        actor_type: str,
+        reason: str | None = None,
+    ) -> Job:
+        job = await self.repo.get(job_id, lock=True)
+        if not job:
+            raise HTTPException(404, "Job not found")
+        changed = self.apply_transition(job, target, actor_id, actor_type, reason)
+        if changed and target == JobStatus.COMPLETED:
+            await self._record_completion_effects(job)
         await self.session.commit()
         await self.session.refresh(job)
         return job
+
+    async def transition(
+        self,
+        job_id: uuid.UUID,
+        target: JobStatus,
+        actor_id: uuid.UUID | None,
+        actor_type: str,
+        reason: str | None = None,
+    ) -> Job:
+        return await self.transition_locked(job_id, target, actor_id, actor_type, reason)
 
     async def technician_note_transition(
         self,
@@ -85,30 +143,12 @@ class JobService:
         job = await self.repo.get(job_id, lock=True)
         if not job or job.worker_id != worker_id:
             raise HTTPException(403, "Technician is not assigned to this job")
-        if target != job.status and target not in TRANSITIONS[job.status]:
-            raise HTTPException(
-                409, f"Cannot transition job from {job.status.value} to {target.value}"
-            )
-        previous = job.status
         setattr(job, notes_field, notes)
-        if target == JobStatus.COMPLETED:
-            self._validate_completion(job)
-        if target != job.status:
-            job.status = target
-            job.version += 1
-            if target == JobStatus.COMPLETED:
-                job.completed_at = datetime.now(UTC)
-                await self._record_completion_effects(job)
-            self.repo.add_event(
-                JobEvent(
-                    job_id=job.id,
-                    from_status=previous,
-                    to_status=target,
-                    actor_id=actor_id,
-                    actor_type="worker",
-                    reason=f"{notes_field}_recorded",
-                )
-            )
+        changed = self.apply_transition(
+            job, target, actor_id, "worker", f"{notes_field}_recorded"
+        )
+        if changed and target == JobStatus.COMPLETED:
+            await self._record_completion_effects(job)
         await self.session.commit()
         await self.session.refresh(job)
         return job
@@ -168,18 +208,8 @@ class JobService:
             created_by=worker_id,
         )
         self.session.add(request)
-        previous = job.status
-        job.status = JobStatus.AWAITING_APPROVAL
-        job.version += 1
-        self.repo.add_event(
-            JobEvent(
-                job_id=job.id,
-                from_status=previous,
-                to_status=job.status,
-                actor_id=worker_id,
-                actor_type="worker",
-                reason="additional_work_requested",
-            )
+        self.apply_transition(
+            job, JobStatus.AWAITING_APPROVAL, worker_id, "worker", "additional_work_requested"
         )
         await self.session.commit()
         await self.session.refresh(request)
@@ -196,8 +226,11 @@ class JobService:
             raise HTTPException(403, "Not permitted to decide this request")
         if request.status != WorkRequestStatus.PENDING_CUSTOMER:
             raise HTTPException(409, "Work request has already been decided")
-        request.status = (
-            WorkRequestStatus.APPROVED_PENDING_PAYMENT if approve else WorkRequestStatus.DECLINED
+        self.apply_work_request_transition(
+            request,
+            WorkRequestStatus.APPROVED_PENDING_PAYMENT
+            if approve
+            else WorkRequestStatus.DECLINED,
         )
         request.customer_decided_at = datetime.now(UTC)
         self.session.add(
@@ -215,37 +248,35 @@ class JobService:
             )
         )
         if not approve:
-            previous = job.status
-            job.status = JobStatus.IN_PROGRESS
-            job.version += 1
-            self.repo.add_event(
-                JobEvent(
-                    job_id=job.id,
-                    from_status=previous,
-                    to_status=job.status,
-                    actor_id=customer_id,
-                    actor_type="customer",
-                    reason="additional_work_declined",
-                )
+            self.apply_transition(
+                job, JobStatus.IN_PROGRESS, customer_id, "customer", "additional_work_declined"
             )
         await self.session.commit()
         await self.session.refresh(request)
         return request
 
-    async def review_work_request(self, request_id: uuid.UUID, approve: bool) -> WorkRequest:
+    async def review_work_request(
+        self, request_id: uuid.UUID, approve: bool, actor_id: uuid.UUID | None = None
+    ) -> WorkRequest:
         request = await self.repo.get_work_request(request_id, lock=True)
         if not request:
             raise HTTPException(404, "Work request not found")
         if request.status != WorkRequestStatus.SUBMITTED:
             raise HTTPException(409, "Work request has already been reviewed")
-        request.status = (
-            WorkRequestStatus.PENDING_CUSTOMER if approve else WorkRequestStatus.DECLINED
+        self.apply_work_request_transition(
+            request,
+            WorkRequestStatus.PENDING_CUSTOMER if approve else WorkRequestStatus.DECLINED,
         )
         if not approve:
             job = await self.repo.get(request.job_id, lock=True)
             if job and job.status == JobStatus.AWAITING_APPROVAL:
-                job.status = JobStatus.IN_PROGRESS
-                job.version += 1
+                self.apply_transition(
+                    job,
+                    JobStatus.IN_PROGRESS,
+                    actor_id,
+                    "operations",
+                    "work_request_rejected",
+                )
         await self.session.commit()
         await self.session.refresh(request)
         return request

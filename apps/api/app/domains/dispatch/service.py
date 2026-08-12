@@ -7,8 +7,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.common.outbox import AuditLog
-from app.domains.jobs.models import JobEvent, JobStatus
+from app.domains.jobs.models import JobStatus
 from app.domains.jobs.repository import JobRepository
+from app.domains.jobs.service import JobService
 from app.domains.workforce.models import Worker
 
 from .models import Assignment, AssignmentStatus, DispatchOffer, OfferStatus
@@ -20,6 +21,7 @@ class DispatchService:
         self.session = session
         self.repo = DispatchRepository(session)
         self.jobs = JobRepository(session)
+        self.job_service = JobService(session)
 
     async def match(
         self, job_id: uuid.UUID, actor_id: uuid.UUID | None = None
@@ -34,17 +36,8 @@ class DispatchService:
         candidates = await self.repo.candidate_workers([], limit=10)
         if not candidates:
             if job.status != JobStatus.MATCHING:
-                previous: JobStatus = job.status
-                job.status = JobStatus.MATCHING
-                self.jobs.add_event(
-                    JobEvent(
-                        job_id=job.id,
-                        from_status=previous,
-                        to_status=job.status,
-                        actor_id=actor_id,
-                        actor_type="system",
-                        reason="no_candidates",
-                    )
+                self.job_service.apply_transition(
+                    job, JobStatus.MATCHING, actor_id, "system", "no_candidates"
                 )
             await self.session.commit()
             return []
@@ -63,19 +56,17 @@ class DispatchService:
             )
             self.session.add(offer)
             offers.append(offer)
-        previous = job.status
-        job.status = JobStatus.OFFERED
-        job.version += 1
-        self.jobs.add_event(
-            JobEvent(
-                job_id=job.id,
-                from_status=previous,
-                to_status=job.status,
-                actor_id=actor_id,
-                actor_type="system",
-                reason="offers_created",
-                metadata_={"count": len(offers), "round": round_number},
+        if job.status == JobStatus.CREATED:
+            self.job_service.apply_transition(
+                job, JobStatus.MATCHING, actor_id, "system", "matching_started"
             )
+        self.job_service.apply_transition(
+            job,
+            JobStatus.OFFERED,
+            actor_id,
+            "system",
+            "offers_created",
+            {"count": len(offers), "round": round_number},
         )
         await self.session.commit()
         return offers
@@ -138,8 +129,9 @@ class DispatchService:
             )
         )
         job.vendor_id, job.worker_id = vendor_id, worker.id
-        previous, job.status = job.status, JobStatus.ASSIGNED
-        job.version += 1
+        self.job_service.apply_transition(
+            job, JobStatus.ASSIGNED, actor_id, "vendor", "offer_accepted"
+        )
         worker.available = False
         await self.session.execute(
             update(DispatchOffer)
@@ -149,16 +141,6 @@ class DispatchService:
                 DispatchOffer.status == OfferStatus.PENDING,
             )
             .values(status=OfferStatus.WITHDRAWN)
-        )
-        self.jobs.add_event(
-            JobEvent(
-                job_id=job.id,
-                from_status=previous,
-                to_status=job.status,
-                actor_id=actor_id,
-                actor_type="vendor",
-                reason="offer_accepted",
-            )
         )
         try:
             await self.session.commit()
@@ -202,19 +184,11 @@ class DispatchService:
                 created_at=datetime.now(UTC),
             )
         )
-        previous, job.status = job.status, JobStatus.ASSIGNED
-        job.vendor_id, job.worker_id, job.version = vendor_id, worker_id, job.version + 1
-        worker.available = False
-        self.jobs.add_event(
-            JobEvent(
-                job_id=job.id,
-                from_status=previous,
-                to_status=job.status,
-                actor_id=actor_id,
-                actor_type="operations",
-                reason=reason,
-            )
+        self.job_service.apply_transition(
+            job, JobStatus.ASSIGNED, actor_id, "operations", reason
         )
+        job.vendor_id, job.worker_id = vendor_id, worker_id
+        worker.available = False
         await self.session.commit()
         await self.session.refresh(assignment)
         return assignment
