@@ -69,7 +69,7 @@ class EmailAdapter:
 
     async def send(self, event_type: str, payload: dict[str, Any]) -> None:
         if not self.delivery_url:
-            if self.environment == "production":
+            if self.environment in {"production", "staging"}:
                 raise IntegrationNotConfigured("Email provider is not configured")
             structlog.get_logger(__name__).info(
                 "local_email_delivery", event_type=event_type, recipient=payload.get("email")

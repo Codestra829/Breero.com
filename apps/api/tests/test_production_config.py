@@ -13,3 +13,31 @@ def test_liveness_has_no_dependency_calls():
     from app.main import live
 
     assert live.__name__ == "live"
+
+
+def test_staging_allows_explicitly_disabled_optional_providers():
+    settings = Settings(
+        app_env="staging",
+        database_url="postgresql+psycopg://staging:strong-password@postgres:5432/staging",
+        redis_url="redis://:strong-password@redis:6379/0",
+        jwt_secret="a" * 32,
+        jwt_refresh_secret="b" * 32,
+        cors_origins="https://staging.breero.com",
+    )
+
+    assert settings.stripe_enabled is False
+    assert settings.geocoding_enabled is False
+    assert settings.email_enabled is False
+
+
+def test_staging_requires_credentials_for_enabled_provider():
+    with pytest.raises(ValidationError, match="STRIPE_SECRET_KEY"):
+        Settings(
+            app_env="staging",
+            database_url="postgresql+psycopg://staging:strong-password@postgres:5432/staging",
+            redis_url="redis://:strong-password@redis:6379/0",
+            jwt_secret="a" * 32,
+            jwt_refresh_secret="b" * 32,
+            cors_origins="https://staging.breero.com",
+            stripe_enabled=True,
+        )
