@@ -28,7 +28,7 @@ class FakeGeocodingAdapter:
 
 class GeocodingAdapter:
     async def geocode(self, address: str) -> GeocodedAddress:
-        if not settings.geocoding_api_key:
+        if not settings.geocoding_enabled or not settings.geocoding_api_key:
             raise DomainError(
                 "GEOCODING_UNAVAILABLE",
                 "Coordinates are required while geocoding is not configured",

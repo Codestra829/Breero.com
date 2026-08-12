@@ -59,6 +59,6 @@ class UnconfiguredPayoutGateway:
 
 def get_payout_gateway() -> PayoutGateway:
     # No live banking provider has been selected. Tests may inject FakePayoutGateway.
-    if not settings.payout_provider:
+    if not settings.payout_enabled or not settings.payout_provider:
         return UnconfiguredPayoutGateway()
     raise IntegrationNotConfigured(f"Unsupported payout provider: {settings.payout_provider}")

@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Alembic merge revision identifiers are not credentials"
+paths = ['''apps/api/migrations/versions/007_backend_merge\.py''']
+regexes = ['''006_(auth_customer_payments|finance_integrations)''']
