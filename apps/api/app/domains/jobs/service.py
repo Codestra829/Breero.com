@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.booking.models import Booking
-from app.domains.common.outbox import EventStatus, IntegrationEvent
+from app.domains.common.outbox import AuditLog, EventStatus, IntegrationEvent
 from app.domains.finance.models import VendorEarning
 from app.domains.finance.service import FinanceService
 
@@ -200,6 +200,20 @@ class JobService:
             WorkRequestStatus.APPROVED_PENDING_PAYMENT if approve else WorkRequestStatus.DECLINED
         )
         request.customer_decided_at = datetime.now(UTC)
+        self.session.add(
+            AuditLog(
+                actor_id=customer_id,
+                action="quote.approve" if approve else "quote.reject",
+                resource_type="work_request",
+                resource_id=request.id,
+                metadata_json={
+                    "previous_status": WorkRequestStatus.PENDING_CUSTOMER.value,
+                    "new_status": request.status.value,
+                    "payment_required": approve,
+                },
+                created_at=datetime.now(UTC),
+            )
+        )
         if not approve:
             previous = job.status
             job.status = JobStatus.IN_PROGRESS

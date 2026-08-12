@@ -29,7 +29,7 @@ from app.domains.booking.schemas import (
 from app.domains.booking.service import AddressService, AvailabilityService, BookingService
 from app.domains.catalog.models import QuestionType, Service, ServiceQuestion
 from app.domains.catalog.repository import CatalogRepository
-from app.domains.common.outbox import EventStatus, IntegrationEvent
+from app.domains.common.outbox import AuditLog, EventStatus, IntegrationEvent
 from app.domains.common.outbox_service import OutboxService
 from app.domains.dispatch.service import DispatchService
 from app.domains.finance.models import (
@@ -337,3 +337,5 @@ async def test_canonical_backend_lifecycle_with_fake_providers() -> None:
         assert remaining is None
         assert booking_payment.status == PaymentStatus.CAPTURED
         assert quote_payment.status == PaymentStatus.CAPTURED
+        audit_actions = set((await session.scalars(select(AuditLog.action))).all())
+        assert {"assignment.create", "quote.approve", "compensation_plan.change", "payout.approve"} <= audit_actions

@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.booking.models import Booking, BookingStatus
-from app.domains.common.outbox import EventStatus, IntegrationEvent
+from app.domains.common.outbox import AuditLog, EventStatus, IntegrationEvent
 from app.domains.jobs.models import Job, JobEvent, JobStatus, WorkRequest, WorkRequestStatus
 from app.integrations.stripe import PaymentProvider
 
@@ -288,6 +288,22 @@ class PaymentService:
             created_by=actor_id,
         )
         self.session.add(refund)
+        self.session.add(
+            AuditLog(
+                actor_id=actor_id,
+                action="refund.create",
+                resource_type="payment",
+                resource_id=payment.id,
+                metadata_json={
+                    "amount_minor": requested,
+                    "currency": payment.currency,
+                    "reason": reason,
+                    "provider_refund_id": provider_refund.id,
+                    "provider_status": provider_status.value,
+                },
+                created_at=datetime.now(UTC),
+            )
+        )
         if provider_status == RefundStatus.SUCCEEDED:
             payment.status = (
                 PaymentStatus.REFUNDED

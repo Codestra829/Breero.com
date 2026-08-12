@@ -62,7 +62,7 @@ class OutboxService:
         event.attempt_count = 0
         event.next_attempt_at = datetime.now(UTC)
         event.processed_at = None
-        self.session.add(AuditLog(actor_id=actor_id, action="integration.manual_retry",
+        self.session.add(AuditLog(actor_id=actor_id, action="integration.retry",
             resource_type="integration_event", resource_id=event.id,
             metadata_json={"previous_error": event.last_error}, created_at=datetime.now(UTC)))
         await self.session.commit()

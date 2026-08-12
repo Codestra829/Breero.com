@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.domains.booking.models import Booking, BookingStatus
+from app.domains.common.outbox import AuditLog
 from app.domains.jobs.models import WorkRequest, WorkRequestStatus
 from app.domains.payments.exceptions import IdempotencyConflict, InvalidPaymentState
 from app.domains.payments.models import (
@@ -203,3 +204,7 @@ async def test_partial_refund_updates_payment(service: PaymentService) -> None:
     assert result.amount_minor == 400
     assert result.status == RefundStatus.SUCCEEDED
     assert payment.status == PaymentStatus.PARTIALLY_REFUNDED
+    assert any(
+        isinstance(call.args[0], AuditLog) and call.args[0].action == "refund.create"
+        for call in service.session.add.call_args_list
+    )

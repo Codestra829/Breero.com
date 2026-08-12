@@ -6,6 +6,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domains.common.outbox import AuditLog
 from app.domains.jobs.models import JobEvent, JobStatus
 from app.domains.jobs.repository import JobRepository
 from app.domains.workforce.models import Worker
@@ -117,14 +118,23 @@ class DispatchService:
         if not job or job.status not in {JobStatus.OFFERED, JobStatus.MATCHING}:
             raise HTTPException(409, "Job is no longer assignable")
         offer.status = OfferStatus.ACCEPTED
-        self.session.add(
-            Assignment(
+        assignment = Assignment(
                 job_id=job.id,
                 offer_id=offer.id,
                 vendor_id=vendor_id,
                 worker_id=worker.id,
                 status=AssignmentStatus.ACTIVE,
                 assigned_by=actor_id,
+            )
+        self.session.add(assignment)
+        self.session.add(
+            AuditLog(
+                actor_id=actor_id,
+                action="assignment.create",
+                resource_type="job",
+                resource_id=job.id,
+                metadata_json={"vendor_id": str(vendor_id), "worker_id": str(worker.id)},
+                created_at=datetime.now(UTC),
             )
         )
         job.vendor_id, job.worker_id = vendor_id, worker.id
@@ -178,6 +188,20 @@ class DispatchService:
             assigned_by=actor_id,
         )
         self.session.add(assignment)
+        self.session.add(
+            AuditLog(
+                actor_id=actor_id,
+                action="assignment.create",
+                resource_type="job",
+                resource_id=job.id,
+                metadata_json={
+                    "vendor_id": str(vendor_id),
+                    "worker_id": str(worker_id),
+                    "reason": reason,
+                },
+                created_at=datetime.now(UTC),
+            )
+        )
         previous, job.status = job.status, JobStatus.ASSIGNED
         job.vendor_id, job.worker_id, job.version = vendor_id, worker_id, job.version + 1
         worker.available = False

@@ -8,7 +8,7 @@
 .market-hero h1 { max-width: 10ch; margin: .15em 0; font-family: var(--br-font-display); font-size: clamp(3rem,7vw,6.5rem); font-weight: 520; letter-spacing: -.055em; line-height: .94; }
 .market-hero > div:first-child > p:not(.market-eyebrow) { max-width: 38rem; color: var(--br-ink-soft); font-size: 1.08rem; }
 .market-eyebrow { color: var(--br-brand); font-size: .75rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-.hero-panel { padding: clamp(1.5rem,4vw,2.5rem); border-radius: var(--br-radius-xl); color: white; background: var(--br-brand-deep); box-shadow: var(--br-shadow-lg); }
+.hero-panel { padding: clamp(1.5rem,4vw,2.5rem); border-radius: var(--br-radius-xl); color: white; background: var(--br-brand-dark); box-shadow: var(--br-shadow-lg); }
 .hero-panel h2 { margin-top: 0; font-family: var(--br-font-display); font-size: 2rem; }
 .market-section { padding-block: clamp(4rem,8vw,7rem); }
 .market-section > h2,.catalog-head h1 { margin: .15em 0 .7em; font-family: var(--br-font-display); font-size: clamp(2.2rem,5vw,4rem); font-weight: 520; letter-spacing: -.035em; line-height: 1.02; }
