@@ -1,0 +1,18 @@
+{
+  "recorded_at": "2026-08-12T13:38:56Z",
+  "source_branch": "codex/final-architecture-staging-fixes",
+  "source_sha": "337e8e9ef47378643d221fb6c97d4ebdfe69e342",
+  "pr": 22,
+  "migration_head": "009_final_staging_boundaries",
+  "openapi": {"paths": 60, "operations": 67},
+  "tests": {"backend": 69, "postgresql_acceptance": 15, "frontend": 46, "mock_browser": 93},
+  "staging_hostname": "staging.breero.com",
+  "staging_address": "49.12.145.207",
+  "safe_compute": false,
+  "deployment_performed": false,
+  "live_browser_proof": false,
+  "blocker": "NO SAFE STAGING COMPUTE",
+  "staging_decision": "NOT READY",
+  "uat_decision": "UAT INCOMPLETE",
+  "production_decision": "PRODUCTION NO-GO"
+}
