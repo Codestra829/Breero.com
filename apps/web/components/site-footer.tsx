@@ -6,7 +6,7 @@ import { Logo } from "./brand/Logo";
 const groups = [
   { title: "Services", links: [["All services", "/services"], ["Plumbing", "/services/plumbing"], ["Electrical", "/services/electrical"], ["Cleaning", "/services/cleaning"]] },
   { title: "Company", links: [["About", "/about"], ["How it works", "/how-it-works"], ["Careers", "/careers"], ["Press", "/press"]] },
-  { title: "Support", links: [["Help centre", "/help"], ["Contact", "/contact"], ["FAQ", "/faq"], ["Trust & safety", "/trust"], ["Refunds", "/refund-policy"], ["Cancellations", "/cancellation-policy"]] },
+  { title: "Support", links: [["Request service", "/request-service"], ["Help centre", "/help"], ["Contact", "/contact"], ["FAQ", "/faq"], ["Trust & safety", "/trust"], ["Refunds", "/refund-policy"], ["Cancellations", "/cancellation-policy"]] },
   { title: "Professionals", links: [["Partner information", "/partners"], ["Professional standards", "/trust"], ["Lead policy", "/professional-lead-policy"], ["Partner interest", "/partners#interest"]] },
 ];
 

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createBreeroApi } from "./client";
 import { createConfiguredApi } from "./factory";
+import { readPublicApiConfig } from "./config";
 
 describe("BREERO client", () => {
   it("sends idempotency keys on booking writes", async () => {
@@ -15,5 +16,29 @@ describe("BREERO client", () => {
   it("switches all domains through one mock seam", async () => {
     const api = createConfiguredApi({ NEXT_PUBLIC_API_MODE: "mock" }, { mock: { services: [] } });
     await expect(api.services.list()).resolves.toEqual([]);
+  });
+
+  it("accepts the exact live staging origin in a production build", () => {
+    expect(
+      readPublicApiConfig({
+        NODE_ENV: "production",
+        NEXT_PUBLIC_DEPLOYMENT_ENV: "staging",
+        NEXT_PUBLIC_API_BASE_URL: "https://api-staging.breero.com/api/v1",
+        NEXT_PUBLIC_API_MODE: "live",
+      }),
+    ).toMatchObject({
+      apiBaseUrl: "https://api-staging.breero.com/api/v1",
+      mode: "live",
+    });
+  });
+
+  it("rejects a production origin for a staging deployment", () => {
+    expect(() =>
+      readPublicApiConfig({
+        NODE_ENV: "production",
+        NEXT_PUBLIC_DEPLOYMENT_ENV: "staging",
+        NEXT_PUBLIC_API_BASE_URL: "https://api.breero.com/api/v1",
+      }),
+    ).toThrow("staging requires https://api-staging.breero.com/api/v1");
   });
 });

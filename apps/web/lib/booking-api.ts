@@ -13,7 +13,7 @@ const mockBooking: BookingCreateResponse = { id: "booking-demo", reference: "BR-
 const mockPayment: Payment = { id: "payment-demo", booking_id: mockBooking.id, provider: "mock", status: "requires_action", amount_minor: 8900, currency: "EUR", captured_amount_minor: 0, client_secret: null, failure_code: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
 
 export function bookingApi(): BreeroApi {
-  if (process.env.NEXT_PUBLIC_API_MODE !== "mock") return createConfiguredApi({ NODE_ENV: process.env.NODE_ENV, NEXT_PUBLIC_API_MODE: process.env.NEXT_PUBLIC_API_MODE, NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL, NEXT_PUBLIC_API_TIMEOUT_MS: process.env.NEXT_PUBLIC_API_TIMEOUT_MS, NEXT_PUBLIC_E2E_ALLOW_MOCK: process.env.NEXT_PUBLIC_E2E_ALLOW_MOCK });
+  if (process.env.NEXT_PUBLIC_API_MODE !== "mock") return createConfiguredApi({ NODE_ENV: process.env.NODE_ENV, NEXT_PUBLIC_API_MODE: process.env.NEXT_PUBLIC_API_MODE, NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL, NEXT_PUBLIC_API_TIMEOUT_MS: process.env.NEXT_PUBLIC_API_TIMEOUT_MS, NEXT_PUBLIC_E2E_ALLOW_MOCK: process.env.NEXT_PUBLIC_E2E_ALLOW_MOCK, NEXT_PUBLIC_DEPLOYMENT_ENV: process.env.NEXT_PUBLIC_DEPLOYMENT_ENV });
   const api = createMockBreeroApi({ services: serviceCatalog as ServiceDetail[], address: mockAddress, slots: futureSlots(), bookings: [mockBooking], bookingCreateResponse: mockBooking, payments: [mockPayment] });
   return {
     ...api,

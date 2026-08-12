@@ -12,15 +12,20 @@ RUN pnpm install --frozen-lockfile
 FROM dependencies AS build
 ARG NEXT_PUBLIC_APP_URL=https://breero.com
 ARG NEXT_PUBLIC_API_BASE_URL=https://api.breero.com/api/v1
+ARG NEXT_PUBLIC_DEPLOYMENT_ENV=production
 ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ENV NODE_ENV=production \
     NEXT_PUBLIC_API_MODE=live \
     NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL} \
     NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL} \
+    NEXT_PUBLIC_DEPLOYMENT_ENV=${NEXT_PUBLIC_DEPLOYMENT_ENV} \
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}
 COPY . .
-RUN test "$NEXT_PUBLIC_APP_URL" = "https://breero.com" \
- && test "$NEXT_PUBLIC_API_BASE_URL" = "https://api.breero.com/api/v1" \
+RUN case "$NEXT_PUBLIC_DEPLOYMENT_ENV" in \
+      production) test "$NEXT_PUBLIC_APP_URL" = "https://breero.com" && test "$NEXT_PUBLIC_API_BASE_URL" = "https://api.breero.com/api/v1" ;; \
+      staging) test "$NEXT_PUBLIC_APP_URL" = "https://staging.breero.com" && test "$NEXT_PUBLIC_API_BASE_URL" = "https://api-staging.breero.com/api/v1" ;; \
+      *) exit 1 ;; \
+    esac \
  && test "$NEXT_PUBLIC_API_MODE" = "live" \
  && pnpm --filter @breero/web build
 

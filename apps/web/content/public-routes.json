@@ -25,6 +25,7 @@
   "/services/home-maintenance",
   "/book",
   "/booking",
+  "/request-service",
   "/availability",
   "/faq",
   "/reviews",
