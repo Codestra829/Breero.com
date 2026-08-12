@@ -47,7 +47,8 @@
 .actions button:disabled { cursor: not-allowed; opacity: .55; }
 .error { padding: .9rem; border-radius: var(--br-radius-md); color: var(--br-danger); background: var(--br-danger-light); }
 .notice { padding: 1rem; border-radius: var(--br-radius-md); background: var(--br-brand-light); }
-.slots { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem; }
+.slots { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem; scroll-margin-top: 90px; }
+.slots .choice { scroll-margin-top: 90px; }
 .summary > div { display: flex; justify-content: space-between; gap: 1rem; padding-bottom: .65rem; border-bottom: 1px solid var(--br-line); }
 .market-loading { padding: 3rem; color: var(--br-muted); text-align: center; }
 @media (max-width: 800px) { .market-hero,.split,.detail-hero { grid-template-columns: 1fr; } .market-hero { padding: 2.25rem 1.5rem; } .service-list { grid-template-columns: repeat(2,minmax(0,1fr)); } .price-box { position: static; } }
