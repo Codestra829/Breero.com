@@ -17,6 +17,7 @@ services:
     <<: *app
     restart: "no"
     command: [alembic, upgrade, head]
+    healthcheck: {disable: true}
     profiles: [migration]
 
   api:
@@ -33,6 +34,7 @@ services:
     <<: *app
     container_name: breero-staging-worker
     command: [celery, -A, app.workers.celery_app:celery_app, worker, --loglevel=info]
+    healthcheck: {disable: true}
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
@@ -67,6 +69,7 @@ services:
 networks:
   edge:
     name: breero_staging_edge
+    external: true
   private:
     name: breero_staging_private
     internal: true
