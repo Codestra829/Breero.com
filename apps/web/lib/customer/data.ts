@@ -5,7 +5,7 @@ export type CustomerBooking = Booking & {
   timeline: Array<{ title: string; description?: string; time?: string; status: "complete" | "current" | "upcoming" }>;
 };
 
-export const profile: CustomerProfile = { id: "customer-1", email: "maya.thompson@example.com", first_name: "Maya", last_name: "Thompson", phone: "+44 7700 900123" };
+export const profile: CustomerProfile = { id: "customer-1", email: "maya.thompson@example.com", full_name: "Maya Thompson", phone: "+44 7700 900123", email_verified: true };
 
 export const bookings: CustomerBooking[] = [
   { id: "BR-240817", reference: "BR-240817", status: "CONFIRMED", total_amount: "78.00", currency: "GBP", window_start: "2026-08-17T09:00:00Z", window_end: "2026-08-17T11:00:00Z", payment_required: false, service: "Home cleaning", category: "Cleaning", address: "24 Maple Grove, London, N16 8QJ", professional: { name: "Amara Okafor", company: "Bright Home Co.", initials: "AO", rating: 4.9 }, timeline: [
@@ -24,12 +24,11 @@ export const bookings: CustomerBooking[] = [
 ];
 
 export const quotes: Quote[] = [
-  { id: "QT-1048", booking_id: "BR-240802", status: "PENDING", currency: "GBP", total_amount_minor: 8850, expires_at: "2026-08-14T23:59:00Z", terms: "Price includes labour, standard fittings and VAT. Any additional work requires your approval before it begins.", lines: [
-    { id: "line-1", description: "Mixer tap cartridge replacement", quantity: 1, unit_amount_minor: 4200, total_amount_minor: 4200 },
-    { id: "line-2", description: "Labour — first hour", quantity: 1, unit_amount_minor: 3500, total_amount_minor: 3500 },
-    { id: "line-3", description: "Call-out adjustment", quantity: 1, unit_amount_minor: 1150, total_amount_minor: 1150 },
+  { id: "QT-1048", job_id: "JOB-240802", status: "PENDING", description: "Replace the worn mixer tap cartridge and test the seals.", currency: "GBP", subtotal_minor: 7700, tax_minor: 850, total_minor: 8550, created_at: "2026-08-11T08:40:00Z", line_items: [
+    { description: "Mixer tap cartridge replacement", quantity: 1, unit_price_minor: 4200 },
+    { description: "Labour — first hour", quantity: 1, unit_price_minor: 3500 },
   ] },
-  { id: "QT-1012", booking_id: "BR-239104", status: "APPROVED", currency: "GBP", total_amount_minor: 11000, expires_at: "2026-07-27T23:59:00Z", terms: "Approved 25 July 2026.", lines: [{ id: "line-4", description: "Electrical inspection and written report", quantity: 1, unit_amount_minor: 11000, total_amount_minor: 11000 }] },
+  { id: "QT-1012", job_id: "JOB-239104", status: "APPROVED", description: "Electrical inspection and written report.", currency: "GBP", subtotal_minor: 11000, tax_minor: 0, total_minor: 11000, created_at: "2026-07-25T12:00:00Z", line_items: [{ description: "Electrical inspection and written report", quantity: 1, unit_price_minor: 11000 }] },
 ];
 
 export const payments: Payment[] = [

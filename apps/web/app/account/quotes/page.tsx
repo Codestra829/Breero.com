@@ -1,6 +1,14 @@
-import { Badge, Card, EmptyState, Price } from "@breero/ui";
-import { AccountPageHeader } from "@/components/account/page-header";
-import { bookings, formatDate, quotes } from "@/lib/customer/data";
+"use client";
 
-export const metadata={title:"My quotes"};
-export default function QuotesPage(){return <><AccountPageHeader eyebrow="Review & decide" title="Quotes" description="Clear costs and terms before any additional work begins."/>{quotes.length?<div className="quote-list">{quotes.map((quote)=>{const booking=bookings.find((item)=>item.id===quote.booking_id);return <a className="booking-card-link" href={`/account/quotes/${quote.id}`} key={quote.id}><Card interactive className="quote-item"><div><Badge variant={quote.status==="PENDING"?"warning":"success"}>{quote.status==="PENDING"?"Awaiting your approval":"Approved"}</Badge><h2>{booking?.service??"Service quote"}</h2><p>{quote.id} · Booking {quote.booking_id}{quote.expires_at&&` · ${quote.status==="PENDING"?"Expires":"Expired"} ${formatDate(quote.expires_at)}`}</p></div><div className="quote-item__side"><Price amount={quote.total_amount_minor/100} currency={quote.currency}/><strong>View quote →</strong></div></Card></a>})}</div>:<EmptyState title="No quotes to review" description="If a professional recommends additional work, their quote will appear here before anything changes."/>}</>}
+import { useCallback } from "react";
+import { Badge, Card, EmptyState, ErrorState, LoadingState, Price } from "@breero/ui";
+import type { Quote } from "@breero/types";
+import { AccountPageHeader } from "@/components/account/page-header";
+import { customerApi } from "@/lib/customer/api";
+import { useApiResource } from "@/lib/customer/use-api-resource";
+
+export default function QuotesPage() {
+  const load = useCallback(async (signal: AbortSignal) => (await customerApi.quotes.list(undefined, signal)).items, []);
+  const { value: quotes, error, retry } = useApiResource<Quote[]>(load);
+  return <><AccountPageHeader eyebrow="Review & decide" title="Quotes" description="Clear costs and terms before any additional work begins."/>{error ? <ErrorState title="Quotes aren’t available" description={error.message} onRetry={retry}/> : !quotes ? <LoadingState label="Loading your quotes"/> : quotes.length ? <div className="quote-list">{quotes.map((quote) => <a className="booking-card-link" href={`/account/quotes/${quote.id}`} key={quote.id}><Card interactive className="quote-item"><div><Badge variant={quote.status === "PENDING" ? "warning" : quote.status === "APPROVED" ? "success" : "neutral"}>{quote.status.replaceAll("_", " ")}</Badge><h2>Additional work request</h2><p>{quote.description} · {new Date(quote.created_at).toLocaleDateString("en-GB", { dateStyle: "medium" })}</p></div><div className="quote-item__side"><Price amount={quote.total_minor / 100} currency={quote.currency}/><strong>View quote →</strong></div></Card></a>)}</div> : <EmptyState title="No quotes to review" description="If a professional recommends additional work, their quote will appear here before anything changes."/>}</>;
+}
