@@ -32,9 +32,9 @@ export const quotes: Quote[] = [
 ];
 
 export const payments: Payment[] = [
-  { id: "PAY-9031", booking_id: "BR-239104", provider: "card", status: "CAPTURED", amount_minor: 11000, currency: "GBP", captured_amount_minor: 11000, client_secret: null, failure_code: null, created_at: "2026-07-24T13:12:00Z", updated_at: "2026-07-28T09:45:00Z" },
-  { id: "PAY-8990", booking_id: "BR-238771", provider: "card", status: "REFUNDED", amount_minor: 6400, currency: "GBP", captured_amount_minor: 0, client_secret: null, failure_code: null, created_at: "2026-06-18T11:20:00Z", updated_at: "2026-06-20T15:05:00Z" },
-  { id: "PAY-8912", booking_id: "BR-237104", provider: "card", status: "CAPTURED", amount_minor: 4800, currency: "GBP", captured_amount_minor: 4800, client_secret: null, failure_code: null, created_at: "2026-05-04T16:20:00Z", updated_at: "2026-05-07T12:30:00Z" },
+  { id: "PAY-9031", booking_id: "BR-239104", provider: "card", status: "captured", amount_minor: 11000, currency: "GBP", captured_amount_minor: 11000, client_secret: null, failure_code: null, created_at: "2026-07-24T13:12:00Z", updated_at: "2026-07-28T09:45:00Z" },
+  { id: "PAY-8990", booking_id: "BR-238771", provider: "card", status: "refunded", amount_minor: 6400, currency: "GBP", captured_amount_minor: 0, client_secret: null, failure_code: null, created_at: "2026-06-18T11:20:00Z", updated_at: "2026-06-20T15:05:00Z" },
+  { id: "PAY-8912", booking_id: "BR-237104", provider: "card", status: "captured", amount_minor: 4800, currency: "GBP", captured_amount_minor: 4800, client_secret: null, failure_code: null, created_at: "2026-05-04T16:20:00Z", updated_at: "2026-05-07T12:30:00Z" },
 ];
 
 export const addresses = [
