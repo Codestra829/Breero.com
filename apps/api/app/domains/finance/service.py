@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domains.common.outbox import AuditLog
+from app.domains.common.outbox import AuditLog, EventStatus, IntegrationEvent
 from app.domains.jobs.models import Job, JobStatus
 from app.integrations.payouts import (
     IntegrationNotConfigured,
@@ -237,6 +237,23 @@ class FinanceService:
         batch.provider_status = result.status
         batch.submitted_at = datetime.now(UTC)
         batch.status = PayoutStatus.PROCESSING
+        self.session.add(
+            IntegrationEvent(
+                aggregate_type="payout",
+                aggregate_id=batch.id,
+                event_type="payout.submitted",
+                payload={
+                    "id": str(batch.id),
+                    "reference": batch.reference,
+                    "total_minor": batch.total_minor,
+                    "currency": batch.currency,
+                    "provider_status": result.status,
+                },
+                status=EventStatus.PENDING,
+                attempts=0,
+                available_at=datetime.now(UTC),
+            )
+        )
         self.audit(actor_id, "payout.submit", "payout_batch", batch.id,
                    {"provider_status": result.status})
         await self.session.commit()
