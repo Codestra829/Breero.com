@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.errors import DomainError
+from app.domains.common.outbox import EventStatus, IntegrationEvent
 from app.domains.payments.service import PaymentService
 from app.domains.workforce.models import Vendor, VendorStatus
 from app.integrations.stripe import PaymentProvider
@@ -136,6 +137,30 @@ class ProfessionalLeadService:
             deadline_at=deadline,
         )
         self.session.add(dispute)
+        await self.session.flush()
+        self.session.add(IntegrationEvent(
+            aggregate_type="lead_dispute",
+            aggregate_id=dispute.id,
+            aggregate_version=1,
+            schema_version=1,
+            idempotency_key=f"lead_dispute:{dispute.id}:1",
+            event_type="breero.lead_dispute.created",
+            payload={
+                "dispute_id": str(dispute.id),
+                "lead_id": str(lead_id),
+                "provider_id": str(vendor_id),
+                "purchase_id": str(purchase.id),
+                "reason": reason,
+                "details": details,
+                "submitted_at": datetime.now(UTC).isoformat(),
+                "deadline_at": deadline.isoformat(),
+                "status": dispute.status.value,
+                "amount_minor": purchase.price_minor,
+                "currency": purchase.currency,
+            },
+            status=EventStatus.PENDING if settings.odoo_enabled else EventStatus.PENDING_CONFIGURATION,
+            next_attempt_at=datetime.now(UTC),
+        ))
         await self.session.commit()
         return dispute
 

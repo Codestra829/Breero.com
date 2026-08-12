@@ -15,6 +15,10 @@ class EventStatus(str, enum.Enum):
     PENDING_CONFIGURATION = "PENDING_CONFIGURATION"
     PROCESSING = "PROCESSING"
     DELIVERED = "DELIVERED"
+    RETRYING = "RETRYING"
+    FAILED_RETRYABLE = "FAILED_RETRYABLE"
+    FAILED_TERMINAL = "FAILED_TERMINAL"
+    # Legacy values remain readable during the rolling schema upgrade.
     FAILED = "FAILED"
     DEAD_LETTER = "DEAD_LETTER"
 
@@ -24,6 +28,9 @@ class IntegrationEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     aggregate_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     aggregate_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     event_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    aggregate_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    idempotency_key: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
     status: Mapped[EventStatus] = mapped_column(
         Enum(EventStatus, name="integration_event_status"), default=EventStatus.PENDING, index=True
@@ -35,6 +42,10 @@ class IntegrationEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str | None] = mapped_column(Text)
+    last_error_code: Mapped[str | None] = mapped_column(String(80))
+    last_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    external_model: Mapped[str | None] = mapped_column(String(120))
+    external_record_id: Mapped[str | None] = mapped_column(String(120))
 
     @property
     def attempts(self):

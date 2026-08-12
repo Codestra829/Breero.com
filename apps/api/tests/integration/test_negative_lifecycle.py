@@ -117,7 +117,7 @@ async def test_odoo_failure_dead_letters_then_authorized_retry_delivers() -> Non
 
         assert await OutboxService(session).process(failed_odoo, limit=1) == 1
         await session.refresh(event)
-        assert event.status == EventStatus.DEAD_LETTER and event.attempt_count == 5
+        assert event.status == EventStatus.FAILED_TERMINAL and event.attempt_count == 5
         await OutboxService(session).retry(event.id, uuid.uuid4())
 
         delivered: list[uuid.UUID] = []

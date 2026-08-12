@@ -78,7 +78,14 @@ class PublicSubmissionService:
             IntegrationEvent(
                 aggregate_type="public_submission",
                 aggregate_id=submission.id,
-                event_type=f"public_submission.{submission_type.value.lower()}.accepted",
+                event_type={
+                    SubmissionType.SERVICE_REQUEST: "breero.service_request.created",
+                    SubmissionType.CONTACT: "breero.contact_request.created",
+                    SubmissionType.PROVIDER_INTEREST: "breero.provider_interest.created",
+                }[submission_type],
+                aggregate_version=1,
+                schema_version=1,
+                idempotency_key=f"{submission_type.value.lower()}:{submission.id}:1",
                 payload={
                     "submission_id": str(submission.id),
                     "route": submission_type.value,

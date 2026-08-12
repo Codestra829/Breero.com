@@ -12,6 +12,15 @@ class TrackingFields(BaseModel):
     utm_campaign: str | None = Field(default=None, max_length=120)
     utm_content: str | None = Field(default=None, max_length=120)
     utm_term: str | None = Field(default=None, max_length=120)
+    language: str | None = Field(default=None, max_length=16)
+    customer_timezone: str | None = Field(default=None, max_length=64)
+    transactional_contact_allowed: bool = True
+    marketing_consent: bool = False
+    sms_consent: bool = False
+    email_consent: bool = False
+    consent_timestamp: str | None = Field(default=None, max_length=40)
+    consent_source: str | None = Field(default=None, max_length=120)
+    policy_version: str | None = Field(default=None, max_length=40)
     company: str = Field(default="", max_length=0, exclude=True)
 
 
@@ -42,7 +51,7 @@ class ContactCreate(TrackingFields):
     name: str = Field(min_length=2, max_length=160)
     email: EmailStr
     phone: str | None = Field(default=None, min_length=7, max_length=40)
-    category: Literal["booking_help", "service_issue", "billing", "general", "business"]
+    category: Literal["booking_help", "service_issue", "billing", "general", "business", "privacy_request", "provider_question"]
     subject: str = Field(min_length=3, max_length=200)
     message: str = Field(min_length=10, max_length=5000)
 

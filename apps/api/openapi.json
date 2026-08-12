@@ -776,7 +776,9 @@
               "service_issue",
               "billing",
               "general",
-              "business"
+              "business",
+              "privacy_request",
+              "provider_question"
             ],
             "title": "Category",
             "type": "string"
@@ -787,10 +789,68 @@
             "title": "Company",
             "type": "string"
           },
+          "consent_source": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consent Source"
+          },
+          "consent_timestamp": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consent Timestamp"
+          },
+          "customer_timezone": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Timezone"
+          },
           "email": {
             "format": "email",
             "title": "Email",
             "type": "string"
+          },
+          "email_consent": {
+            "default": false,
+            "title": "Email Consent",
+            "type": "boolean"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "marketing_consent": {
+            "default": false,
+            "title": "Marketing Consent",
+            "type": "boolean"
           },
           "message": {
             "maxLength": 5000,
@@ -817,6 +877,23 @@
             ],
             "title": "Phone"
           },
+          "policy_version": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Version"
+          },
+          "sms_consent": {
+            "default": false,
+            "title": "Sms Consent",
+            "type": "boolean"
+          },
           "source_url": {
             "format": "uri",
             "minLength": 1,
@@ -828,6 +905,11 @@
             "minLength": 3,
             "title": "Subject",
             "type": "string"
+          },
+          "transactional_contact_allowed": {
+            "default": true,
+            "title": "Transactional Contact Allowed",
+            "type": "boolean"
           },
           "utm_campaign": {
             "anyOf": [
@@ -2067,16 +2149,69 @@
             "title": "Company",
             "type": "string"
           },
+          "consent_source": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consent Source"
+          },
+          "consent_timestamp": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consent Timestamp"
+          },
           "contact_name": {
             "maxLength": 160,
             "minLength": 2,
             "title": "Contact Name",
             "type": "string"
           },
+          "customer_timezone": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Timezone"
+          },
           "email": {
             "format": "email",
             "title": "Email",
             "type": "string"
+          },
+          "email_consent": {
+            "default": false,
+            "title": "Email Consent",
+            "type": "boolean"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
           },
           "license_details": {
             "anyOf": [
@@ -2089,6 +2224,11 @@
               }
             ],
             "title": "License Details"
+          },
+          "marketing_consent": {
+            "default": false,
+            "title": "Marketing Consent",
+            "type": "boolean"
           },
           "notes": {
             "anyOf": [
@@ -2108,6 +2248,18 @@
             "title": "Phone",
             "type": "string"
           },
+          "policy_version": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Version"
+          },
           "postal_code": {
             "pattern": "^\\d{5}(?:-\\d{4})?$",
             "title": "Postal Code",
@@ -2122,6 +2274,11 @@
             "title": "Service Categories",
             "type": "array"
           },
+          "sms_consent": {
+            "default": false,
+            "title": "Sms Consent",
+            "type": "boolean"
+          },
           "source_url": {
             "format": "uri",
             "minLength": 1,
@@ -2132,6 +2289,11 @@
             "pattern": "^[A-Z]{2}$",
             "title": "State",
             "type": "string"
+          },
+          "transactional_contact_allowed": {
+            "default": true,
+            "title": "Transactional Contact Allowed",
+            "type": "boolean"
           },
           "utm_campaign": {
             "anyOf": [
@@ -2788,6 +2950,30 @@
             "title": "Company",
             "type": "string"
           },
+          "consent_source": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consent Source"
+          },
+          "consent_timestamp": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consent Timestamp"
+          },
           "contact_preference": {
             "enum": [
               "email",
@@ -2797,10 +2983,44 @@
             "title": "Contact Preference",
             "type": "string"
           },
+          "customer_timezone": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Timezone"
+          },
           "email": {
             "format": "email",
             "title": "Email",
             "type": "string"
+          },
+          "email_consent": {
+            "default": false,
+            "title": "Email Consent",
+            "type": "boolean"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "marketing_consent": {
+            "default": false,
+            "title": "Marketing Consent",
+            "type": "boolean"
           },
           "name": {
             "maxLength": 160,
@@ -2813,6 +3033,18 @@
             "minLength": 7,
             "title": "Phone",
             "type": "string"
+          },
+          "policy_version": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Version"
           },
           "postal_code": {
             "pattern": "^\\d{5}(?:-\\d{4})?$",
@@ -2873,6 +3105,11 @@
             ],
             "title": "Service Slug"
           },
+          "sms_consent": {
+            "default": false,
+            "title": "Sms Consent",
+            "type": "boolean"
+          },
           "source_url": {
             "format": "uri",
             "minLength": 1,
@@ -2883,6 +3120,11 @@
             "pattern": "^[A-Z]{2}$",
             "title": "State",
             "type": "string"
+          },
+          "transactional_contact_allowed": {
+            "default": true,
+            "title": "Transactional Contact Allowed",
+            "type": "boolean"
           },
           "utm_campaign": {
             "anyOf": [
@@ -7510,6 +7752,146 @@
         "summary": "Ready",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/internal/v1/integrations/odoo/deliveries/{event_id}": {
+      "get": {
+        "operationId": "delivery_internal_v1_integrations_odoo_deliveries__event_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delivery",
+        "tags": [
+          "private-odoo"
+        ]
+      }
+    },
+    "/internal/v1/integrations/odoo/deliveries/{event_id}/retry": {
+      "post": {
+        "operationId": "retry_internal_v1_integrations_odoo_deliveries__event_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retry",
+        "tags": [
+          "private-odoo"
+        ]
+      }
+    },
+    "/internal/v1/integrations/odoo/failures": {
+      "get": {
+        "operationId": "failures_internal_v1_integrations_odoo_failures_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Failures",
+        "tags": [
+          "private-odoo"
+        ]
+      }
+    },
+    "/internal/v1/integrations/odoo/health": {
+      "get": {
+        "operationId": "health_internal_v1_integrations_odoo_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Health",
+        "tags": [
+          "private-odoo"
         ]
       }
     }

@@ -1,0 +1,7 @@
+<odoo noupdate="1">
+  <record id="team_customer_requests" model="crm.team"><field name="name">BREERO — Customer Service Requests</field></record>
+  <record id="team_contact_support" model="crm.team"><field name="name">BREERO — Contact &amp; Support</field></record>
+  <record id="team_provider_recruitment" model="crm.team"><field name="name">BREERO — Provider Recruitment</field></record>
+  <record id="team_lead_disputes" model="crm.team"><field name="name">BREERO — Professional Lead Disputes</field></record>
+  <record id="team_business" model="crm.team"><field name="name">BREERO — Business Enquiries</field></record>
+</odoo>
