@@ -68,11 +68,10 @@ export interface Payment {
   created_at: ISODateTime; updated_at: ISODateTime;
 }
 
-/** Frontend-ready contracts; quote/profile endpoints are documented as backend gaps. */
-export interface QuoteLine { id: UUID; description: string; quantity: number; unit_price_minor?: number; unit_amount_minor: number; total_amount_minor: number }
-export interface Quote { id: UUID; job_id?: UUID; booking_id: UUID; status: string; description?: string; line_items?: QuoteLine[]; lines: QuoteLine[]; subtotal_minor?: number; tax_minor?: number; total_minor?: number; total_amount_minor: number; currency: string; created_at?: ISODateTime; expires_at: ISODateTime | null; terms: string | null }
-export interface CustomerProfile { id: UUID; email: string; full_name?: string; first_name?: string; last_name?: string; phone: string | null; email_verified?: boolean }
-export interface CustomerProfilePatch { full_name?: string; first_name?: string; last_name?: string; phone?: string }
+export interface QuoteLine { description: string; quantity: number; unit_price_minor: number }
+export interface Quote { id: UUID; job_id: UUID; status: string; description: string; line_items: QuoteLine[]; subtotal_minor: number; tax_minor: number; total_minor: number; currency: string; created_at: ISODateTime }
+export interface CustomerProfile { id: UUID; email: string; full_name: string; phone: string; email_verified: boolean }
+export interface CustomerProfilePatch { full_name?: string; phone?: string }
 export interface CustomerAddress { id: UUID; line1: string; city: string; postal_code: string; country_code: string }
 export interface CustomerAddressInput { line1: string; city: string; postal_code: string; country_code: string; latitude: number; longitude: number }
 export interface Page<T> { items: T[]; total: number; page: number; page_size: number }

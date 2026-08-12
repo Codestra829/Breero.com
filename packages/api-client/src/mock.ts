@@ -57,7 +57,15 @@ export function createMockBreeroApi(scenario: MockScenario = {}): BreeroApi {
       addAddress: (input, s) => run("customer", () => ({ id: "mock-address", ...input }), s),
       updateAddress: (id, input, s) => run("customer", () => ({ id, ...input }), s),
       deleteAddress: (_id, s) => run("customer", () => undefined, s),
-      payments: (_params, s) => run("customer", () => ({ items: [], total: 0, page: 1, page_size: 20 }), s),
+      payments: (_params, s) => run("customer", () => {
+        const items = (scenario.payments ?? []).map((payment) => ({
+          id: payment.id, purpose: payment.payment_purpose ?? "BOOKING_DIAGNOSTIC", status: payment.status,
+          amount_minor: payment.amount_minor, captured_amount_minor: payment.captured_amount_minor,
+          refunded_amount_minor: payment.status === "REFUNDED" ? payment.amount_minor : 0,
+          currency: payment.currency, created_at: payment.created_at,
+        }));
+        return { items, total: items.length, page: 1, page_size: 20 };
+      }, s),
     },
     quotes: {
       list: (_params, s) => run("quotes", () => ({ items: scenario.quotes ?? [], total: scenario.quotes?.length ?? 0, page: 1, page_size: 20 }), s),

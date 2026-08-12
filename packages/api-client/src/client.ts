@@ -80,8 +80,8 @@ export function createApiClient(http: Transport): BreeroApi {
     quotes: {
       list: (params, signal) => http.request(`/customer/quotes${pageQuery(params)}`, { signal }),
       get: (id, signal) => http.request(`/customer/quotes/${encoded(id)}`, { signal }),
-      decide: (id, approve, signal) => http.request(`/jobs/work-requests/${encoded(id)}/decision`, { method: "POST", body: { approve }, signal, retry: false }),
-      approve: (id, _key, signal) => http.request(`/jobs/work-requests/${encoded(id)}/decision`, { method: "POST", body: { approve: true }, signal, retry: false }),
+      decide: (id, approve, signal) => http.request(`/customer/quotes/${encoded(id)}/decision`, { method: "POST", body: { approve }, signal, retry: false }),
+      approve: (id, _key, signal) => http.request(`/customer/quotes/${encoded(id)}/decision`, { method: "POST", body: { approve: true }, signal, retry: false }),
     },
   };
 }
