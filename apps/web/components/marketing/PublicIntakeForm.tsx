@@ -124,6 +124,7 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
         <>
           <label>Category<select name="category"><option value="booking_help">Booking help</option><option value="service_issue">Service issue</option><option value="billing">Billing</option><option value="general">General</option><option value="business">Business</option></select></label>
           <label>Subject<input name="subject" required minLength={3} /></label>
+          <label>Message<textarea name="message" required minLength={5} maxLength={4000} /></label>
         </>
       )}
       {kind === "provider" && (
