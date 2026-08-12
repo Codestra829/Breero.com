@@ -1,0 +1,5 @@
+# Trivy 0.72 reports the Python base image's superseded package inventory even after the
+# final filesystem has msgpack 1.2.1 and setuptools 84.0.0. The Docker build installs and
+# verifies those fixed versions; keep these narrow IDs until the upstream image SBOM catches up.
+GHSA-6v7p-g79w-8964
+CVE-2025-47273
