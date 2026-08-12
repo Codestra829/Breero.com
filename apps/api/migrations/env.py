@@ -15,8 +15,8 @@ from app.domains.dispatch import models as dispatch_models  # noqa: F401
 from app.domains.finance import models as finance_models  # noqa: F401
 from app.domains.jobs import models as job_models  # noqa: F401
 from app.domains.payments import models as payment_models  # noqa: F401
-from app.domains.public_submissions import models as public_submission_models  # noqa: F401
 from app.domains.professional_leads import models as professional_lead_models  # noqa: F401
+from app.domains.public_submissions import models as public_submission_models  # noqa: F401
 from app.domains.workforce import models as workforce_models  # noqa: F401
 
 config = context.config
