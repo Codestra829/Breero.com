@@ -1,7 +1,7 @@
 # Backend API inventory
 
-The live canonical contract is `/openapi.json`. Candidate `2f6eb4e...` exposes 60 paths, 67
-operations, and 67 unique operation IDs. Suggested endpoint names must be mapped to these existing
+The canonical contract is `/openapi.json`. The final source exposes 62 paths, 69 operations, and 69
+unique operation IDs. Suggested endpoint names must be mapped to these existing
 routes; they must not be duplicated.
 
 | Capability | Canonical route family | State |
@@ -22,8 +22,12 @@ routes; they must not be duplicated.
 | Health | `/health`, `/health/live`, `/health/ready` | Present |
 | Professional paid leads | — | Not present in canonical contract |
 | Lead disputes | — | Not present in canonical contract |
-| Customer booking cancellation | — | Not present in canonical contract |
+| Customer booking cancellation | `POST /api/v1/customer/bookings/{booking_id}/cancel` | Present |
+| Customer payment detail | `GET /api/v1/customer/payments/{payment_id}` | Present |
 
-Absent capabilities are recorded as product/API gaps. This staging activation did not invent routes
-or duplicate existing operations.
+The customer payment response deliberately excludes the Stripe client secret. Cancellation is
+owner-scoped, audited, revokes the guest token, and rejects bookings whose job has progressed beyond
+the pre-dispatch states. It does not invent an automatic refund decision.
 
+Paid professional leads and disputes remain product/API gaps: current dispatch offers are assignment
+offers, not purchased leads, and therefore must not be relabelled or given fabricated prices.

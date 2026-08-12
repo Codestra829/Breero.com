@@ -12,12 +12,17 @@ from geoalchemy2.elements import WKTElement
 from sqlalchemy import func, select
 
 from app.api.v1.bookings import booking_confirmation, guest_booking
+from app.api.v1.customers import cancel_booking
+from app.api.v1.customers import payment as customer_payment
 from app.db.session import SessionLocal
 from app.domains.auth import models as _auth_models  # noqa: F401
+from app.domains.auth.models import User
 from app.domains.booking.models import (
     Address,
     AvailabilityRule,
+    Booking,
     BookingStatus,
+    Customer,
     LegalEntity,
     ServiceArea,
 )
@@ -226,6 +231,45 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
         assert booking.status == BookingStatus.PENDING_PAYMENT
         assert booking.pricing_snapshot["total"] == "129.00"
         guest_token = getattr(booking, "guest_confirmation_token")
+        customer = await session.get(Customer, booking.customer_id)
+        assert customer
+        customer_user = User(
+            email=customer.email,
+            password_hash="not-used-by-route-test",
+            full_name="E2E Customer",
+            email_verified=True,
+        )
+        session.add(customer_user)
+        await session.flush()
+        customer.user_id = customer_user.id
+        cancellable = Booking(
+            reference=f"CANCEL-{marker[:12]}",
+            idempotency_key=f"cancel-{marker}",
+            idempotency_request_hash="test",
+            customer_id=customer.id,
+            address_id=booking.address_id,
+            legal_entity_id=booking.legal_entity_id,
+            service_id=booking.service_id,
+            window_start=booking.window_start + timedelta(days=1),
+            window_end=booking.window_end + timedelta(days=1),
+            status=BookingStatus.PENDING_PAYMENT,
+            pricing_snapshot=booking.pricing_snapshot,
+            total_amount=booking.total_amount,
+            currency=booking.currency,
+            expires_at=booking.expires_at,
+            guest_confirmation_token_hash="test",
+            guest_confirmation_expires_at=booking.guest_confirmation_expires_at,
+        )
+        session.add(cancellable)
+        await session.commit()
+        cancelled = await cancel_booking(cancellable.id, customer_user, session)
+        assert cancelled.status == BookingStatus.CANCELLED
+        cancellation_audit = await session.scalar(
+            select(AuditLog).where(
+                AuditLog.action == "booking.cancel", AuditLog.resource_id == cancellable.id
+            )
+        )
+        assert cancellation_audit
         assert await guest_booking(session, booking.id, f"Bearer {guest_token}") == booking
         for invalid_booking_id, invalid_token in (
             (uuid.uuid4(), guest_token),
@@ -262,6 +306,30 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
         )
         booking_payment = await session.get(Payment, booking_payment_view.id)
         assert booking_payment
+        owned_payment = await customer_payment(booking_payment.id, customer_user, session)
+        assert owned_payment.id == booking_payment.id
+        assert owned_payment.refunded_amount_minor == 0
+        other_user = User(
+            email=f"other-{marker}@example.com",
+            password_hash="not-used-by-route-test",
+            full_name="Other Customer",
+            email_verified=True,
+        )
+        session.add(other_user)
+        await session.flush()
+        session.add(
+            Customer(
+                first_name="Other",
+                last_name="Customer",
+                email=other_user.email,
+                phone="+49444444444",
+                user_id=other_user.id,
+            )
+        )
+        await session.commit()
+        with pytest.raises(HTTPException) as hidden_payment:
+            await customer_payment(booking_payment.id, other_user, session)
+        assert hidden_payment.value.status_code == 404
         booking_payment.status = PaymentStatus.FAILED
         await session.flush()
         failed_confirmation = await booking_confirmation(

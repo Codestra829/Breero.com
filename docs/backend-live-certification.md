@@ -6,7 +6,7 @@
 - Migrations: fresh, 005, and 008 to the single 009 head; `alembic check` clean.
 - Security: Gitleaks clean; pip-audit clean after a patched pip; Trivy zero high/critical findings.
 - Runtime: isolated PostGIS and Redis healthy; API live/ready 200; Celery worker ping succeeds.
-- Contract: 60 paths, 67 operations, 67 unique operation IDs at `/openapi.json`.
+- Contract: final source has 62 paths, 69 operations, and 69 unique operation IDs at `/openapi.json`.
 - CORS: exact staging origin accepted; unapproved origin rejected.
 - Auth: register, duplicate conflict, login failure/success, verification, refresh rotation/reuse
   rejection, logout semantics, password reset, and old-password rejection.
@@ -29,7 +29,7 @@
   disabled. Signed webhook, sandbox payments/refunds, external geocoding, and provider UAT are blocked.
 - `staging.breero.com` also resolves to `.207`, so browser-to-live-API and cross-browser live UAT are
   blocked.
-- The canonical contract has no professional-lead, lead-dispute, or customer-cancellation endpoints.
+- The canonical contract has no paid professional-lead or lead-dispute domain. Dispatch offers are
+  not misrepresented as purchased leads.
 
 Production remains **NO-GO**.
-
