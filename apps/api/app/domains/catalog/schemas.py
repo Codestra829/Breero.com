@@ -25,8 +25,12 @@ class ServiceRead(BaseModel):
     slug: str
     name: str
     description: str | None
-    base_price: Decimal
-    duration_minutes: int
+    category: str
+    base_price: Decimal | None
+    pricing_model: str
+    duration_minutes: int | None
+    is_active: bool
+    is_bookable: bool
 
 
 class ServiceDetail(ServiceRead):
@@ -57,7 +61,16 @@ class ServiceWrite(BaseModel):
     slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=100)
     name: str = Field(min_length=1, max_length=160)
     description: str | None = None
-    base_price: Decimal = Field(ge=0)
+    category: str = Field(default="home-services", min_length=1, max_length=100)
+    base_price: Decimal | None = Field(default=None, ge=0)
+    pricing_model: str = Field(default="quote_required", pattern="^(fixed|quote_required)$")
     duration_minutes: int = Field(ge=15, le=1440)
+    is_bookable: bool = False
     sort_order: int = 0
     questions: list[QuestionWrite] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def fixed_pricing_requires_price(self) -> "ServiceWrite":
+        if self.pricing_model == "fixed" and self.base_price is None:
+            raise ValueError("Fixed pricing requires base_price")
+        return self

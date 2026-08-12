@@ -1,74 +1,80 @@
-import asyncio
-import uuid
-from datetime import time
-from decimal import Decimal
+"""Environment-aware, idempotent BREERO catalog seed.
 
-from geoalchemy2.elements import WKTElement
+Launch services are deliberately quote-required and non-bookable unless an operator
+explicitly supplies BREERO_BOOKABLE_SERVICE_SLUGS after operational approval.
+"""
+
+import asyncio
+import os
+
 from sqlalchemy import select
 
+from app.config import settings
 from app.db.session import SessionLocal
-from app.domains.booking.models import AvailabilityRule, LegalEntity, ServiceArea
-from app.domains.catalog.models import QuestionType, Service, ServiceQuestion
+from app.domains.catalog.models import Service
 
-ENTITY_ID = uuid.UUID("00000000-0000-4000-8000-000000000001")
-AREA_ID = uuid.UUID("00000000-0000-4000-8000-000000000002")
-SERVICE_ID = uuid.UUID("00000000-0000-4000-8000-000000000003")
+LAUNCH_SERVICES = (
+    ("plumbing", "Plumbing", "Plumbing repair and installation requests."),
+    ("electrical", "Electrical", "Electrical repair and installation requests."),
+    ("handyman", "Handyman", "General home repair and maintenance requests."),
+    ("heating", "Heating", "Heating system service requests."),
+    ("cooling", "Cooling", "Cooling and air-conditioning service requests."),
+    ("appliance-repair", "Appliance repair", "Household appliance repair requests."),
+    ("cleaning", "Cleaning", "Residential cleaning service requests."),
+    ("locksmith", "Locksmith", "Lock and entry service requests."),
+    ("painting", "Painting", "Interior and exterior painting requests."),
+    ("carpentry", "Carpentry", "Carpentry and woodwork requests."),
+    ("moving-help", "Moving help", "Loading, unloading, and moving-help requests."),
+    ("home-maintenance", "Home maintenance", "Recurring and seasonal maintenance requests."),
+)
+
+KNOWN_CERTIFICATION_PREFIXES = ("e2e-service-", "test-", "fixture-", "certification-")
 
 
 async def seed() -> None:
+    environment = settings.app_env.lower()
+    if environment not in {"staging", "production"}:
+        raise RuntimeError("Launch catalog seed requires APP_ENV=staging or production")
+    approved_bookable = {
+        slug.strip()
+        for slug in os.getenv("BREERO_BOOKABLE_SERVICE_SLUGS", "").split(",")
+        if slug.strip()
+    }
+    unknown = approved_bookable - {row[0] for row in LAUNCH_SERVICES}
+    if unknown:
+        raise RuntimeError(f"Unknown approved bookable service slugs: {sorted(unknown)}")
+
     async with SessionLocal() as session:
-        if await session.scalar(select(LegalEntity.id).limit(1)):
-            return
-        entity = LegalEntity(
-            id=ENTITY_ID,
-            code="BREERO-DE",
-            name="BREERO Deutschland GmbH",
-            currency="EUR",
-            active=True,
-        )
-        area = ServiceArea(
-            id=AREA_ID,
-            legal_entity_id=ENTITY_ID,
-            name="Berlin launch area",
-            active=True,
-            boundary=WKTElement(
-                "MULTIPOLYGON(((13.0 52.3,13.8 52.3,13.8 52.8,13.0 52.8,13.0 52.3)))", srid=4326
-            ),
-        )
-        service = Service(
-            id=SERVICE_ID,
-            slug="home-repair-visit",
-            name="Home repair visit",
-            description="A qualified technician diagnoses and completes standard home repairs.",
-            base_price=Decimal("89.00"),
-            duration_minutes=120,
-            is_active=True,
-            sort_order=1,
-        )
-        question = ServiceQuestion(
-            service_id=SERVICE_ID,
-            key="problem_description",
-            label="What needs fixing?",
-            help_text="Describe the issue and anything the technician should know.",
-            question_type=QuestionType.textarea,
-            required=True,
-            sort_order=1,
-            is_active=True,
-        )
-        session.add_all([entity, area, service, question])
-        await session.flush()
-        for weekday in range(5):
-            session.add(
-                AvailabilityRule(
-                    service_id=SERVICE_ID,
-                    service_area_id=AREA_ID,
-                    weekday=weekday,
-                    start_time=time(8),
-                    end_time=time(18),
-                    slot_minutes=120,
-                    capacity=4,
-                )
-            )
+        rows = list((await session.scalars(select(Service))).all())
+        launch_slugs = {row[0] for row in LAUNCH_SERVICES}
+        for service in rows:
+            certification = service.slug.startswith(KNOWN_CERTIFICATION_PREFIXES)
+            legacy_berlin = service.slug == "home-repair-visit"
+            if certification or legacy_berlin:
+                service.is_active = False
+                service.is_bookable = False
+
+        by_slug = {row.slug: row for row in rows}
+        for order, (slug, name, description) in enumerate(LAUNCH_SERVICES, start=1):
+            launch_service = by_slug.get(slug)
+            if launch_service is None:
+                launch_service = Service(slug=slug)
+                session.add(launch_service)
+            launch_service.name = name
+            launch_service.description = description
+            launch_service.category = "home-services"
+            launch_service.base_price = None
+            launch_service.pricing_model = "quote_required"
+            launch_service.duration_minutes = None
+            launch_service.is_active = True
+            launch_service.is_bookable = slug in approved_bookable
+            launch_service.sort_order = order
+
+        # Never silently publish an unknown service in launch environments.
+        for service in rows:
+            if service.slug not in launch_slugs:
+                service.is_active = False
+                service.is_bookable = False
         await session.commit()
 
 

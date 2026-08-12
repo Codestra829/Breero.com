@@ -72,10 +72,32 @@ class PayoutOdooMapper(OdooMapper):
                 "currency_code": _value(payout, "currency", "USD")}
 
 
+class PublicSubmissionOdooMapper(OdooMapper):
+    """Public forms become CRM leads with a BREERO request ID as external reference."""
+
+    model = "crm.lead"
+
+    def map(self, source: object) -> dict:
+        payload = _value(source, "payload", source)
+        route = _value(source, "route", "CONTACT")
+        return {
+            "name": f"BREERO {str(route).replace('_', ' ').title()}",
+            "contact_name": _value(payload, "name") or _value(payload, "contact_name"),
+            "partner_name": _value(payload, "business_name"),
+            "email_from": _value(payload, "email"),
+            "phone": _value(payload, "phone"),
+            "description": _value(payload, "message") or _value(payload, "details") or _value(payload, "notes"),
+            "x_breero_request_id": str(_value(source, "submission_id")),
+            "x_breero_form_route": route,
+            "x_breero_source_url": _value(payload, "source_url"),
+        }
+
+
 MAPPERS = {
     "customer": CustomerOdooMapper(), "vendor": VendorOdooMapper(),
     "booking": BookingOdooMapper(), "job": JobOdooMapper(),
     "payment": PaymentOdooMapper(), "payout": PayoutOdooMapper(),
+    "public_submission": PublicSubmissionOdooMapper(),
 }
 
 

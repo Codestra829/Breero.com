@@ -160,6 +160,8 @@ class BookingService:
         service = await CatalogRepository(self.session).active_detail(str(payload.service_id))
         if not service:
             raise DomainError("SERVICE_NOT_FOUND", "Service is not available", 404)
+        if not service.is_bookable:
+            raise DomainError("SERVICE_NOT_BOOKABLE", "Service is not currently bookable", 422)
         supplied = {answer.question_id for answer in payload.answers}
         required = {
             question.id
@@ -176,7 +178,7 @@ class BookingService:
                 "INVALID_QUESTION", "An answer references an invalid service question", 422
             )
         # Catalog pricing is copied into an immutable snapshot; never recomputed for an existing booking.
-        amount = service.base_price
+        amount = service.base_price or 0
         customer = await self.repository.customer_for_email(str(payload.customer.email).lower())
         if customer is None:
             customer = Customer(

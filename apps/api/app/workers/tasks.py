@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
+from app.config import settings
 from app.db.session import SessionLocal
 from app.domains.booking.models import Booking, BookingStatus
 from app.domains.common.outbox_service import OutboxService
@@ -56,10 +57,17 @@ def publish_outbox() -> int:
             }
 
             async def deliver(event):
+                aggregate = event.aggregate_type.lower()
                 if event.event_type in notification_events:
                     await email.send(event.event_type, event.payload)
                     return
-                aggregate = event.aggregate_type.lower()
+                if event.aggregate_type == "public_submission" and not settings.odoo_enabled:
+                    # BREERO has durably accepted the form. Delivery remains pending
+                    # configuration without turning a missing optional CRM into data loss.
+                    return
+                if aggregate == "public_submission":
+                    await adapter.upsert(aggregate, event.payload)
+                    return
                 if aggregate in {"customer", "vendor", "booking", "job", "payment", "payout"}:
                     await adapter.upsert(aggregate, event.payload)
                 else:
