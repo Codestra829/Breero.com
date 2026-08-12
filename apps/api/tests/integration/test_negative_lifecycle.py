@@ -7,6 +7,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from geoalchemy2.elements import WKTElement
+from sqlalchemy import delete
 
 from app.core.errors import DomainError
 from app.db.session import SessionLocal, get_db
@@ -97,6 +98,8 @@ async def test_unserviceable_address_and_unavailable_slot() -> None:
 @pytest.mark.asyncio
 async def test_odoo_failure_dead_letters_then_authorized_retry_delivers() -> None:
     async with SessionLocal() as session:
+        await session.execute(delete(IntegrationEvent))
+        await session.commit()
         event = IntegrationEvent(
             aggregate_type="job",
             aggregate_id=uuid.uuid4(),
@@ -123,6 +126,50 @@ async def test_odoo_failure_dead_letters_then_authorized_retry_delivers() -> Non
             delivered.append(item.id)
 
         assert await OutboxService(session).process(recovered_odoo, limit=1) == 1
+        await session.refresh(event)
+        assert event.status == EventStatus.DELIVERED and delivered == [event.id]
+
+
+@postgres_only
+@pytest.mark.asyncio
+async def test_stale_outbox_processing_lease_is_recovered() -> None:
+    async with SessionLocal() as session:
+        await session.execute(delete(IntegrationEvent))
+        await session.commit()
+        now = datetime.now(UTC)
+        event = IntegrationEvent(
+            aggregate_type="lease-test",
+            aggregate_id=uuid.uuid4(),
+            event_type="lease.test",
+            payload={"idempotency_key": uuid.uuid4().hex},
+            status=EventStatus.PENDING,
+            attempts=0,
+            available_at=now,
+        )
+        session.add(event)
+        await session.commit()
+
+        first_claim = await OutboxService(session).claim(now=now, lease_seconds=60)
+        assert [item.id for item in first_claim] == [event.id]
+        first_token = event.claim_token
+
+        assert await OutboxService(session).claim(now=now + timedelta(seconds=30)) == []
+        reclaimed = await OutboxService(session).claim(now=now + timedelta(seconds=61))
+        assert [item.id for item in reclaimed] == [event.id]
+        assert event.claim_token != first_token and event.attempt_count == 2
+
+        delivered: list[uuid.UUID] = []
+
+        async def deliver(item: IntegrationEvent) -> None:
+            delivered.append(item.id)
+
+        # Restore to pending to exercise the normal delivery finalization after reclaim.
+        event.status = EventStatus.PENDING
+        event.next_attempt_at = now
+        event.lease_expires_at = None
+        event.claim_token = None
+        await session.commit()
+        assert await OutboxService(session).process(deliver, limit=1) == 1
         await session.refresh(event)
         assert event.status == EventStatus.DELIVERED and delivered == [event.id]
 
@@ -196,6 +243,48 @@ async def test_wrong_customer_vendor_technician_and_invalid_transition_are_rejec
             uuid.uuid4(),
         )
     assert vendor.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_operations_rejection_records_job_history() -> None:
+    actor_id = uuid.uuid4()
+    request = WorkRequest(
+        id=uuid.uuid4(),
+        job_id=uuid.uuid4(),
+        status=WorkRequestStatus.SUBMITTED,
+        description="unsafe proposal",
+        line_items=[],
+        subtotal_minor=100,
+        tax_minor=0,
+        total_minor=100,
+        currency="EUR",
+        created_by=uuid.uuid4(),
+    )
+    job = Job(
+        id=request.job_id,
+        booking_id=uuid.uuid4(),
+        service_id=uuid.uuid4(),
+        address_id=uuid.uuid4(),
+        status=JobStatus.AWAITING_APPROVAL,
+        scheduled_start=datetime.now(UTC),
+        scheduled_end=datetime.now(UTC) + timedelta(hours=2),
+        version=4,
+    )
+    session = AsyncMock()
+    jobs = JobService(session)
+    jobs.repo = AsyncMock()
+    jobs.repo.add_event = MagicMock()
+    jobs.repo.get_work_request.return_value = request
+    jobs.repo.get.return_value = job
+
+    result = await jobs.review_work_request(request.id, False, actor_id)
+
+    assert result.status == WorkRequestStatus.DECLINED
+    assert job.status == JobStatus.IN_PROGRESS and job.version == 5
+    event = jobs.repo.add_event.call_args.args[0]
+    assert event.from_status == JobStatus.AWAITING_APPROVAL
+    assert event.to_status == JobStatus.IN_PROGRESS
+    assert event.actor_id == actor_id and event.reason == "work_request_rejected"
 
 
 def test_dispatcher_cannot_approve_payout_or_read_arbitrary_payment() -> None:

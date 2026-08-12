@@ -1,14 +1,17 @@
 import json
 import os
+import secrets
 import uuid
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import select
+from sqlalchemy import func, select
 
+from app.api.v1.bookings import booking_confirmation, guest_booking
 from app.db.session import SessionLocal
 from app.domains.auth import models as _auth_models  # noqa: F401
 from app.domains.booking.models import (
@@ -34,6 +37,7 @@ from app.domains.common.outbox_service import OutboxService
 from app.domains.dispatch.service import DispatchService
 from app.domains.finance.models import (
     CompensationMethod,
+    CompensationSnapshot,
     EarningStatus,
     PayoutStatus,
     VendorEarning,
@@ -99,7 +103,7 @@ def succeeded_event(event_id: str, payment: Payment) -> bytes:
 
 
 @pytest.mark.asyncio
-async def test_canonical_backend_lifecycle_with_fake_providers() -> None:
+async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> None:
     marker = uuid.uuid4().hex
     service_date = (datetime.now(UTC) + timedelta(days=2)).date()
     async with SessionLocal() as session:
@@ -221,6 +225,21 @@ async def test_canonical_backend_lifecycle_with_fake_providers() -> None:
         )
         assert booking.status == BookingStatus.PENDING_PAYMENT
         assert booking.pricing_snapshot["total"] == "129.00"
+        guest_token = getattr(booking, "guest_confirmation_token")
+        assert await guest_booking(session, booking.id, f"Bearer {guest_token}") == booking
+        for invalid_booking_id, invalid_token in (
+            (uuid.uuid4(), guest_token),
+            (booking.id, secrets.token_urlsafe(32)),
+            (booking.id, guest_token + "tampered"),
+        ):
+            with pytest.raises(HTTPException):
+                await guest_booking(
+                    session, invalid_booking_id, f"Bearer {invalid_token}"
+                )
+        pending_confirmation = await booking_confirmation(
+            booking.id, f"Bearer {guest_token}", session, None
+        )
+        assert pending_confirmation.payment_status == "not_started"
 
         stripe = FakeStripeProvider(marker)
         payments = PaymentService(session, stripe)
@@ -241,6 +260,12 @@ async def test_canonical_backend_lifecycle_with_fake_providers() -> None:
         )
         await session.refresh(booking)
         assert booking.status == BookingStatus.CONFIRMED
+        confirmed = await booking_confirmation(
+            booking.id, f"Bearer {guest_token}", session, None
+        )
+        assert confirmed.booking_status == "CONFIRMED"
+        assert confirmed.payment_status == "captured"
+        assert confirmed.next_action == "confirmed"
         job = await session.scalar(select(Job).where(Job.booking_id == booking.id))
         assert job and job.status == JobStatus.CREATED
 
@@ -304,16 +329,58 @@ async def test_canonical_backend_lifecycle_with_fake_providers() -> None:
             ),
             vendor.id,
         )
+        job_id, worker_id, vendor_id = job.id, worker.id, vendor.id
+        original_recognize = FinanceService.recognize_earning
+
+        async def fail_after_earning(*args, **kwargs):
+            await original_recognize(*args, **kwargs)
+            raise RuntimeError("forced failure after earning creation")
+
+        monkeypatch.setattr(FinanceService, "recognize_earning", fail_after_earning)
+        with pytest.raises(RuntimeError, match="forced failure"):
+            await jobs.technician_note_transition(
+                job.id,
+                worker.id,
+                worker.id,
+                "completion_notes",
+                "Repair complete",
+                JobStatus.COMPLETED,
+            )
+        await session.rollback()
+        rolled_back_job = await session.get(Job, job_id)
+        booking_payment = await session.get(Payment, booking_payment_view.id)
+        quote_payment = await session.get(Payment, quote_payment_view.id)
+        assert rolled_back_job and rolled_back_job.status == JobStatus.IN_PROGRESS
+        assert booking_payment and quote_payment
+        assert await session.scalar(
+            select(func.count()).select_from(VendorEarning).where(VendorEarning.job_id == job_id)
+        ) == 0
+        assert await session.scalar(
+            select(func.count()).select_from(CompensationSnapshot).where(
+                CompensationSnapshot.vendor_id == vendor_id
+            )
+        ) == 0
+        assert await session.scalar(
+            select(func.count()).select_from(IntegrationEvent).where(
+                IntegrationEvent.aggregate_id == job_id,
+                IntegrationEvent.event_type == "job.completed",
+            )
+        ) == 0
+        monkeypatch.setattr(FinanceService, "recognize_earning", original_recognize)
         await jobs.technician_note_transition(
-            job.id, worker.id, worker.id, "completion_notes", "Repair complete", JobStatus.COMPLETED
+            job_id, worker_id, worker_id, "completion_notes", "Repair complete", JobStatus.COMPLETED
         )
-        earning = await session.scalar(select(VendorEarning).where(VendorEarning.job_id == job.id))
+        job = await session.get(Job, job_id)
+        earning = await session.scalar(select(VendorEarning).where(VendorEarning.job_id == job_id))
         assert earning and earning.net_minor == 7000 and earning.status == EarningStatus.PENDING
+        assert await session.scalar(
+            select(func.count()).select_from(VendorEarning).where(VendorEarning.job_id == job_id)
+        ) == 1
         assert await finance.release_eligible() == 1
-        batch = await finance.create_batch("EUR", vendor.id, vendor.id)
+        batch = await finance.create_batch("EUR", vendor_id, vendor_id)
         assert batch.status == PayoutStatus.PENDING_APPROVAL and batch.earning_count == 1
-        await finance.approve_batch(batch.id, vendor.id)
-        submitted = await finance.submit_batch(batch.id, vendor.id)
+        await finance.approve_batch(batch.id, vendor_id)
+        submitted = await finance.submit_batch(batch.id, vendor_id)
         assert submitted.status == PayoutStatus.PROCESSING
         assert submitted.provider_transfer_id.startswith("fake_")
 

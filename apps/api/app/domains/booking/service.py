@@ -209,8 +209,14 @@ class BookingService:
             total_amount=amount,
             currency=entity.currency,
             expires_at=datetime.now(UTC) + timedelta(minutes=30),
+            guest_confirmation_token_hash="pending",
+            guest_confirmation_expires_at=datetime.now(UTC) + timedelta(hours=24),
         )
+        guest_token = secrets.token_urlsafe(32)
+        booking.guest_confirmation_token_hash = hashlib.sha256(guest_token.encode()).hexdigest()
         await self.repository.add(booking)
+        # The reusable token is returned only at this creation boundary; only its hash is stored.
+        setattr(booking, "guest_confirmation_token", guest_token)
         for answer in payload.answers:
             await self.repository.add(
                 BookingAnswer(

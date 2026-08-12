@@ -103,6 +103,13 @@ class Booking(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    guest_confirmation_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    guest_confirmation_expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    guest_confirmation_revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
 
 
 class BookingAnswer(UUIDPrimaryKeyMixin, Base):

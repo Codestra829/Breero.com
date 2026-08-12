@@ -4,6 +4,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
+from .models import BookingStatus
+
 
 class AddressValidateRequest(BaseModel):
     address: str = Field(min_length=5, max_length=500)
@@ -79,12 +81,25 @@ class BookingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
     reference: str
-    status: str
+    status: BookingStatus
     total_amount: Decimal
     currency: str
     window_start: datetime
     window_end: datetime
     payment_required: bool
+    guest_confirmation_token: str | None = None
+
+
+class BookingConfirmation(BaseModel):
+    booking_id: uuid.UUID
+    reference: str
+    booking_status: BookingStatus
+    payment_status: str
+    window_start: datetime
+    window_end: datetime
+    amount_minor: int
+    currency: str
+    next_action: str
 
 
 class CustomerBookingList(BaseModel):

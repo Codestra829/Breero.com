@@ -30,6 +30,8 @@ class IntegrationEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str | None] = mapped_column(Text)
 
@@ -61,6 +63,7 @@ class IntegrationEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class AuditLog(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "audit_logs"
     actor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
+    actor_type: Mapped[str] = mapped_column(String(32), nullable=False, default="user")
     action: Mapped[str] = mapped_column(String(120), nullable=False)
     resource_type: Mapped[str] = mapped_column(String(80), nullable=False)
     resource_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
