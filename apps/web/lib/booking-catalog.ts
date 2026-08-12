@@ -7,21 +7,19 @@ export const serviceCatalog: ServiceDetail[] = [
       { id: "cleaning-type", key: "cleaning_type", label: "What kind of clean do you need?", help_text: null, question_type: "single_choice", required: true, options: [{ value: "standard", label: "Standard clean" }, { value: "deep", label: "Deep clean" }, { value: "move", label: "Move in or out" }], validation: null, sort_order: 1 },
       { id: "rooms", key: "rooms", label: "How many rooms?", help_text: "Include bedrooms and living rooms.", question_type: "number", required: true, options: null, validation: { min: 1, max: 20 }, sort_order: 2 },
       { id: "extras", key: "extras", label: "Optional extras", help_text: null, question_type: "multi_choice", required: false, options: [{ value: "oven", label: "Inside oven" }, { value: "fridge", label: "Inside fridge" }, { value: "windows", label: "Interior windows" }], validation: null, sort_order: 3 },
-      { id: "notes", key: "notes", label: "Anything your professional should know?", help_text: "Access notes, surfaces, pets, or priorities.", question_type: "long_text", required: false, options: null, validation: null, sort_order: 4 },
+      { id: "notes", key: "notes", label: "Anything your professional should know?", help_text: "Access notes, surfaces, pets, or priorities.", question_type: "textarea", required: false, options: null, validation: null, sort_order: 4 },
     ],
   },
   {
     id: "plumbing", slug: "plumbing-repair", name: "Plumbing repair", description: "Diagnosis and repair for leaks, fixtures, drains, and common plumbing faults.", base_price: "109.00", duration_minutes: 90,
     questions: [
-      { id: "issue", key: "issue", label: "Describe the problem", help_text: "Tell us what you see, hear, or smell.", question_type: "long_text", required: true, options: null, validation: null, sort_order: 1 },
+      { id: "issue", key: "issue", label: "Describe the problem", help_text: "Tell us what you see, hear, or smell.", question_type: "textarea", required: true, options: null, validation: null, sort_order: 1 },
       { id: "shutoff", key: "shutoff", label: "Can you safely shut off the water?", help_text: null, question_type: "boolean", required: true, options: null, validation: null, sort_order: 2 },
-      { id: "photo", key: "photo", label: "Add a photo", help_text: "Optional. This helps the professional prepare.", question_type: "media", required: false, options: null, validation: null, sort_order: 3 },
     ],
   },
   {
     id: "electrical", slug: "electrical-help", name: "Electrical help", description: "Qualified help for outlets, switches, lights, and electrical troubleshooting.", base_price: "119.00", duration_minutes: 90, questions: [
-      { id: "details", key: "details", label: "What needs attention?", help_text: null, question_type: "short_text", required: true, options: null, validation: null, sort_order: 1 },
-      { id: "preferred-date", key: "preferred_date", label: "When did you first notice it?", help_text: null, question_type: "date", required: false, options: null, validation: null, sort_order: 2 },
+      { id: "details", key: "details", label: "What needs attention?", help_text: null, question_type: "text", required: true, options: null, validation: null, sort_order: 1 },
     ],
   },
   { id: "handyman", slug: "handyman", name: "Handyman", description: "Practical help with mounting, assembly, minor repairs, and home projects.", base_price: "79.00", duration_minutes: 120, questions: [] },

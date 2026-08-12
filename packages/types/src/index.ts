@@ -4,8 +4,8 @@ export type ISODateTime = string;
 export type MoneyAmount = string;
 
 export type QuestionType =
-  | "single_choice" | "multi_choice" | "boolean" | "short_text"
-  | "long_text" | "number" | "date" | "media";
+  | "text" | "textarea" | "number" | "boolean"
+  | "single_choice" | "multi_choice";
 
 export interface QuestionOption { value: string; label: string; description?: string }
 export interface ServiceQuestion {
@@ -44,7 +44,7 @@ export interface Booking {
 }
 export interface CustomerBookingList { items: Booking[] }
 
-export type UserRole = "customer" | "partner" | "technician" | "operations" | "finance" | "admin";
+export type UserRole = "customer" | "vendor_admin" | "technician" | "operations" | "finance" | "admin";
 export interface User { id: UUID; email: string; full_name: string; role: UserRole; is_active: boolean; email_verified?: boolean }
 export interface LoginRequest { email: string; password: string }
 export interface RegisterRequest extends LoginRequest { full_name: string }
@@ -56,13 +56,13 @@ export interface ResetPasswordRequest { token: string; new_password: string }
 export interface ChangePasswordRequest { current_password: string; new_password: string }
 export interface TokenRequest { token: string }
 
-export type PaymentStatus = "CREATED" | "REQUIRES_ACTION" | "PROCESSING" | "AUTHORIZED" | "CAPTURED" | "FAILED" | "CANCELLED" | "REFUNDED" | "PARTIALLY_REFUNDED";
+export type PaymentStatus = "created" | "requires_action" | "authorized" | "captured" | "failed" | "canceled" | "refunded" | "partially_refunded";
 export interface PaymentIntentRequest {
-  booking_id?: UUID; quote_id?: UUID; payment_purpose?: "BOOKING_DIAGNOSTIC" | "ADDITIONAL_WORK";
+  booking_id?: UUID; quote_id?: UUID; payment_purpose?: "BOOKING_DIAGNOSTIC" | "QUOTE_ADDITIONAL_WORK";
   amount_minor: number; currency?: string; capture_method?: "automatic" | "manual"; metadata?: Record<string, string>;
 }
 export interface Payment {
-  id: UUID; booking_id: UUID | null; quote_id?: UUID | null; payment_purpose?: "BOOKING_DIAGNOSTIC" | "ADDITIONAL_WORK"; provider: string; status: PaymentStatus;
+  id: UUID; booking_id: UUID | null; quote_id?: UUID | null; payment_purpose?: "BOOKING_DIAGNOSTIC" | "QUOTE_ADDITIONAL_WORK"; provider: string; status: PaymentStatus;
   amount_minor: number; currency: string; captured_amount_minor: number;
   client_secret: string | null; failure_code: string | null;
   created_at: ISODateTime; updated_at: ISODateTime;
