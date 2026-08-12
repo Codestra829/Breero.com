@@ -2,12 +2,11 @@
 
 ## Certified candidate
 
-- Application candidate: `841965f951bad102c3df0715bfdf6f4ea1dbad44`
+- Application candidate: `e3a1c8fa94875b9a83867a385d2d9fbf91d6d788`
 - Architecture base: `337e8e9ef47378643d221fb6c97d4ebdfe69e342`
-- Runtime migration before productization: `009_final_staging_boundaries`
-- Productized source migration: `010_productization` (single head; requires deployment certification)
-- Image: `breero-api:841965f951bad102c3df0715bfdf6f4ea1dbad44`
-- Image digest: `sha256:eea0d438c50d7eb74693173edcdbe1dd6e83ad77785e57f1ac7be12c67b32f85`
+- Runtime migration: `010_productization` (single head)
+- Image: `breero-api:e3a1c8fa94875b9a83867a385d2d9fbf91d6d788`
+- Image digest: `sha256:a022d9a22786eada2a2c9c9645ae608817b5667ecbb90f453a35a559c86a51b1`
 
 ## Host topology
 
@@ -47,5 +46,6 @@ test/sandbox credentials are installed and the corresponding enable flag is deli
 ## Current external origin evidence
 
 As of 2026-08-12, `api-staging.breero.com` resolves to `49.12.145.107` through Cloudflare and Google
-DNS and serves the staging API over valid TLS. `staging.breero.com` resolves to the same host but has
-no active staging frontend TLS/site route; it must not be substituted with the production frontend.
+DNS and serves the staging API over valid TLS. `staging.breero.com` resolves to the same host and
+serves the isolated `breero-staging-web` container over valid TLS. The staging frontend is built with
+`NEXT_PUBLIC_API_MODE=live` and the exact staging API origin; it is not a production-frontend alias.

@@ -2,8 +2,8 @@
 
 ## Passed evidence
 
-- Source: Ruff, Mypy, 71 Pytest tests, PostgreSQL-backed acceptance, concurrency/negative tests.
-- Migrations: fresh, 005, and 008 to the single 009 head; `alembic check` clean.
+- Source: Ruff, Mypy, 73 Pytest tests, PostgreSQL-backed acceptance, concurrency/negative tests.
+- Migrations: fresh, 005, and 008 to the single `010_productization` head; `alembic check` clean.
 - Security: Gitleaks clean; pip-audit clean after a patched pip; Trivy zero high/critical findings.
 - Runtime: isolated PostGIS and Redis healthy; API live/ready 200; Celery worker ping succeeds.
 - Contract: productized source has 70 paths, 77 operations, and 77 unique operation IDs at
@@ -28,13 +28,19 @@
 - External staging API: on 2026-08-12 both Cloudflare (`1.1.1.1`) and Google (`8.8.8.8`) resolved
   `api-staging.breero.com` to `49.12.145.107`; its hostname-matched TLS certificate, live/ready,
   OpenAPI, and service-catalog requests passed over HTTPS.
+- Product intake: the 12-service Texas launch taxonomy is active, legacy Berlin and certification
+  fixtures are inactive, and Service Request, Contact, and Provider Interest each persisted through
+  the live staging API with idempotent replay and transactional outbox creation.
+- Live frontend: `staging.breero.com` serves the immutable `059a068` frontend over hostname-matched
+  TLS in live API mode. Chromium, Firefox, and WebKit each submitted all three intake forms; the
+  seven responsive widths from 375 through 1920 pixels passed without horizontal overflow.
 
 ## Blocked evidence
 
 - Stripe test, email, SMS, geocoding, Odoo, and payout credentials were unavailable and are explicitly
   disabled. Signed webhook, sandbox payments/refunds, external geocoding, and provider UAT are blocked.
-- `staging.breero.com` now resolves to `49.12.145.107` through both checked resolvers, but no staging
-  frontend TLS/site route is active. Browser-to-live-API and cross-browser live UAT remain blocked.
+- Booking and paid-lead browser UAT remain blocked because launch services intentionally remain
+  non-bookable until external geocoding and Stripe sandbox credentials are certified.
 - Production API activation is blocked until production-only credentials and a private production
   data plane are provisioned and the Stripe/browser gates pass. `api.breero.com` deliberately returns
   a TLS-valid `503` maintenance response rather than routing production users into staging.
