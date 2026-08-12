@@ -790,6 +790,103 @@
         "title": "CustomerInput",
         "type": "object"
       },
+      "CustomerPaymentRead": {
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "booking_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Booking Id"
+          },
+          "captured_amount_minor": {
+            "title": "Captured Amount Minor",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "payment_purpose": {
+            "$ref": "#/components/schemas/PaymentPurpose"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "quote_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote Id"
+          },
+          "refunded_amount_minor": {
+            "title": "Refunded Amount Minor",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PaymentStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "booking_id",
+          "quote_id",
+          "payment_purpose",
+          "provider",
+          "status",
+          "amount_minor",
+          "currency",
+          "captured_amount_minor",
+          "refunded_amount_minor",
+          "failure_code",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CustomerPaymentRead",
+        "type": "object"
+      },
       "EarningAdjustmentCreate": {
         "properties": {
           "adjustment_type": {
@@ -3671,6 +3768,54 @@
         ]
       }
     },
+    "/api/v1/customer/bookings/{booking_id}/cancel": {
+      "post": {
+        "operationId": "cancel_booking_api_v1_customer_bookings__booking_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "booking_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Booking Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cancel Booking",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
     "/api/v1/customer/payments": {
       "get": {
         "operationId": "payments_api_v1_customer_payments_get",
@@ -3727,6 +3872,54 @@
           }
         ],
         "summary": "Payments",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
+    "/api/v1/customer/payments/{payment_id}": {
+      "get": {
+        "operationId": "payment_api_v1_customer_payments__payment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Payment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerPaymentRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Payment",
         "tags": [
           "customer"
         ]

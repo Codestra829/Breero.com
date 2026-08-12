@@ -28,6 +28,7 @@ export interface BreeroApi {
     guestConfirmation(id: UUID, guestToken: string, signal?: AbortSignal): Promise<BookingConfirmation>;
     mine(params?: PageParams, signal?: AbortSignal): Promise<Page<Booking> | CustomerBookingList>;
     getMine(id: UUID, signal?: AbortSignal): Promise<Booking>;
+    cancelMine(id: UUID, signal?: AbortSignal): Promise<Booking>;
   };
   payments: { createIntent(input: PaymentIntentRequest, idempotencyKey: string, signal?: AbortSignal): Promise<Payment> };
   customer: {
@@ -35,6 +36,7 @@ export interface BreeroApi {
     addresses(signal?: AbortSignal): Promise<CustomerAddress[]>; addAddress(input: CustomerAddressInput, signal?: AbortSignal): Promise<CustomerAddress>;
     updateAddress(id: UUID, input: CustomerAddressInput, signal?: AbortSignal): Promise<CustomerAddress>; deleteAddress(id: UUID, signal?: AbortSignal): Promise<void>;
     payments(params?: PageParams, signal?: AbortSignal): Promise<Page<CustomerPayment>>;
+    payment(id: UUID, signal?: AbortSignal): Promise<CustomerPayment>;
   };
   quotes: { list(params?: PageParams, signal?: AbortSignal): Promise<Page<Quote>>; get(id: UUID, signal?: AbortSignal): Promise<Quote>; decide(id: UUID, approve: boolean, signal?: AbortSignal): Promise<Quote> };
 }
@@ -71,6 +73,7 @@ export function createApiClient(http: Transport): BreeroApi {
       guestConfirmation: (id, token, signal) => http.request(`/bookings/${encoded(id)}/confirmation`, { signal, retry: false, headers: { Authorization: `Bearer ${token}` } }),
       mine: (params, signal) => http.request(`/customer/bookings${pageQuery(params)}`, { signal }),
       getMine: (id, signal) => http.request(`/customer/bookings/${encoded(id)}`, { signal }),
+      cancelMine: (id, signal) => http.request(`/customer/bookings/${encoded(id)}/cancel`, { method: "POST", signal, retry: false }),
     },
     payments: {
       createIntent: (body, key, signal) => http.request("/payments/intents", { method: "POST", body, signal, retry: false, headers: { "Idempotency-Key": key } }),
@@ -83,6 +86,7 @@ export function createApiClient(http: Transport): BreeroApi {
       updateAddress: (id, body, signal) => http.request(`/customer/addresses/${encoded(id)}`, { method: "PATCH", body, signal, retry: false }),
       deleteAddress: (id, signal) => http.request(`/customer/addresses/${encoded(id)}`, { method: "DELETE", signal, retry: false }),
       payments: (params, signal) => http.request(`/customer/payments${pageQuery(params)}`, { signal }),
+      payment: (id, signal) => http.request(`/customer/payments/${encoded(id)}`, { signal }),
     },
     quotes: {
       list: (params, signal) => http.request(`/customer/quotes${pageQuery(params)}`, { signal }),
