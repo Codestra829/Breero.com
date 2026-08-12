@@ -36,6 +36,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - run: python -m pip install --upgrade 'pip>=26.1.2'
       - run: pip install -e '.[dev]' pip-audit
       - run: ruff check .
       - run: mypy app
@@ -70,6 +71,7 @@ jobs:
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: breero-api:${{ github.sha }}
+          trivyignores: .trivyignore
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"

@@ -80,6 +80,24 @@ async def test_refresh_token_reuse_revokes_family(service: AuthService) -> None:
 
 
 @pytest.mark.asyncio
+async def test_expired_refresh_token_is_rejected(service: AuthService) -> None:
+    expired = Session(
+        user_id=uuid.uuid4(),
+        token_hash="hash",
+        family_id=uuid.uuid4(),
+        expires_at=datetime.now(UTC) - timedelta(seconds=1),
+    )
+    service.users.session_by_hash.return_value = expired
+
+    with pytest.raises(HTTPException, match="expired") as error:
+        await service.refresh("refresh-token-that-is-long-enough")
+
+    assert error.value.status_code == 401
+    assert expired.revoked_at is not None
+    service.session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_logout_revokes_session(service: AuthService) -> None:
     active = Session(
         user_id=uuid.uuid4(),
