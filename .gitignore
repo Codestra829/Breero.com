@@ -1,5 +1,11 @@
 # Environment
 .env
+.next/
+.turbo/
+node_modules/
+test-results/
+playwright-report/
+*.tsbuildinfo
 .env.*
 !.env.example
 
@@ -18,6 +24,7 @@ node_modules/
 .next/
 dist/
 .turbo/
+*.tsbuildinfo
 
 # IDE / OS
 .DS_Store
@@ -28,3 +35,5 @@ dist/
 coverage/
 .coverage
 htmlcov/
+test-results/
+playwright-report/
