@@ -15,7 +15,8 @@ export interface ServiceQuestion {
 }
 export interface ServiceSummary {
   id: UUID; slug: string; name: string; description: string | null;
-  base_price: MoneyAmount; duration_minutes: number;
+  base_price: MoneyAmount | null; duration_minutes: number | null;
+  pricing_model?: string; is_active?: boolean; is_bookable?: boolean;
 }
 export interface ServiceDetail extends ServiceSummary { questions: ServiceQuestion[] }
 
