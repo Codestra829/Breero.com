@@ -2,15 +2,15 @@
 
 ## Current decision
 
-**NO-GO (verified 2026-08-12 00:23 UTC).** The inspected host has only 5.8 GB free on
+**NO-GO (reverified 2026-08-12 12:17 UTC).** The inspected host has only 4.3 GB free on
 436 GB (99% used), and the current BREERO
 PostgreSQL, Redis, and API ports are published on all host interfaces. The replacement
 topology fixes exposure, but must not be started until an operator approves cleanup,
 backup, shared-Caddy networking, secrets, and rollback.
 
-The running source is `fc1fdbaa4a8b2ac9ee0babfd363b104cdd7a9bf3`. Its database reports
+The running source is `8fd87dfc8e5c76fc1990cce7ad84f120af30eb4f`. Earlier evidence reports its database at
 `005_booking_integrations`, while application head is `008_production_readiness`; no migration
-was attempted. The deployed OpenAPI validates at 58 paths / 65 operations. `api.breero.com`
+was attempted. The canonical repository OpenAPI validates at 58 paths / 65 operations. `api.breero.com`
 and `www.breero.com` did not return IPv4 answers; the apex resolves to external addresses not
 the inspected host. Shared Caddy configuration validates but contains no BREERO route.
 
