@@ -36,3 +36,9 @@ backend/web deployment, Caddy change, or UAT was attempted.
 5. Re-run authenticated SSH. Only after success perform the required read-only inventory.
 
 No production or staging infrastructure was mutated.
+
+## Reverification
+
+At 2026-08-12T14:22:00Z, source public IP `49.12.145.107` again received a TCP/22 timeout and
+OpenSSH again timed out before key exchange. No new Hetzner firewall/console access was available.
+The hard gate remains unchanged.
