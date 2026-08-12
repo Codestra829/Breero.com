@@ -4,7 +4,8 @@
 
 - Application candidate: `841965f951bad102c3df0715bfdf6f4ea1dbad44`
 - Architecture base: `337e8e9ef47378643d221fb6c97d4ebdfe69e342`
-- Migration: `009_final_staging_boundaries` (single head)
+- Runtime migration before productization: `009_final_staging_boundaries`
+- Productized source migration: `010_productization` (single head; requires deployment certification)
 - Image: `breero-api:841965f951bad102c3df0715bfdf6f4ea1dbad44`
 - Image digest: `sha256:eea0d438c50d7eb74693173edcdbe1dd6e83ad77785e57f1ac7be12c67b32f85`
 

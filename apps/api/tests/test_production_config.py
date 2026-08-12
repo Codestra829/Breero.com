@@ -6,7 +6,14 @@ from app.config import Settings
 
 def test_production_rejects_development_defaults():
     with pytest.raises(ValidationError, match="unsafe production configuration"):
-        Settings(app_env="production")
+        Settings(
+            app_env="production",
+            database_url="postgresql+psycopg://breero:breero@postgres:5432/breero",
+            redis_url="redis://redis:6379/0",
+            jwt_secret="development-only-change-me",
+            jwt_refresh_secret="development-only-change-me-too",
+            cors_origins="http://localhost:3000",
+        )
 
 
 def test_liveness_has_no_dependency_calls():

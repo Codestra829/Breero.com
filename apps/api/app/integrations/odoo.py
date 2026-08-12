@@ -80,13 +80,47 @@ class PublicSubmissionOdooMapper(OdooMapper):
     def map(self, source: object) -> dict:
         payload = _value(source, "payload", source)
         route = _value(source, "route", "CONTACT")
+        route_title = str(route).replace("_", " ").title()
+        detail_parts = [
+            _value(payload, "service_description"),
+            _value(payload, "message"),
+            _value(payload, "notes"),
+            _value(payload, "license_details"),
+        ]
+        location = ", ".join(
+            str(value)
+            for value in (
+                _value(payload, "address_line1"),
+                _value(payload, "city"),
+                _value(payload, "state"),
+                _value(payload, "postal_code"),
+            )
+            if value
+        )
+        attribution = ", ".join(
+            f"{name}={value}"
+            for name in ("utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term")
+            if (value := _value(payload, name))
+        )
         return {
-            "name": f"BREERO {str(route).replace('_', ' ').title()}",
+            "name": f"BREERO {route_title}",
             "contact_name": _value(payload, "name") or _value(payload, "contact_name"),
             "partner_name": _value(payload, "business_name"),
             "email_from": _value(payload, "email"),
             "phone": _value(payload, "phone"),
-            "description": _value(payload, "message") or _value(payload, "details") or _value(payload, "notes"),
+            "description": "\n".join(
+                part
+                for part in (
+                    *[str(value) for value in detail_parts if value],
+                    f"Service: {_value(payload, 'service_slug')}" if _value(payload, "service_slug") else None,
+                    f"Categories: {', '.join(_value(payload, 'service_categories', []))}" if _value(payload, "service_categories") else None,
+                    f"Location: {location}" if location else None,
+                    f"Requested timing: {_value(payload, 'requested_timing')}" if _value(payload, "requested_timing") else None,
+                    f"Contact preference: {_value(payload, 'contact_preference')}" if _value(payload, "contact_preference") else None,
+                    f"Attribution: {attribution}" if attribution else None,
+                )
+                if part
+            ),
             "x_breero_request_id": str(_value(source, "submission_id")),
             "x_breero_form_route": route,
             "x_breero_source_url": _value(payload, "source_url"),
@@ -151,4 +185,22 @@ class OdooAdapter:
         mapper = MAPPERS.get(aggregate_type.lower())
         if not mapper:
             raise ValueError(f"No Odoo mapper for {aggregate_type}")
-        return await self.execute(mapper.model, "create", [mapper.map(source)])
+        values = mapper.map(source)
+        if aggregate_type.lower() == "public_submission":
+            external_id = values["x_breero_request_id"]
+            existing = await self.execute(
+                mapper.model,
+                "search_read",
+                [[("x_breero_request_id", "=", external_id)]],
+                {"fields": ["id"], "limit": 1},
+            )
+            if (
+                isinstance(existing, list)
+                and existing
+                and isinstance(existing[0], dict)
+                and "id" in existing[0]
+            ):
+                record_id = existing[0]["id"]
+                await self.execute(mapper.model, "write", [[record_id], values])
+                return record_id
+        return await self.execute(mapper.model, "create", [values])

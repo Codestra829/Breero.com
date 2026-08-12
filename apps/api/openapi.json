@@ -755,6 +755,139 @@
         "title": "CompensationPlanRead",
         "type": "object"
       },
+      "ContactCreate": {
+        "properties": {
+          "category": {
+            "enum": [
+              "booking_help",
+              "service_issue",
+              "billing",
+              "general",
+              "business"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "company": {
+            "default": "",
+            "maxLength": 0,
+            "title": "Company",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 5000,
+            "minLength": 10,
+            "title": "Message",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 160,
+            "minLength": 2,
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 7,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "source_url": {
+            "format": "uri",
+            "minLength": 1,
+            "title": "Source Url",
+            "type": "string"
+          },
+          "subject": {
+            "maxLength": 200,
+            "minLength": 3,
+            "title": "Subject",
+            "type": "string"
+          },
+          "utm_campaign": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utm Campaign"
+          },
+          "utm_content": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utm Content"
+          },
+          "utm_medium": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utm Medium"
+          },
+          "utm_source": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utm Source"
+          },
+          "utm_term": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utm Term"
+          }
+        },
+        "required": [
+          "source_url",
+          "name",
+          "email",
+          "category",
+          "subject",
+          "message"
+        ],
+        "title": "ContactCreate",
+        "type": "object"
+      },
       "CustomerInput": {
         "properties": {
           "email": {
@@ -886,6 +1019,118 @@
         ],
         "title": "CustomerPaymentRead",
         "type": "object"
+      },
+      "DisputeCreate": {
+        "properties": {
+          "details": {
+            "maxLength": 4000,
+            "minLength": 10,
+            "title": "Details",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "invalid_contact",
+              "duplicate_charged_lead",
+              "wrong_service_category",
+              "material_qualification_mismatch",
+              "documented_platform_defect"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "details"
+        ],
+        "title": "DisputeCreate",
+        "type": "object"
+      },
+      "DisputeRead": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "deadline_at": {
+            "format": "date-time",
+            "title": "Deadline At",
+            "type": "string"
+          },
+          "details": {
+            "title": "Details",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "purchase_id": {
+            "format": "uuid",
+            "title": "Purchase Id",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution"
+          },
+          "resolution_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Reference"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DisputeStatus"
+          },
+          "vendor_id": {
+            "format": "uuid",
+            "title": "Vendor Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "purchase_id",
+          "vendor_id",
+          "reason",
+          "details",
+          "status",
+          "deadline_at",
+          "resolution",
+          "resolution_reference",
+          "created_at"
+        ],
+        "title": "DisputeRead",
+        "type": "object"
+      },
+      "DisputeStatus": {
+        "enum": [
+          "OPEN",
+          "APPROVED",
+          "DENIED"
+        ],
+        "title": "DisputeStatus",
+        "type": "string"
       },
       "EarningAdjustmentCreate": {
         "properties": {
@@ -1135,6 +1380,92 @@
           "CANCELLED"
         ],
         "title": "JobStatus",
+        "type": "string"
+      },
+      "LeadPurchaseStatus": {
+        "enum": [
+          "PENDING_PAYMENT",
+          "PAID",
+          "FAILED",
+          "REFUNDED"
+        ],
+        "title": "LeadPurchaseStatus",
+        "type": "string"
+      },
+      "LeadRead": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "location_summary": {
+            "title": "Location Summary",
+            "type": "string"
+          },
+          "opportunity_disclosure": {
+            "default": "Access to a customer opportunity; not a guaranteed job, sale, contract, appointment outcome, or revenue.",
+            "title": "Opportunity Disclosure",
+            "type": "string"
+          },
+          "policy_version": {
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "price_minor": {
+            "title": "Price Minor",
+            "type": "integer"
+          },
+          "qualification_criteria": {
+            "additionalProperties": true,
+            "title": "Qualification Criteria",
+            "type": "object"
+          },
+          "service_category": {
+            "title": "Service Category",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LeadStatus"
+          }
+        },
+        "required": [
+          "id",
+          "service_category",
+          "location_summary",
+          "qualification_criteria",
+          "price_minor",
+          "currency",
+          "policy_version",
+          "status",
+          "expires_at"
+        ],
+        "title": "LeadRead",
+        "type": "object"
+      },
+      "LeadStatus": {
+        "enum": [
+          "AVAILABLE",
+          "PURCHASED",
+          "CLOSED"
+        ],
+        "title": "LeadStatus",
         "type": "string"
       },
       "LoginRequest": {
@@ -1663,6 +1994,220 @@
         "title": "ProfileRead",
         "type": "object"
       },
+      "ProviderInterestCreate": {
+        "properties": {
+          "business_name": {
+            "maxLength": 200,
+            "minLength": 2,
+            "title": "Business Name",
+            "type": "string"
+          },
+          "business_website": {
+            "anyOf": [
+              {
+                "format": "uri",
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Website"
+          },
+          "city": {
+            "maxLength": 120,
+            "minLength": 2,
+            "title": "City",
+            "type": "string"
+          },
+          "company": {
+            "default": "",
+            "maxLength": 0,
+            "title": "Company",
+            "type": "string"
+          },
+          "contact_name": {
+            "maxLength": 160,
+            "minLength": 2,
+            "title": "Contact Name",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "license_details": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License Details"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 3000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "phone": {
+            "maxLength": 40,
+            "minLength": 7,
+            "title": "Phone",
+            "type": "string"
+          },
+          "postal_code": {
+            "pattern": "^\\d{5}(?:-\\d{4})?$",
+            "title": "Postal Code",
+            "type": "string"
+          },
+          "service_categories": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Service Categories",
+            "type": "array"
+          },
+          "source_url": {
+            "format": "uri",
+            "minLength": 1,
+            "title": "Source Url",
+            "type": "string"
+          },
+          "state": {
+            "pattern": "^[A-Z]{2}$",
+            "title": "State",
+            "type": "string"
+          },
+          "utm_campaign": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utm Campaign"
+          },
+          "utm_content": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utm Content"
+          },
+          "utm_medium": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utm Medium"
+          },
+          "utm_source": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utm Source"
+          },
+          "utm_term": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utm Term"
+          }
+        },
+        "required": [
+          "source_url",
+          "business_name",
+          "contact_name",
+          "email",
+          "phone",
+          "service_categories",
+          "city",
+          "state",
+          "postal_code"
+        ],
+        "title": "ProviderInterestCreate",
+        "type": "object"
+      },
+      "PurchaseRead": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lead_id": {
+            "format": "uuid",
+            "title": "Lead Id",
+            "type": "string"
+          },
+          "price_minor": {
+            "title": "Price Minor",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LeadPurchaseStatus"
+          },
+          "vendor_id": {
+            "format": "uuid",
+            "title": "Vendor Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "lead_id",
+          "vendor_id",
+          "price_minor",
+          "currency",
+          "status"
+        ],
+        "title": "PurchaseRead",
+        "type": "object"
+      },
       "QuestionRead": {
         "properties": {
           "help_text": {
@@ -1994,8 +2539,19 @@
       "ServiceDetail": {
         "properties": {
           "base_price": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Base Price",
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Price"
+          },
+          "category": {
+            "title": "Category",
             "type": "string"
           },
           "description": {
@@ -2010,16 +2566,35 @@
             "title": "Description"
           },
           "duration_minutes": {
-            "title": "Duration Minutes",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Minutes"
           },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
           },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "is_bookable": {
+            "title": "Is Bookable",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
+            "type": "string"
+          },
+          "pricing_model": {
+            "title": "Pricing Model",
             "type": "string"
           },
           "questions": {
@@ -2039,8 +2614,12 @@
           "slug",
           "name",
           "description",
+          "category",
           "base_price",
+          "pricing_model",
           "duration_minutes",
+          "is_active",
+          "is_bookable",
           "questions"
         ],
         "title": "ServiceDetail",
@@ -2049,8 +2628,19 @@
       "ServiceRead": {
         "properties": {
           "base_price": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Base Price",
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Price"
+          },
+          "category": {
+            "title": "Category",
             "type": "string"
           },
           "description": {
@@ -2065,16 +2655,35 @@
             "title": "Description"
           },
           "duration_minutes": {
-            "title": "Duration Minutes",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Minutes"
           },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
           },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "is_bookable": {
+            "title": "Is Bookable",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
+            "type": "string"
+          },
+          "pricing_model": {
+            "title": "Pricing Model",
             "type": "string"
           },
           "slug": {
@@ -2087,10 +2696,206 @@
           "slug",
           "name",
           "description",
+          "category",
           "base_price",
-          "duration_minutes"
+          "pricing_model",
+          "duration_minutes",
+          "is_active",
+          "is_bookable"
         ],
         "title": "ServiceRead",
+        "type": "object"
+      },
+      "ServiceRequestCreate": {
+        "properties": {
+          "address_line1": {
+            "maxLength": 240,
+            "minLength": 3,
+            "title": "Address Line1",
+            "type": "string"
+          },
+          "city": {
+            "maxLength": 120,
+            "minLength": 2,
+            "title": "City",
+            "type": "string"
+          },
+          "company": {
+            "default": "",
+            "maxLength": 0,
+            "title": "Company",
+            "type": "string"
+          },
+          "contact_preference": {
+            "enum": [
+              "email",
+              "phone",
+              "text"
+            ],
+            "title": "Contact Preference",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 160,
+            "minLength": 2,
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "maxLength": 40,
+            "minLength": 7,
+            "title": "Phone",
+            "type": "string"
+          },
+          "postal_code": {
+            "pattern": "^\\d{5}(?:-\\d{4})?$",
+            "title": "Postal Code",
+            "type": "string"
+          },
+          "requested_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested Date"
+          },
+          "requested_timing": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested Timing"
+          },
+          "service_description": {
+            "maxLength": 4000,
+            "minLength": 5,
+            "title": "Service Description",
+            "type": "string"
+          },
+          "service_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Id"
+          },
+          "service_slug": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Slug"
+          },
+          "source_url": {
+            "format": "uri",
+            "minLength": 1,
+            "title": "Source Url",
+            "type": "string"
+          },
+          "state": {
+            "pattern": "^[A-Z]{2}$",
+            "title": "State",
+            "type": "string"
+          },
+          "utm_campaign": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utm Campaign"
+          },
+          "utm_content": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utm Content"
+          },
+          "utm_medium": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utm Medium"
+          },
+          "utm_source": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utm Source"
+          },
+          "utm_term": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utm Term"
+          }
+        },
+        "required": [
+          "source_url",
+          "name",
+          "email",
+          "phone",
+          "service_description",
+          "address_line1",
+          "city",
+          "state",
+          "postal_code",
+          "contact_preference"
+        ],
+        "title": "ServiceRequestCreate",
         "type": "object"
       },
       "ServiceWrite": {
@@ -2104,9 +2909,19 @@
               {
                 "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
+              },
+              {
+                "type": "null"
               }
             ],
             "title": "Base Price"
+          },
+          "category": {
+            "default": "home-services",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Category",
+            "type": "string"
           },
           "description": {
             "anyOf": [
@@ -2125,10 +2940,21 @@
             "title": "Duration Minutes",
             "type": "integer"
           },
+          "is_bookable": {
+            "default": false,
+            "title": "Is Bookable",
+            "type": "boolean"
+          },
           "name": {
             "maxLength": 160,
             "minLength": 1,
             "title": "Name",
+            "type": "string"
+          },
+          "pricing_model": {
+            "default": "quote_required",
+            "pattern": "^(fixed|quote_required)$",
+            "title": "Pricing Model",
             "type": "string"
           },
           "questions": {
@@ -2153,10 +2979,34 @@
         "required": [
           "slug",
           "name",
-          "base_price",
           "duration_minutes"
         ],
         "title": "ServiceWrite",
+        "type": "object"
+      },
+      "SubmissionAccepted": {
+        "properties": {
+          "downstream_status": {
+            "title": "Downstream Status",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "REQUEST_ACCEPTED",
+            "default": "REQUEST_ACCEPTED",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "downstream_status"
+        ],
+        "title": "SubmissionAccepted",
         "type": "object"
       },
       "TechnicianNoteRequest": {
@@ -3485,6 +4335,65 @@
         "summary": "Prepare Booking Payment",
         "tags": [
           "bookings"
+        ]
+      }
+    },
+    "/api/v1/contact": {
+      "post": {
+        "operationId": "contact_api_v1_contact_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Contact",
+        "tags": [
+          "public-forms"
         ]
       }
     },
@@ -5641,6 +6550,382 @@
         "summary": "Create Refund",
         "tags": [
           "payments"
+        ]
+      }
+    },
+    "/api/v1/provider-interest": {
+      "post": {
+        "operationId": "provider_interest_api_v1_provider_interest_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderInterestCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Provider Interest",
+        "tags": [
+          "public-forms"
+        ]
+      }
+    },
+    "/api/v1/provider/leads": {
+      "get": {
+        "operationId": "list_leads_api_v1_provider_leads_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LeadRead"
+                  },
+                  "title": "Response List Leads Api V1 Provider Leads Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Leads",
+        "tags": [
+          "provider-leads"
+        ]
+      }
+    },
+    "/api/v1/provider/leads/{lead_id}": {
+      "get": {
+        "operationId": "get_lead_api_v1_provider_leads__lead_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lead_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lead Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Lead",
+        "tags": [
+          "provider-leads"
+        ]
+      }
+    },
+    "/api/v1/provider/leads/{lead_id}/disputes": {
+      "post": {
+        "operationId": "create_dispute_api_v1_provider_leads__lead_id__disputes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lead_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lead Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisputeCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Dispute",
+        "tags": [
+          "provider-leads"
+        ]
+      }
+    },
+    "/api/v1/provider/leads/{lead_id}/disputes/{dispute_id}": {
+      "get": {
+        "operationId": "get_dispute_api_v1_provider_leads__lead_id__disputes__dispute_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lead_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lead Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "dispute_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dispute Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Dispute",
+        "tags": [
+          "provider-leads"
+        ]
+      }
+    },
+    "/api/v1/provider/leads/{lead_id}/purchase": {
+      "post": {
+        "operationId": "purchase_lead_api_v1_provider_leads__lead_id__purchase_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lead_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lead Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Purchase Lead",
+        "tags": [
+          "provider-leads"
+        ]
+      }
+    },
+    "/api/v1/service-requests": {
+      "post": {
+        "operationId": "service_request_api_v1_service_requests_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceRequestCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Service Request",
+        "tags": [
+          "public-forms"
         ]
       }
     },

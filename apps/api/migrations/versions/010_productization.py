@@ -15,6 +15,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # A disabled optional CRM is a durable, inspectable delivery state—not a
+    # successful external delivery and not a retryable failure.
+    op.execute("ALTER TYPE integration_event_status ADD VALUE IF NOT EXISTS 'PENDING_CONFIGURATION'")
     op.add_column("services", sa.Column("category", sa.String(100), nullable=False, server_default="home-services"))
     op.add_column("services", sa.Column("pricing_model", sa.String(32), nullable=False, server_default="quote_required"))
     op.add_column("services", sa.Column("is_bookable", sa.Boolean(), nullable=False, server_default=sa.false()))
@@ -54,6 +57,12 @@ def upgrade() -> None:
     op.create_table(
         "professional_leads",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column(
+            "service_request_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("public_submissions.id", ondelete="SET NULL"),
+            unique=True,
+        ),
         sa.Column("service_category", sa.String(100), nullable=False),
         sa.Column("location_summary", sa.String(200), nullable=False),
         sa.Column("qualification_criteria", postgresql.JSONB(), nullable=False),
@@ -62,7 +71,8 @@ def upgrade() -> None:
         sa.Column("policy_version", sa.String(40), nullable=False),
         sa.Column("status", lead_status, nullable=False),
         sa.Column("purchased_by_vendor_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("vendors.id")),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column("expires_at", sa.DateTime(timezone=True)),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
     op.create_index("ix_professional_leads_service_category", "professional_leads", ["service_category"])
     op.create_index("ix_professional_leads_status", "professional_leads", ["status"])
@@ -76,7 +86,7 @@ def upgrade() -> None:
         sa.Column("price_minor", sa.Integer(), nullable=False),
         sa.Column("currency", sa.String(3), nullable=False),
         sa.Column("status", purchase_status, nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.UniqueConstraint("vendor_id", "idempotency_key", name="uq_lead_purchase_key"),
     )
     op.create_index("ix_professional_lead_purchases_vendor_id", "professional_lead_purchases", ["vendor_id"])
@@ -88,7 +98,10 @@ def upgrade() -> None:
         sa.Column("reason", sa.String(80), nullable=False),
         sa.Column("details", sa.Text(), nullable=False),
         sa.Column("status", dispute_status, nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column("deadline_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("resolution", sa.String(80)),
+        sa.Column("resolution_reference", sa.String(255)),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.UniqueConstraint("purchase_id", "reason", name="uq_lead_dispute_reason"),
     )
     op.create_index("ix_professional_lead_disputes_purchase_id", "professional_lead_disputes", ["purchase_id"])

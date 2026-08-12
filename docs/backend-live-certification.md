@@ -6,7 +6,8 @@
 - Migrations: fresh, 005, and 008 to the single 009 head; `alembic check` clean.
 - Security: Gitleaks clean; pip-audit clean after a patched pip; Trivy zero high/critical findings.
 - Runtime: isolated PostGIS and Redis healthy; API live/ready 200; Celery worker ping succeeds.
-- Contract: final source has 62 paths, 69 operations, and 69 unique operation IDs at `/openapi.json`.
+- Contract: productized source has 70 paths, 77 operations, and 77 unique operation IDs at
+  `/openapi.json`.
 - CORS: exact staging origin accepted; unapproved origin rejected.
 - Auth: register, duplicate conflict, login failure/success, verification, refresh rotation/reuse
   rejection, logout semantics, password reset, and old-password rejection.
@@ -37,7 +38,7 @@
 - Production API activation is blocked until production-only credentials and a private production
   data plane are provisioned and the Stripe/browser gates pass. `api.breero.com` deliberately returns
   a TLS-valid `503` maintenance response rather than routing production users into staging.
-- The canonical contract has no paid professional-lead or lead-dispute domain. Dispatch offers are
-  not misrepresented as purchased leads.
+- Paid professional opportunities now have provider-owned list/detail/purchase/dispute boundaries,
+  but live purchase remains disabled until Stripe sandbox certification succeeds.
 
 Production remains **NO-GO**.

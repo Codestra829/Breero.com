@@ -12,6 +12,7 @@ from app.domains.common.models import TimestampMixin, UUIDPrimaryKeyMixin
 
 class EventStatus(str, enum.Enum):
     PENDING = "PENDING"
+    PENDING_CONFIGURATION = "PENDING_CONFIGURATION"
     PROCESSING = "PROCESSING"
     DELIVERED = "DELIVERED"
     FAILED = "FAILED"

@@ -17,6 +17,7 @@ class LeadRead(BaseModel):
     currency: str
     policy_version: str
     status: LeadStatus
+    expires_at: datetime | None
     opportunity_disclosure: str = "Access to a customer opportunity; not a guaranteed job, sale, contract, appointment outcome, or revenue."
 
 
@@ -43,4 +44,7 @@ class DisputeRead(BaseModel):
     reason: str
     details: str
     status: DisputeStatus
+    deadline_at: datetime
+    resolution: str | None
+    resolution_reference: str | None
     created_at: datetime

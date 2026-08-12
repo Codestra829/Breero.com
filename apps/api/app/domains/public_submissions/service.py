@@ -87,10 +87,10 @@ class PublicSubmissionService:
                 status=(
                     EventStatus.PENDING
                     if settings.odoo_enabled
-                    else EventStatus.DELIVERED
+                    else EventStatus.PENDING_CONFIGURATION
                 ),
                 next_attempt_at=datetime.now(UTC),
-                processed_at=None if settings.odoo_enabled else datetime.now(UTC),
+                processed_at=None,
             )
         )
         await self.session.commit()

@@ -32,8 +32,13 @@ async def provider_context(
 
 
 @router.get("", response_model=list[LeadRead])
-async def list_leads(session: Annotated[AsyncSession, Depends(get_db)], _: Annotated[Vendor, Depends(provider_context)]):
-    return await ProfessionalLeadService(session).available()
+async def list_leads(session: Annotated[AsyncSession, Depends(get_db)], vendor: Annotated[Vendor, Depends(provider_context)]):
+    return await ProfessionalLeadService(session).available(vendor)
+
+
+@router.get("/{lead_id}", response_model=LeadRead)
+async def get_lead(lead_id: uuid.UUID, session: Annotated[AsyncSession, Depends(get_db)], vendor: Annotated[Vendor, Depends(provider_context)]):
+    return await ProfessionalLeadService(session).get(lead_id, vendor)
 
 
 @router.post("/{lead_id}/purchase", response_model=PurchaseRead)

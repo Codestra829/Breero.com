@@ -31,6 +31,9 @@ class DisputeStatus(str, enum.Enum):
 class ProfessionalLead(Base):
     __tablename__ = "professional_leads"
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    service_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("public_submissions.id", ondelete="SET NULL"), unique=True, index=True
+    )
     service_category: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     location_summary: Mapped[str] = mapped_column(String(200), nullable=False)
     qualification_criteria: Mapped[dict] = mapped_column(JSONB, nullable=False)
@@ -39,7 +42,10 @@ class ProfessionalLead(Base):
     policy_version: Mapped[str] = mapped_column(String(40), nullable=False)
     status: Mapped[LeadStatus] = mapped_column(Enum(LeadStatus, name="professional_lead_status"), nullable=False, index=True)
     purchased_by_vendor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("vendors.id"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class LeadPurchase(Base):
@@ -52,7 +58,9 @@ class LeadPurchase(Base):
     price_minor: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     status: Mapped[LeadPurchaseStatus] = mapped_column(Enum(LeadPurchaseStatus, name="lead_purchase_status"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class LeadDispute(Base):
@@ -64,4 +72,9 @@ class LeadDispute(Base):
     reason: Mapped[str] = mapped_column(String(80), nullable=False)
     details: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[DisputeStatus] = mapped_column(Enum(DisputeStatus, name="lead_dispute_status"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolution: Mapped[str | None] = mapped_column(String(80))
+    resolution_reference: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

@@ -130,6 +130,7 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
             base_price=Decimal("129.00"),
             duration_minutes=120,
             is_active=True,
+            is_bookable=True,
         )
         session.add_all([area, catalog_service])
         await session.flush()

@@ -18,6 +18,8 @@ from app.domains.dispatch import models as _dispatch  # noqa: F401
 from app.domains.finance import models as _finance  # noqa: F401
 from app.domains.jobs import models as _jobs  # noqa: F401
 from app.domains.payments import models as _payments  # noqa: F401
+from app.domains.professional_leads import models as _professional_leads  # noqa: F401
+from app.domains.public_submissions import models as _public_submissions  # noqa: F401
 from app.domains.workforce import models as _workforce  # noqa: F401
 
 
