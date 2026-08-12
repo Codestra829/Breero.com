@@ -2,11 +2,11 @@
 
 ## Certified candidate
 
-- Application candidate: `2f6eb4e013ca4aac87620de27ede8a5c4bafe5c3`
+- Application candidate: `841965f951bad102c3df0715bfdf6f4ea1dbad44`
 - Architecture base: `337e8e9ef47378643d221fb6c97d4ebdfe69e342`
 - Migration: `009_final_staging_boundaries` (single head)
-- Image: `breero-api:2f6eb4e013ca4aac87620de27ede8a5c4bafe5c3`
-- Image digest: `sha256:40faf4c463a86c4ea07006d4d16ee52778ff2c0a7d5df7df42e45d1edfa90698`
+- Image: `breero-api:841965f951bad102c3df0715bfdf6f4ea1dbad44`
+- Image digest: `sha256:eea0d438c50d7eb74693173edcdbe1dd6e83ad77785e57f1ac7be12c67b32f85`
 
 ## Host topology
 
@@ -42,4 +42,3 @@ membership after every update.
 Stripe, email, SMS, geocoding, Odoo, and payout are explicitly disabled because staging credentials
 were not available. There is no fake-provider fallback. Provider-dependent UAT remains blocked until
 test/sandbox credentials are installed and the corresponding enable flag is deliberately changed.
-

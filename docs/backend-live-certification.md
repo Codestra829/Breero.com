@@ -20,6 +20,10 @@
   and post-expiry stale lease reclaim succeeds.
 - Backup: custom archive restored to a separate database at migration 009 with representative row
   counts matching.
+- Final customer boundaries: owner-scoped payment detail excludes the Stripe client secret;
+  cancellation is audited, idempotent, revokes guest access, and hides cross-customer resources.
+- Rollback: compatible prior API/worker image reached readiness, then the final 62-path image was
+  restored without database migration or data loss.
 
 ## Blocked evidence
 

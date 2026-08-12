@@ -13,6 +13,6 @@ Never downgrade migration 009 automatically. The pre-change Caddy configuration 
 a graceful reload. Database recovery uses the custom archive in `/var/backups/breero/staging/` and
 must target a new isolated database before any destructive decision.
 
-The rollback procedure is executable, but an earlier provider-compatible application image was not
-available for a meaningful image rollback rehearsal. The rehearsal therefore remains blocked.
-
+The application-only rehearsal succeeded from the 62-path final candidate to the compatible
+60-path prior image and back. Readiness returned 200 for both images, the database remained at 009,
+and the worker rejoined after the final image was restored.
