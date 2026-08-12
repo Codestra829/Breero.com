@@ -5,6 +5,20 @@ import { ApiTransport } from "./transport";
 const json = (body: unknown, init: ResponseInit = {}) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json", ...init.headers }, ...init });
 
 describe("ApiTransport", () => {
+  it("invokes the configured fetch function without a transport receiver", async () => {
+    let receiver: unknown = Symbol("unset");
+    function fetcher(this: unknown) {
+      receiver = this;
+      return Promise.resolve(new Response(JSON.stringify({ ok: true })));
+    }
+    const transport = new ApiTransport({
+      baseUrl: "https://api.test",
+      fetch: fetcher as typeof globalThis.fetch,
+    });
+    await transport.request("/health");
+    expect(receiver).toBeUndefined();
+  });
+
   it("adds bearer auth and returns typed JSON", async () => {
     const fetcher = vi.fn(async (_url: URL | RequestInfo, init?: RequestInit) => {
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer token");

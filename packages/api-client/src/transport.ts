@@ -15,7 +15,8 @@ export class ApiTransport implements Transport {
   private readonly fetcher: typeof globalThis.fetch;
   constructor(private readonly options: TransportOptions) {
     if (options.baseUrl && !/^https?:\/\//.test(options.baseUrl)) throw new Error("API base URL must be an absolute HTTP(S) URL");
-    this.fetcher = options.fetch ?? globalThis.fetch;
+    const fetcher = options.fetch ?? globalThis.fetch;
+    this.fetcher = (...args) => fetcher(...args);
   }
 
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
