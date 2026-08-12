@@ -361,6 +361,61 @@
         "title": "BookingAnswerInput",
         "type": "object"
       },
+      "BookingConfirmation": {
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "booking_id": {
+            "format": "uuid",
+            "title": "Booking Id",
+            "type": "string"
+          },
+          "booking_status": {
+            "$ref": "#/components/schemas/BookingStatus"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "next_action": {
+            "title": "Next Action",
+            "type": "string"
+          },
+          "payment_status": {
+            "title": "Payment Status",
+            "type": "string"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "window_end": {
+            "format": "date-time",
+            "title": "Window End",
+            "type": "string"
+          },
+          "window_start": {
+            "format": "date-time",
+            "title": "Window Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "booking_id",
+          "reference",
+          "booking_status",
+          "payment_status",
+          "window_start",
+          "window_end",
+          "amount_minor",
+          "currency",
+          "next_action"
+        ],
+        "title": "BookingConfirmation",
+        "type": "object"
+      },
       "BookingCreateRequest": {
         "properties": {
           "address_id": {
@@ -402,6 +457,17 @@
             "title": "Currency",
             "type": "string"
           },
+          "guest_confirmation_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guest Confirmation Token"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -416,8 +482,7 @@
             "type": "string"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/BookingStatus"
           },
           "total_amount": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -447,6 +512,16 @@
         ],
         "title": "BookingResponse",
         "type": "object"
+      },
+      "BookingStatus": {
+        "enum": [
+          "PENDING_PAYMENT",
+          "CONFIRMED",
+          "CANCELLED",
+          "EXPIRED"
+        ],
+        "title": "BookingStatus",
+        "type": "string"
       },
       "BookingWindow": {
         "properties": {
@@ -3144,6 +3219,121 @@
           }
         },
         "summary": "Create Booking",
+        "tags": [
+          "bookings"
+        ]
+      }
+    },
+    "/api/v1/bookings/{booking_id}/confirmation": {
+      "get": {
+        "operationId": "booking_confirmation_api_v1_bookings__booking_id__confirmation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "booking_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Booking Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": true,
+            "schema": {
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingConfirmation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Booking Confirmation",
+        "tags": [
+          "bookings"
+        ]
+      }
+    },
+    "/api/v1/bookings/{booking_id}/payment": {
+      "post": {
+        "operationId": "prepare_booking_payment_api_v1_bookings__booking_id__payment_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "booking_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Booking Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": true,
+            "schema": {
+              "title": "Authorization",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Prepare Booking Payment",
         "tags": [
           "bookings"
         ]

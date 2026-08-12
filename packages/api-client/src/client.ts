@@ -1,6 +1,6 @@
 import type {
   AddressValidation, AddressValidationRequest, AuthSession, AvailabilitySearchRequest,
-  AvailabilitySlot, Booking, BookingCreateRequest, ChangePasswordRequest, CustomerAddress,
+  AvailabilitySlot, Booking, BookingConfirmation, BookingCreateRequest, ChangePasswordRequest, CustomerAddress,
   CustomerAddressInput, CustomerBookingList, CustomerPayment, CustomerProfile,
   CustomerProfilePatch, ForgotPasswordRequest, LoginRequest, MessageResponse, Page,
   Payment, PaymentIntentRequest, Quote, RefreshRequest, RegisterRequest,
@@ -22,15 +22,21 @@ export interface BreeroApi {
   services: { list(signal?: AbortSignal): Promise<ServiceSummary[]>; detail(id: UUID, signal?: AbortSignal): Promise<ServiceDetail>; questions(id: UUID, signal?: AbortSignal): Promise<ServiceQuestion[]> };
   addresses: { validate(input: AddressValidationRequest, signal?: AbortSignal): Promise<AddressValidation> };
   availability: { search(input: AvailabilitySearchRequest, signal?: AbortSignal): Promise<AvailabilitySlot[]> };
-  bookings: { create(input: BookingCreateRequest, idempotencyKey: string, signal?: AbortSignal): Promise<Booking>; mine(params?: PageParams, signal?: AbortSignal): Promise<Page<Booking> | CustomerBookingList>; getMine(id: UUID, signal?: AbortSignal): Promise<Booking> };
-  payments: { createIntent(input: PaymentIntentRequest, idempotencyKey: string, signal?: AbortSignal): Promise<Payment>; get(id: UUID, signal?: AbortSignal): Promise<Payment> };
+  bookings: {
+    create(input: BookingCreateRequest, idempotencyKey: string, signal?: AbortSignal): Promise<Booking>;
+    prepareGuestPayment(id: UUID, guestToken: string, idempotencyKey: string, signal?: AbortSignal): Promise<Payment>;
+    guestConfirmation(id: UUID, guestToken: string, signal?: AbortSignal): Promise<BookingConfirmation>;
+    mine(params?: PageParams, signal?: AbortSignal): Promise<Page<Booking> | CustomerBookingList>;
+    getMine(id: UUID, signal?: AbortSignal): Promise<Booking>;
+  };
+  payments: { createIntent(input: PaymentIntentRequest, idempotencyKey: string, signal?: AbortSignal): Promise<Payment> };
   customer: {
     profile(signal?: AbortSignal): Promise<CustomerProfile>; updateProfile(input: CustomerProfilePatch, signal?: AbortSignal): Promise<CustomerProfile>;
     addresses(signal?: AbortSignal): Promise<CustomerAddress[]>; addAddress(input: CustomerAddressInput, signal?: AbortSignal): Promise<CustomerAddress>;
     updateAddress(id: UUID, input: CustomerAddressInput, signal?: AbortSignal): Promise<CustomerAddress>; deleteAddress(id: UUID, signal?: AbortSignal): Promise<void>;
     payments(params?: PageParams, signal?: AbortSignal): Promise<Page<CustomerPayment>>;
   };
-  quotes: { list(params?: PageParams, signal?: AbortSignal): Promise<Page<Quote>>; get(id: UUID, signal?: AbortSignal): Promise<Quote>; decide(id: UUID, approve: boolean, signal?: AbortSignal): Promise<Quote>; approve(id: UUID, idempotencyKey: string, signal?: AbortSignal): Promise<Quote> };
+  quotes: { list(params?: PageParams, signal?: AbortSignal): Promise<Page<Quote>>; get(id: UUID, signal?: AbortSignal): Promise<Quote>; decide(id: UUID, approve: boolean, signal?: AbortSignal): Promise<Quote> };
 }
 
 const encoded = (value: string) => encodeURIComponent(value);
@@ -61,12 +67,13 @@ export function createApiClient(http: Transport): BreeroApi {
     availability: { search: (body, signal) => http.request("/availability/search", { method: "POST", body, signal, retry: false }) },
     bookings: {
       create: (body, key, signal) => http.request("/bookings", { method: "POST", body, signal, retry: false, headers: { "Idempotency-Key": key } }),
+      prepareGuestPayment: (id, token, key, signal) => http.request(`/bookings/${encoded(id)}/payment`, { method: "POST", signal, retry: false, headers: { Authorization: `Bearer ${token}`, "Idempotency-Key": key } }),
+      guestConfirmation: (id, token, signal) => http.request(`/bookings/${encoded(id)}/confirmation`, { signal, retry: false, headers: { Authorization: `Bearer ${token}` } }),
       mine: (params, signal) => http.request(`/customer/bookings${pageQuery(params)}`, { signal }),
       getMine: (id, signal) => http.request(`/customer/bookings/${encoded(id)}`, { signal }),
     },
     payments: {
       createIntent: (body, key, signal) => http.request("/payments/intents", { method: "POST", body, signal, retry: false, headers: { "Idempotency-Key": key } }),
-      get: (id, signal) => http.request(`/payments/${encoded(id)}`, { signal }),
     },
     customer: {
       profile: (signal) => http.request("/customer/profile", { signal }),
@@ -81,7 +88,6 @@ export function createApiClient(http: Transport): BreeroApi {
       list: (params, signal) => http.request(`/customer/quotes${pageQuery(params)}`, { signal }),
       get: (id, signal) => http.request(`/customer/quotes/${encoded(id)}`, { signal }),
       decide: (id, approve, signal) => http.request(`/customer/quotes/${encoded(id)}/decision`, { method: "POST", body: { approve }, signal, retry: false }),
-      approve: (id, _key, signal) => http.request(`/customer/quotes/${encoded(id)}/decision`, { method: "POST", body: { approve: true }, signal, retry: false }),
     },
   };
 }

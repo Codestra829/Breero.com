@@ -43,12 +43,17 @@ export function createMockBreeroApi(scenario: MockScenario = {}): BreeroApi {
     availability: { search: (_input, s) => run("availability", () => scenario.slots ?? [], s) },
     bookings: {
       create: (_input, _key, s) => run("bookings", () => scenario.bookings?.[0] ?? missing("booking"), s),
+      prepareGuestPayment: (_id, _token, _key, s) => run("payments", () => scenario.payments?.[0] ?? missing("payment"), s),
+      guestConfirmation: (id, _token, s) => run("bookings", () => {
+        const booking = scenario.bookings?.find((item) => item.id === id) ?? missing(`booking ${id}`);
+        const payment = scenario.payments?.find((item) => item.booking_id === id);
+        return { booking_id: booking.id, reference: booking.reference, booking_status: booking.status, payment_status: payment?.status ?? "not_started", window_start: booking.window_start, window_end: booking.window_end, amount_minor: Math.round(Number(booking.total_amount) * 100), currency: booking.currency, next_action: booking.status === "CONFIRMED" ? "confirmed" as const : "await_payment_confirmation" as const };
+      }, s),
       mine: (_params, s) => run("bookings", () => ({ items: scenario.bookings ?? [], total: scenario.bookings?.length ?? 0, page: 1, page_size: 20 }), s),
       getMine: (id, s) => run("bookings", () => scenario.bookings?.find((item) => item.id === id) ?? missing(`booking ${id}`), s),
     },
     payments: {
       createIntent: (_input, _key, s) => run("payments", () => scenario.payments?.[0] ?? missing("payment"), s),
-      get: (id, s) => run("payments", () => scenario.payments?.find((item) => item.id === id) ?? missing(`payment ${id}`), s),
     },
     customer: {
       profile: (s) => run("customer", () => profile ?? missing("profile"), s),
@@ -71,7 +76,6 @@ export function createMockBreeroApi(scenario: MockScenario = {}): BreeroApi {
       list: (_params, s) => run("quotes", () => ({ items: scenario.quotes ?? [], total: scenario.quotes?.length ?? 0, page: 1, page_size: 20 }), s),
       get: (id, s) => run("quotes", () => scenario.quotes?.find((item) => item.id === id) ?? missing(`quote ${id}`), s),
       decide: (id, approve, s) => run("quotes", () => ({ ...(scenario.quotes?.find((item) => item.id === id) ?? missing(`quote ${id}`)), status: approve ? "APPROVED" : "DECLINED" }), s),
-      approve: (id, _key, s) => run("quotes", () => ({ ...(scenario.quotes?.find((item) => item.id === id) ?? missing(`quote ${id}`)), status: "APPROVED" }), s),
     },
   };
 }

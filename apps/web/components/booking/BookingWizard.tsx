@@ -11,6 +11,7 @@ import { ApiError } from "@breero/api-client";
 import { bookingApi } from "../../lib/booking-api";
 import { serviceCatalog as fallbackCatalog } from "../../lib/booking-catalog";
 import { track } from "../../lib/analytics";
+import { StripePaymentForm } from "./StripePaymentForm";
 type Answers = Record<string, string | string[] | boolean>;
 type State = {
   serviceId: string;
@@ -27,6 +28,10 @@ type State = {
   paymentId?: string;
   paymentKey?: string;
   paymentStatus?: string;
+  guestToken?: string;
+  amountMinor?: number;
+  currency?: string;
+  clientSecret?: string;
 };
 const empty: State = {
   serviceId: "",
@@ -182,7 +187,13 @@ export function BookingWizard() {
         key,
       );
       track({ name: "booking_submitted", serviceId: service.id });
-      setState((v) => ({ ...v, bookingId: booking.id }));
+      setState((v) => ({
+        ...v,
+        bookingId: booking.id,
+        guestToken: booking.guest_confirmation_token ?? undefined,
+        amountMinor: Math.round(Number(booking.total_amount) * 100),
+        currency: booking.currency,
+      }));
       next();
     } catch (reason) {
       setError(
@@ -198,23 +209,30 @@ export function BookingWizard() {
     }
   }
   async function pay() {
-    if (!state.bookingId) return;
+    if (!state.bookingId || !state.guestToken) {
+      setError("This booking session cannot authorize payment. Start again or contact support.");
+      return;
+    }
     setBusy(true);
     setError("");
     const key = state.paymentKey ?? crypto.randomUUID();
     if (!state.paymentKey) setState((v) => ({ ...v, paymentKey: key }));
     try {
-      const p = await api.payments.createIntent(
-        {
-          booking_id: state.bookingId,
-          amount_minor: Math.round(Number(service?.base_price ?? 0) * 100),
-          currency: "EUR",
-        },
+      const p = await api.bookings.prepareGuestPayment(
+        state.bookingId,
+        state.guestToken,
         key,
       );
       track({ name: "payment_started", bookingId: state.bookingId });
-      setState((v) => ({ ...v, paymentId: p.id, paymentStatus: p.status }));
-      setStep(7);
+      setState((v) => ({
+        ...v,
+        paymentId: p.id,
+        paymentStatus: p.status,
+        amountMinor: p.amount_minor,
+        currency: p.currency,
+        clientSecret: p.client_secret ?? undefined,
+      }));
+      if (mockMode || !p.client_secret) setStep(7);
     } catch {
       setError(
         "Payment could not be started. Your booking is saved but not confirmed.",
@@ -223,6 +241,31 @@ export function BookingWizard() {
       setBusy(false);
     }
   }
+  async function checkConfirmation() {
+    if (!state.bookingId || !state.guestToken) return;
+    try {
+      const confirmation = await api.bookings.guestConfirmation(
+        state.bookingId,
+        state.guestToken,
+      );
+      setState((v) => ({
+        ...v,
+        paymentStatus: confirmation.payment_status,
+        amountMinor: confirmation.amount_minor,
+        currency: confirmation.currency,
+      }));
+    } catch {
+      setError("We couldn’t refresh the confirmation status. Try again.");
+    }
+  }
+  useEffect(() => {
+    if (step !== 7 || !state.bookingId || !state.guestToken) return;
+    const delays = [0, 1000, 2000, 4000, 5000];
+    const timers = delays.map((delay) => window.setTimeout(() => void checkConfirmation(), delay));
+    return () => timers.forEach(window.clearTimeout);
+    // Confirmation polling is intentionally bounded and keyed to the confirmation step.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, state.bookingId, state.guestToken]);
   function requiredDone() {
     return !service?.questions.some(
       (q) =>
@@ -460,14 +503,13 @@ export function BookingWizard() {
               redirect.
             </p>
             <div className="notice">
-              Secure provider handoff · €{service?.base_price} EUR
+              Secure provider handoff · {state.amountMinor !== undefined ? (state.amountMinor / 100).toFixed(2) : service?.base_price} {state.currency ?? ""}
             </div>
-            <Actions
-              back={back}
-              next={pay}
-              busy={busy}
-              nextLabel="Continue to payment"
-            />
+            {state.clientSecret && !mockMode ? (
+              <StripePaymentForm clientSecret={state.clientSecret} onSubmitted={() => setStep(7)} />
+            ) : (
+              <Actions back={back} next={pay} busy={busy} nextLabel="Continue to payment" />
+            )}
           </>
         )}
         {step === 7 && (
@@ -486,6 +528,9 @@ export function BookingWizard() {
             <p className="notice">
               Current status: {state.paymentStatus ?? "pending"}
             </p>
+            <button className="button-secondary" type="button" onClick={() => void checkConfirmation()}>
+              Check status again
+            </button>
             <Link className="button" href="/">
               Return home
             </Link>

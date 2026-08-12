@@ -8,7 +8,7 @@ export function QuoteApproval({ quoteId, amountMinor, currency }: { quoteId: str
   const [state, setState] = useState<"idle" | "approving" | "approved" | "payment" | "ready" | "error">("idle");
   async function approve() {
     setState("approving");
-    try { await customerApi.quotes.approve(quoteId, crypto.randomUUID()); setState("approved"); }
+    try { await customerApi.quotes.decide(quoteId, true); setState("approved"); }
     catch { setState("error"); }
   }
   async function preparePayment() {

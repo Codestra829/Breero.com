@@ -9,7 +9,7 @@ const futureSlots = (): AvailabilitySlot[] => Array.from({ length: 6 }, (_, inde
 });
 
 const mockAddress: AddressValidation = { serviceable: true, formatted_address: "24 Lindenstraße, Berlin", address_id: "address-demo", service_area_id: "berlin", legal_entity_code: "BREERO-DE" };
-const mockBooking: Booking = { id: "booking-demo", reference: "BR-240811", status: "PENDING_PAYMENT", total_amount: "89.00", currency: "EUR", window_start: futureSlots()[0]!.start, window_end: futureSlots()[0]!.end, payment_required: true };
+const mockBooking: Booking = { id: "booking-demo", reference: "BR-240811", status: "PENDING_PAYMENT", total_amount: "89.00", currency: "EUR", window_start: futureSlots()[0]!.start, window_end: futureSlots()[0]!.end, payment_required: true, guest_confirmation_token: "mock-guest-confirmation-token-that-is-long-enough" };
 const mockPayment: Payment = { id: "payment-demo", booking_id: mockBooking.id, provider: "mock", status: "requires_action", amount_minor: 8900, currency: "EUR", captured_amount_minor: 0, client_secret: null, failure_code: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
 
 export function bookingApi(): BreeroApi {

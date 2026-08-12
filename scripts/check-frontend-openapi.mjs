@@ -16,8 +16,9 @@ const required = {
   "/api/v1/addresses/validate": ["post"],
   "/api/v1/availability/search": ["post"],
   "/api/v1/bookings": ["post"],
+  "/api/v1/bookings/{booking_id}/payment": ["post"],
+  "/api/v1/bookings/{booking_id}/confirmation": ["get"],
   "/api/v1/payments/intents": ["post"],
-  "/api/v1/payments/{payment_id}": ["get"],
   "/api/v1/customer/profile": ["get", "patch"],
   "/api/v1/customer/addresses": ["get", "post"],
   "/api/v1/customer/addresses/{address_id}": ["patch", "delete"],
@@ -44,6 +45,23 @@ for (const purpose of ["BOOKING_DIAGNOSTIC", "QUOTE_ADDITIONAL_WORK"]) {
     console.error(`Frontend API contract is missing payment purpose ${purpose}`);
     process.exit(1);
   }
+}
+
+const enumExpectations = {
+  QuestionType: ["text", "textarea", "number", "boolean", "single_choice", "multi_choice"],
+  UserRole: ["customer", "vendor_admin", "technician", "operations", "finance", "admin"],
+  PaymentStatus: ["created", "requires_action", "authorized", "captured", "failed", "canceled", "refunded", "partially_refunded"],
+  PaymentPurpose: ["BOOKING_DIAGNOSTIC", "QUOTE_ADDITIONAL_WORK"],
+  BookingStatus: ["PENDING_PAYMENT", "CONFIRMED", "CANCELLED", "EXPIRED"],
+  WorkRequestStatus: ["DRAFT", "SUBMITTED", "PENDING_CUSTOMER", "APPROVED_PENDING_PAYMENT", "APPROVED", "DECLINED", "PAID", "CANCELLED", "EXPIRED"],
+};
+for (const [schema, expected] of Object.entries(enumExpectations)) {
+  const actual = document.components?.schemas?.[schema]?.enum ?? [];
+  for (const value of expected) if (!actual.includes(value)) missing.push(`${schema}.${value}`);
+}
+if (missing.length) {
+  console.error(`Frontend enum contract is missing:\n${missing.join("\n")}`);
+  process.exit(1);
 }
 
 console.log(`Frontend API contract verified: ${Object.keys(required).length} paths and payment purposes.`);
