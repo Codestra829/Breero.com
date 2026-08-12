@@ -25,6 +25,7 @@ def request(email: str = "guest@example.com") -> BookingCreateRequest:
 @pytest.mark.asyncio
 async def test_reused_booking_key_rejects_different_intent() -> None:
     service = BookingService(MagicMock())
+    service.repository.lock_idempotency_key = AsyncMock()
     service.repository.booking_by_idempotency_key = AsyncMock(
         return_value=SimpleNamespace(idempotency_request_hash="0" * 64)
     )

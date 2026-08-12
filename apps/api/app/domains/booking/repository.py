@@ -73,6 +73,13 @@ class BookingRepository:
             text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": key}
         )
 
+    async def lock_idempotency_key(self, key: str) -> None:
+        """Serialize lookup/create for one booking idempotency key across API processes."""
+        await self.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {"key": f"booking-idempotency:{key}"},
+        )
+
     async def booking_by_idempotency_key(self, key: str) -> Booking | None:
         return await self.session.scalar(select(Booking).where(Booking.idempotency_key == key))
 

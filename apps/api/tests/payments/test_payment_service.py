@@ -109,6 +109,38 @@ async def test_duplicate_webhook_is_noop(service: PaymentService) -> None:
 
 
 @pytest.mark.asyncio
+async def test_failed_payment_webhook_records_failure(service: PaymentService) -> None:
+    payment = Payment(
+        id=uuid.uuid4(),
+        booking_id=uuid.uuid4(),
+        provider_payment_id="pi_failed",
+        payment_purpose=PaymentPurpose.BOOKING_DIAGNOSTIC,
+        amount_minor=1000,
+        captured_amount_minor=0,
+        currency="usd",
+        status=PaymentStatus.CREATED,
+    )
+    service.provider.verify_webhook.return_value = {
+        "id": "evt_failed",
+        "type": "payment_intent.payment_failed",
+        "data": {
+            "object": {
+                "object": "payment_intent",
+                "id": "pi_failed",
+                "last_payment_error": {"code": "card_declined"},
+            }
+        },
+    }
+    service.repo.get_by_provider_id.return_value = payment
+
+    event_id, duplicate = await service.process_webhook(b"{}", "signature")
+
+    assert (event_id, duplicate) == ("evt_failed", False)
+    assert payment.status == PaymentStatus.FAILED
+    assert payment.failure_code == "card_declined"
+
+
+@pytest.mark.asyncio
 async def test_quote_intent_requires_customer_approval(service: PaymentService) -> None:
     quote_id = uuid.uuid4()
     payment_id = uuid.uuid4()

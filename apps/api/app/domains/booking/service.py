@@ -122,6 +122,7 @@ class BookingService:
         request_hash = hashlib.sha256(
             json.dumps(payload.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
+        await self.repository.lock_idempotency_key(idempotency_key)
         existing = await self.repository.booking_by_idempotency_key(idempotency_key)
         if existing:
             if existing.idempotency_request_hash not in {"legacy", request_hash}:

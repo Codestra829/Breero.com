@@ -37,6 +37,26 @@ async def test_two_booking_transactions_serialize_same_capacity_slot():
 
 
 @pytest.mark.asyncio
+async def test_duplicate_booking_idempotency_key_serializes_lookup_and_create():
+    first = await psycopg.AsyncConnection.connect(dsn())
+    second = await psycopg.AsyncConnection.connect(dsn())
+    key = f"booking-idempotency:{uuid.uuid4()}"
+    try:
+        await first.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (key,))
+        waiter = asyncio.create_task(
+            second.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (key,))
+        )
+        await asyncio.sleep(0.05)
+        assert not waiter.done(), "duplicate lookup/create must wait for the first transaction"
+        await first.commit()
+        await asyncio.wait_for(waiter, 1)
+    finally:
+        await second.rollback()
+        await first.close()
+        await second.close()
+
+
+@pytest.mark.asyncio
 async def test_simultaneous_stripe_webhook_has_one_durable_event():
     event_id = f"evt_{uuid.uuid4().hex}"
     first = await psycopg.AsyncConnection.connect(dsn())
