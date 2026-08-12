@@ -15,7 +15,9 @@ runner with its own PostGIS and Redis volumes. Never point its environment at pr
 ## Provision and validate
 
 ```sh
-export BREERO_STAGING_ENV_FILE=/run/secrets/breero-staging.env
+export BREERO_STAGING_APP_ENV_FILE=/run/secrets/breero-staging-app.env
+export BREERO_STAGING_POSTGRES_ENV_FILE=/run/secrets/breero-staging-postgres.env
+export BREERO_STAGING_REDIS_ENV_FILE=/run/secrets/breero-staging-redis.env
 export BREERO_API_IMAGE=registry.example/breero-api@sha256:<digest>
 export BREERO_WEB_IMAGE=registry.example/breero-web@sha256:<digest>
 scripts/release/verify-compose.sh

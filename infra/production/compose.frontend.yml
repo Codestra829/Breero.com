@@ -1,7 +1,7 @@
 name: breero-production-frontend
 
 x-frontend: &frontend
-  image: ${BREERO_FRONTEND_IMAGE:?Set immutable BREERO_FRONTEND_IMAGE digest}
+  image: ${BREERO_WEB_IMAGE:?Set immutable BREERO_WEB_IMAGE digest}
   restart: unless-stopped
   init: true
   read_only: true
@@ -14,15 +14,12 @@ services:
   web:
     <<: *frontend
     container_name: breero-web
-  customer:
-    <<: *frontend
-    container_name: breero-customer
-  partners:
-    <<: *frontend
-    container_name: breero-partners
-  ops:
-    <<: *frontend
-    container_name: breero-ops
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 4s
+      retries: 5
+      start_period: 20s
 
 networks:
   frontend_edge:

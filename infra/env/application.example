@@ -1,0 +1,13 @@
+APP_ENV=staging
+DATABASE_URL=postgresql+psycopg://breero:replace-me@postgres:5432/breero
+REDIS_URL=redis://:replace-me@redis:6379/0
+JWT_SECRET=replace-me
+JWT_REFRESH_SECRET=replace-me-separately
+CORS_ORIGINS=https://staging.breero.com
+STRIPE_SECRET_KEY=replace-with-test-key
+STRIPE_WEBHOOK_SECRET=replace-with-test-secret
+ODOO_URL=
+SMTP_HOST=
+SMS_PROVIDER=fake
+PAYOUT_PROVIDER=fake
+GEOCODING_API_KEY=

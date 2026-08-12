@@ -1,0 +1,3 @@
+POSTGRES_DB=breero
+POSTGRES_USER=breero
+POSTGRES_PASSWORD=replace-me

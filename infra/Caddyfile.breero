@@ -1,15 +1,6 @@
 breero.com, www.breero.com {
     reverse_proxy breero-web:3000
 }
-app.breero.com {
-    reverse_proxy breero-customer:3000
-}
-partners.breero.com {
-    reverse_proxy breero-partners:3000
-}
-ops.breero.com {
-    reverse_proxy breero-ops:3000
-}
 api.breero.com {
     reverse_proxy breero-api:8000
 }
@@ -18,15 +9,6 @@ status.breero.com {
 }
 staging.breero.com {
     reverse_proxy breero-staging-web:3000
-}
-app-staging.breero.com {
-    reverse_proxy breero-staging-customer:3000
-}
-partners-staging.breero.com {
-    reverse_proxy breero-staging-partners:3000
-}
-ops-staging.breero.com {
-    reverse_proxy breero-staging-ops:3000
 }
 api-staging.breero.com {
     reverse_proxy breero-staging-api:8000

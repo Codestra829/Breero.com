@@ -25,6 +25,8 @@ private network. The reviewed route fragment is `infra/Caddyfile.breero`; it mus
 a backup of the live Caddyfile, validated as a complete configuration, and reloaded only under
 explicit deployment approval.
 
-Frontend and backend images are tracked separately as immutable `BREERO_FRONTEND_IMAGE` and
-`BREERO_BACKEND_IMAGE` digests. Updating one Compose project does not recreate the other. The
-same independent versioning applies to staging. Do not use a monolithic project or `latest` tags.
+The proven public web and backend images are tracked separately as immutable `BREERO_WEB_IMAGE`
+and `BREERO_BACKEND_IMAGE` digests. `BREERO_CUSTOMER_IMAGE`, `BREERO_PARTNERS_IMAGE`, and
+`BREERO_OPS_IMAGE` are reserved but must not be deployed until those applications have runnable
+manifests, Dockerfiles, startup commands, and health tests. Updating one Compose project does not
+recreate the other. The same independent versioning applies to staging. Do not use `latest` tags.

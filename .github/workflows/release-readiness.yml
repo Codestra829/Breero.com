@@ -18,12 +18,16 @@ jobs:
       NEXT_PUBLIC_API_BASE_URL: https://staging-api.breero.com/api/v1
       NEXT_PUBLIC_APP_URL: https://staging.breero.com
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_ci_placeholder
-      BREERO_STAGING_ENV_FILE: .env.staging.example
       BREERO_BACKEND_IMAGE: registry.invalid/breero-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      BREERO_FRONTEND_IMAGE: registry.invalid/breero-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      BREERO_WEB_IMAGE: registry.invalid/breero-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
       BREERO_STAGING_BACKEND_IMAGE: registry.invalid/breero-api@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-      BREERO_STAGING_FRONTEND_IMAGE: registry.invalid/breero-web@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
-      BREERO_PRODUCTION_ENV_FILE: .env.staging.example
+      BREERO_STAGING_WEB_IMAGE: registry.invalid/breero-web@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+      BREERO_PRODUCTION_APP_ENV_FILE: infra/env/application.example
+      BREERO_PRODUCTION_POSTGRES_ENV_FILE: infra/env/postgres.example
+      BREERO_PRODUCTION_REDIS_ENV_FILE: infra/env/redis.example
+      BREERO_STAGING_APP_ENV_FILE: infra/env/application.example
+      BREERO_STAGING_POSTGRES_ENV_FILE: infra/env/postgres.example
+      BREERO_STAGING_REDIS_ENV_FILE: infra/env/redis.example
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -37,5 +41,23 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - name: Prove read-only web runtime
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" \
+            --build-arg NEXT_PUBLIC_APP_URL="$NEXT_PUBLIC_APP_URL" \
+            --build-arg NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" \
+            -t breero-web:readonly-preflight -f apps/web/Dockerfile .
+          docker run --rm -d --name breero-web-readonly --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=32m breero-web:readonly-preflight
+          trap 'docker stop breero-web-readonly' EXIT
+          for attempt in $(seq 1 20); do
+            if docker exec breero-web-readonly wget --quiet --tries=1 --spider http://127.0.0.1:3000/; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs breero-web-readonly
+          exit 1
       - run: scripts/release/verify-compose.sh
       - run: git diff --check
