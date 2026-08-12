@@ -25,11 +25,11 @@ export const images = {
   cleanModernHome: image("/images/lifestyle/clean-modern-home.webp", "A clean modern living space"),
   bookingOnPhone: image("/images/lifestyle/booking-on-phone.webp", "A homeowner arranging a service visit"),
   verifiedProfessional: image("/images/trust/verified-professional.webp", "A verified home-service professional"),
-  quality: image("/images/trust/quality-check.webp", "A professional carrying out a careful quality check"),
+  qualityCheck: image("/images/trust/quality-check.webp", "A careful professional quality check"),
   supportTeam: image("/images/trust/support-team.webp", "Professionals coordinating customer support"),
   serviceGuarantee: image("/images/trust/service-guarantee.webp", "A professional completing a careful handover"),
   breeroTeam: image("/images/about/breero-team.webp", "Home-service professionals working together"),
-  partner: image("/images/partners/partner-professional.webp", "Two service professionals working together"),
+  partnerProfessional: image("/images/partners/partner-professional.webp", "Two service professionals reviewing work"),
   serviceVan: image("/images/partners/service-van.webp", "Professionals beside a clean service vehicle"),
   localCommunity: image("/images/about/local-community.webp", "A welcoming local residential community"),
 } as const;

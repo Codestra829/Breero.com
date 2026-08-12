@@ -1,25 +1,15 @@
 import { expect, test } from "@playwright/test";
+import publicRoutes from "../../content/public-routes.json";
 
-const routes = [
-  "/",
-  "/services",
-  "/services/plumbing",
-  "/how-it-works",
-  "/about",
-  "/contact",
-  "/terms",
-  "/privacy",
-  "/refund-policy",
-  "/cancellation-policy",
-  "/service-fulfillment-policy",
-  "/professional-lead-policy",
-];
-
-for (const route of routes) {
+for (const route of publicRoutes.filter((path) => path !== "/book")) {
   test(`production frontend serves ${route}`, async ({ page }) => {
     const response = await page.goto(route);
     expect(response?.status()).toBe(200);
     await expect(page.locator("main")).toBeVisible();
+    await expect(page.locator("h1")).toHaveCount(1);
+    await expect(page).toHaveTitle(/\S/);
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /\S/);
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", /^https:\/\/breero\.com(?:\/|$)/);
   });
 }
 

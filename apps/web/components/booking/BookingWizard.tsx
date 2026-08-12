@@ -310,9 +310,7 @@ export function BookingWizard() {
                   <span>
                     <b>{s.name}</b>
                     <br />
-                    <small>
-                      From €{s.base_price} · {s.duration_minutes} min
-                    </small>
+                    <small>{s.duration_minutes} min estimated visit time</small>
                   </span>
                 </label>
               ))}
@@ -474,17 +472,9 @@ export function BookingWizard() {
                   {state.slot && new Date(state.slot.start).toLocaleString()}
                 </span>
               </div>
-              <div>
-                <b>Starting total</b>
-                <span>€{service?.base_price}</span>
-              </div>
+              <div><b>Price</b><span>Confirmed by BREERO after this request</span></div>
             </div>
-            <p>
-              <small>
-                Additional work is never added without a separate quote and your
-                approval.
-              </small>
-            </p>
+            <div className="notice"><strong>Independent-provider marketplace</strong><br/>BREERO helps connect and coordinate you with an independent service provider. Unless expressly stated otherwise, that provider is responsible for the final estimate, scope, pricing, licensing, permits, insurance, workmanship, and service performance. Additional work requires a separate quote and your approval.</div>
             <Actions
               back={back}
               next={submit}
