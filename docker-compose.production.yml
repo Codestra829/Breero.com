@@ -1,5 +1,11 @@
 name: breero
 
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 x-app: &app
   image: ${BREERO_IMAGE:?Set BREERO_IMAGE to an immutable image digest}
   env_file: ${BREERO_ENV_FILE:-.env.production}
@@ -12,6 +18,7 @@ x-app: &app
     - no-new-privileges:true
   cap_drop:
     - ALL
+  logging: *logging
   networks:
     - breero_private
 
@@ -51,6 +58,7 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    logging: *logging
     networks:
       - caddy_shared
     healthcheck:
@@ -85,6 +93,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks: [breero_private]
+    logging: *logging
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
@@ -98,6 +107,7 @@ services:
     volumes:
       - redis_data:/data
     networks: [breero_private]
+    logging: *logging
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep PONG"]
       interval: 10s

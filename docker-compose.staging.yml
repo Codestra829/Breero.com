@@ -1,5 +1,11 @@
 name: breero-staging
 
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 x-api: &api
   image: ${BREERO_API_IMAGE:?Set BREERO_API_IMAGE to an immutable image digest}
   env_file: ${BREERO_STAGING_ENV_FILE:-.env.staging}
@@ -10,6 +16,7 @@ x-api: &api
     - /tmp:rw,noexec,nosuid,size=64m
   security_opt: [no-new-privileges:true]
   cap_drop: [ALL]
+  logging: *logging
   networks: [staging_private]
 
 services:
@@ -55,6 +62,7 @@ services:
     tmpfs: [/tmp:rw,noexec,nosuid,size=32m]
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
+    logging: *logging
     networks: [staging_ingress]
     ports: ["127.0.0.1:${BREERO_STAGING_WEB_PORT:-13000}:3000"]
     healthcheck:
@@ -70,6 +78,7 @@ services:
     restart: unless-stopped
     volumes: [staging_postgres_data:/var/lib/postgresql/data]
     networks: [staging_private]
+    logging: *logging
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -83,6 +92,7 @@ services:
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "$${REDIS_PASSWORD}"]
     volumes: [staging_redis_data:/data]
     networks: [staging_private]
+    logging: *logging
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep PONG"]
       interval: 5s
