@@ -10,6 +10,9 @@ const sourceFiles=[...walk(resolve(root,"app")),...walk(resolve(root,"components
 const forbidden=["app.breero.com","partners.breero.com","ops.breero.com","/partner/login","/ops/login"];
 const forbiddenHits=sourceFiles.flatMap(file=>forbidden.filter(value=>readFileSync(file,"utf8").includes(value)).map(value=>`${relative(root,file)}: ${value}`));
 if(forbiddenHits.length){console.error("Forbidden placeholder portal links:",forbiddenHits);process.exit(1)}
+const obsoleteIdentity=["Booked4"+"Seasons","BREERO "+"Ltd.","hello"+"@breero.com"];
+const obsoleteIdentityHits=sourceFiles.flatMap(file=>obsoleteIdentity.filter(value=>readFileSync(file,"utf8").toLowerCase().includes(value.toLowerCase())).map(value=>`${relative(root,file)}: ${value}`));
+if(obsoleteIdentityHits.length){console.error("Obsolete public identity references:",obsoleteIdentityHits);process.exit(1)}
 const pageFiles=walk(resolve(root,"app")).filter(file=>file.endsWith("page.tsx"));
 const toRoute=file=>{const route=relative(resolve(root,"app"),file).replace(/\\/g,"/").replace(/(^|\/)\([^/]+\)\//g,"$1").replace(/\/page\.tsx$/,"/").replace(/^page\.tsx$/,"/").replace(/\/$/,"");return route?`/${route}`:"/"};
 const staticRoutes=new Set(pageFiles.map(toRoute).filter(route=>!route.includes("[")));
