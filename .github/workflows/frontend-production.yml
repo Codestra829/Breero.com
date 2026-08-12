@@ -35,6 +35,5 @@ jobs:
       - run: pnpm test
       - run: pnpm contract:check
       - run: pnpm build
-      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm --filter @breero/web exec playwright install --with-deps chromium
       - run: pnpm --filter @breero/web test:e2e
-
