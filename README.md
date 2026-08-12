@@ -43,6 +43,8 @@ API docs: `http://localhost:8000/docs`
 
 ## Production target
 
-Approved BREERO origin: `49.12.145.207`
+Current BREERO host: `49.12.145.107`. DNS is audited separately and must not be used as proof of
+host ownership; the configured BREERO records currently point to `49.12.145.207` and therefore
+do not match the intended current host.
 
 Production secrets are never committed to this repository.

@@ -40,6 +40,7 @@ Server-side RBAC/permissions, audit logging, webhook verification, idempotency, 
 
 ## Production
 
-BREERO production and staging origin: `49.12.145.207`.
+Current BREERO host: `49.12.145.107`. DNS currently resolves configured BREERO names to
+`49.12.145.207`; that mismatch does not establish `.207` as a BREERO-owned origin.
 
 Production topology: reverse proxy/TLS -> API -> PostgreSQL/PostGIS + Redis + workers/scheduler. Frontends remain independently deployable.

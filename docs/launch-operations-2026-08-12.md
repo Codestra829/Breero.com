@@ -1,8 +1,9 @@
 # Production launch operations record — 2026-08-12 12:38 UTC
 
-> Historical inventory below concerns the superseded `.107` target. The approved origin is now
-> `49.12.145.207`; all approved DNS names resolve there, but SSH inventory timed out. See
-> `docs/docker-dns-architecture.md`. This correction does not constitute cutover approval.
+> The inventory below concerns the current BREERO host, `49.12.145.107`. DNS currently points
+> configured BREERO names to `.207`; that is a mismatch and does not prove `.207` ownership.
+> The `.207` SSH evidence is retained only as an incorrect-target investigation. See
+> `docs/current-host-dns-audit-2026-08-12.md`. No cutover is approved.
 
 ## Frozen candidate
 

@@ -38,23 +38,24 @@ for migrations, drift checks and pytest. A green post-commit CI result is requir
 
 ## DNS from two independent resolvers
 
-Cloudflare `1.1.1.1` and Google `8.8.8.8` were queried at 2026-08-12T13:45:00Z. No AAAA answers
-were returned.
+Cloudflare `1.1.1.1` and Google `8.8.8.8` were queried again at 2026-08-12T14:25:41Z. No AAAA
+answers were returned. The intended current-host IP is `49.12.145.107`; DNS resolution is not
+treated as proof of host ownership.
 
-| Hostname | A/CNAME answer on both | TTL |
-|---|---|---:|
-| `breero.com` | `49.12.145.207` | 3600 |
-| `www.breero.com` | CNAME `breero.com`; A `49.12.145.207` | 3600 |
-| `app.breero.com` | `49.12.145.207` | 600 |
-| `partners.breero.com` | `49.12.145.207` | 600 |
-| `ops.breero.com` | `49.12.145.207` | 600 |
-| `api.breero.com` | `49.12.145.207` | 600 |
-| `status.breero.com` | `49.12.145.207` | 600 |
-| `staging.breero.com` | `49.12.145.207` | 600 |
-| `app-staging.breero.com` | `49.12.145.207` | 600 |
-| `partners-staging.breero.com` | `49.12.145.207` | 600 |
-| `ops-staging.breero.com` | `49.12.145.207` | 600 |
-| `api-staging.breero.com` | `49.12.145.207` | 600 |
+| Hostname | Current A/CNAME answer on both | Intended IP | Result | TTL |
+|---|---|---|---|---:|
+| `breero.com` | `49.12.145.207` | `49.12.145.107` | MISMATCH | 3600 |
+| `www.breero.com` | CNAME `breero.com`; A `49.12.145.207` | `49.12.145.107` | MISMATCH | 3600 |
+| `app.breero.com` | `49.12.145.207` | `49.12.145.107` | MISMATCH | 600 |
+| `partners.breero.com` | `49.12.145.207` | `49.12.145.107` | MISMATCH | 600 |
+| `ops.breero.com` | `49.12.145.207` | `49.12.145.107` | MISMATCH | 600 |
+| `api.breero.com` | `49.12.145.207` | `49.12.145.107` | MISMATCH | 600 |
+| `status.breero.com` | `49.12.145.207` | `49.12.145.107` | MISMATCH | 600 |
+| `staging.breero.com` | `49.12.145.207` | `49.12.145.107` | MISMATCH | 600 |
+| `app-staging.breero.com` | `49.12.145.207` | `49.12.145.107` | MISMATCH | 600 |
+| `partners-staging.breero.com` | `49.12.145.207` | `49.12.145.107` | MISMATCH | 600 |
+| `ops-staging.breero.com` | `49.12.145.207` | `49.12.145.107` | MISMATCH | 600 |
+| `api-staging.breero.com` | `49.12.145.207` | `49.12.145.107` | MISMATCH | 600 |
 
 The contradiction was ordering: `api-staging.breero.com` resolves; `staging-api.breero.com` does
 not. DNS does not prove host or application readiness.
@@ -67,9 +68,10 @@ No application/data/frontend service publishes host ports. Approved Caddy edge n
 Caddy fragment contains only proven web/API upstreams plus separately managed status; placeholder
 customer/partner/ops routes were removed.
 
-Authenticated SSH to `49.12.145.207` has not succeeded. Hostname, capacity, Docker state, networks,
-volumes, sockets, firewall, and actual Caddy membership remain **UNVERIFIED**. No host readiness is
-claimed and no live Caddy/DNS/network/service was changed.
+The current `.107` host was inspected read-only. Root storage reports 100% used with approximately
+1.1 GiB free. Existing BREERO PostgreSQL 5432, Redis 6379, and API 8000 are published on all IPv4
+and IPv6 interfaces. Shared Caddy owns 80/443 but is not attached to the repository-defined BREERO
+edge networks. No host readiness is claimed and no live Caddy/DNS/network/service was changed.
 
 ## Independent deployment and rollback
 
@@ -80,7 +82,8 @@ rehearsal remains blocked until authenticated staging access exists.
 
 ## Decision
 
-**BLOCKED**. Remaining conditions: green pinned-PostGIS/read-only-web CI; authenticated SSH to
-`.207`; read-only host inventory; proof shared Caddy attaches to exactly four edge and no private
-networks; independently runnable customer/partners/ops artifacts if those names are to launch; and
-real independent frontend/backend deploy/rollback rehearsal.
+**BLOCKED**. Remaining conditions: remediate `.107` disk capacity through an approved, itemized
+procedure; close public 5432/6379/8000 exposure; reconcile all configured DNS records from `.207`
+to the intended `.107` only during an authorized DNS change; validate shared Caddy edge membership;
+retain customer/partners/ops names inactive until real apps exist; and complete independent
+frontend/backend deploy/rollback rehearsal.

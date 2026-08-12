@@ -1,8 +1,9 @@
 # BREERO production runbook
 
-> The `.107` inventory in this record is historical. The approved origin is `49.12.145.207`.
-> DNS now resolves to `.207`, but live host/Caddy/container state there is not verified because
-> SSH access timed out. Use the split topology in `infra/` and `docs/docker-dns-architecture.md`.
+> `49.12.145.107` is the current BREERO host. DNS currently resolves configured BREERO names to
+> `.207`; this is a mismatch, not proof of server ownership. The `.207` access attempt is retained
+> only as historical incorrect-target evidence. Use the split topology in `infra/` and see
+> `docs/current-host-dns-audit-2026-08-12.md`.
 
 ## Current decision
 

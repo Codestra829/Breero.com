@@ -1,10 +1,10 @@
 # Docker and DNS architecture
 
-The approved BREERO origin is `49.12.145.207`. Production names are `breero.com`, `www`,
-`app`, `partners`, `ops`, `api`, and `status`. Staging names are `staging`, `app-staging`,
-`partners-staging`, `ops-staging`, and `api-staging`. All twelve names were verified resolving
-to the approved origin on 2026-08-12. SSH inventory of the origin timed out, so deployed Docker
-and Caddy state remains unverified.
+The current BREERO host is `49.12.145.107`. Production names are `breero.com`, `www`, `app`,
+`partners`, `ops`, `api`, and `status`. Staging names are `staging`, `app-staging`,
+`partners-staging`, `ops-staging`, and `api-staging`. On 2026-08-12 all twelve configured names
+resolved to `49.12.145.207`, which is a **DNS mismatch**, not evidence that `.207` is owned or
+approved for BREERO. See `docs/current-host-dns-audit-2026-08-12.md`.
 
 Deployment is split into independent stacks:
 

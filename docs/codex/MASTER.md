@@ -59,7 +59,7 @@ Vendor offers, jobs, worker assignment, technician commands, evidence/diagnostic
 Dispatch board, jobs, matching, quotes, vendors, exceptions, service configuration, finance/admin surfaces.
 
 ### codex/devops
-CI/CD, Docker production configuration, reverse proxy, TLS, migrations, deployment to 49.12.145.207, backups, monitoring and health checks.
+CI/CD, Docker production configuration, reverse proxy, TLS, migrations, deployment planning for the current host 49.12.145.107, backups, monitoring and health checks.
 
 ## Core state rules
 
