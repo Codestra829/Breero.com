@@ -1,0 +1,38 @@
+name: Release readiness
+
+on:
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "packages/**"
+      - "docker-compose*.yml"
+      - "scripts/release/**"
+      - ".github/workflows/release-readiness.yml"
+  push:
+    branches: ["codex/staging-production-final"]
+
+jobs:
+  frontend-and-topology:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_API_BASE_URL: https://staging-api.breero.com/api/v1
+      NEXT_PUBLIC_APP_URL: https://staging.breero.com
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_ci_placeholder
+      BREERO_STAGING_ENV_FILE: .env.staging.example
+      BREERO_API_IMAGE: registry.invalid/breero-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      BREERO_WEB_IMAGE: registry.invalid/breero-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: {version: 10.0.0}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - run: scripts/release/verify-compose.sh
+      - run: git diff --check
