@@ -5,29 +5,32 @@ Branch: `codex/full-stack-acceptance-final`
 
 ## Integrated inputs
 
-- Backend master: `9a94a82c5ef815191409bf8e462b9fa8fd5b1bee`
-- Frontend master: `cbc85f8e3f6630d712a7265e030e5eca7cdbf1f1`
-- Integration merge: `fc1fdba`
+- Backend master: `da57218c73f2050ce1d6ed71f92bbeb737195527`
+- Frontend master: `70b22c9b8d4b978c33fe8190f8b2fff956c56e88`
+- Integration merges: `720644f` (frontend), `8fd87df` (backend)
 - Alembic head: `008_production_readiness`
 - OpenAPI: 58 paths / 65 operations, with unique operation IDs
 
 ## Contract corrections
 
-The frontend types and rendering now follow the generated backend contract for dynamic question types, `vendor_admin`, lowercase payment statuses, and `QUOTE_ADDITIONAL_WORK`. The guest booking UI no longer polls the privileged operations payment endpoint. A redirect or client-side state is never treated as authoritative payment success.
+The frontend types and rendering follow the generated backend contract for dynamic question types, `vendor_admin`, lowercase payment statuses, and `QUOTE_ADDITIONAL_WORK`. The guest booking UI does not poll the privileged operations payment endpoint. A redirect or client-side state is never treated as authoritative payment success. Account resource failures are now mapped to status-classed customer-safe text, so backend exception details are not rendered. Assignment, quote-decision, refund, compensation, payout, and manual integration-retry audit actions have explicit coverage.
 
 ## Validation evidence
 
 - Frontend frozen install: pass
 - Frontend lint and typecheck: pass
-- Frontend unit/component tests: 35 pass
+- Frontend unit/component tests: 36 pass
 - Next.js production build: pass, 31 static/generated pages, 102 kB shared first-load JavaScript
 - Chromium Playwright: 26 pass across 375, 430, 768, 1024, 1280, and 1440 px checks
 - Backend Ruff: pass
 - Backend Mypy: pass (83 source files)
-- Backend pytest: 64 pass, including canonical lifecycle, negative lifecycle, and PostgreSQL concurrency cases
-- Fresh PostgreSQL/PostGIS migration: pass
-- `alembic heads`, `current`, and `check`: one head, current at head, no drift
+- Backend pytest: 65 pass, including canonical lifecycle, negative lifecycle, and eight PostgreSQL concurrency cases
+- Fresh PostgreSQL/PostGIS migration and production-like `005_booking_integrations -> head`: pass
+- `alembic heads`, `current`, and `check`: one `008_production_readiness` head, current at head, no drift on both databases
 - Runtime image Trivy HIGH/CRITICAL fixable scan: zero findings
+- Runtime image: 94.2 MB, UID/GID 10001, 16.6 kB build context after Docker ignore hardening
+- Local isolated API baseline (five requests, not an SLO): median 0.68 ms `/health`, 2.03 ms `/health/ready`, 1.30 ms `/openapi.json`
+- Persisted canonical records: 3 linked customer lifecycles, 6 payments, 9 provider events, 3 jobs/assignments/work requests/earnings/payouts, 18 integration events, and 19 audit entries
 - Existing shared Caddy configuration: valid (warnings only)
 
 The current browser suite runs with the explicit test mock adapter. It validates UI behavior and responsive layout, but is not evidence of a browser-to-live-API canonical lifecycle. The backend canonical lifecycle test persists the full booking/payment/job/finance/outbox path with fake providers independently.
@@ -42,10 +45,10 @@ The current browser suite runs with the explicit test mock adapter. It validates
 
 ## Production blockers
 
-- Root filesystem is 99% used with approximately 5.6 GiB free. Docker reports 339.9 GiB of images and 54.2 GiB of build cache; cleanup must be reviewed, not blindly pruned.
+- Root filesystem is now 100% used with approximately 1.5 GiB free. Cleanup must be reviewed, not blindly pruned.
 - PostgreSQL 5432, Redis 6379, and API 8000 remain bound on all host interfaces.
 - Shared Caddy owns 80/443. Its current full configuration validates; no BREERO route was changed.
-- `api.breero.com` does not currently resolve from the host.
+- `breero.com` resolves to `13.248.243.5` / `76.223.105.230`, not this host; the BREERO API route/DNS cutover is not verified.
 - Production provider credentials/configuration and production `.env.production` have not been supplied.
 - No production backup/restore was performed during this read-only acceptance mission.
 
