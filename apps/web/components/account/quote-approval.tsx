@@ -14,7 +14,7 @@ export function QuoteApproval({ quoteId, amountMinor, currency }: { quoteId: str
   async function preparePayment() {
     setState("payment");
     try {
-      await customerApi.payments.createIntent({ quote_id: quoteId, payment_purpose: "ADDITIONAL_WORK", amount_minor: amountMinor, currency }, crypto.randomUUID());
+      await customerApi.payments.createIntent({ quote_id: quoteId, payment_purpose: "QUOTE_ADDITIONAL_WORK", amount_minor: amountMinor, currency }, crypto.randomUUID());
       setState("ready");
     } catch { setState("error"); }
   }

@@ -3,8 +3,8 @@ import type { BookingCreateRequest, QuestionType } from "./index";
 
 describe("frontend contracts", () => {
   it("covers every dynamic question renderer kind", () => {
-    const kinds: QuestionType[] = ["single_choice", "multi_choice", "boolean", "short_text", "long_text", "number", "date", "media"];
-    expect(new Set(kinds).size).toBe(8);
+    const kinds: QuestionType[] = ["text", "textarea", "number", "boolean", "single_choice", "multi_choice"];
+    expect(new Set(kinds).size).toBe(6);
   });
 
   it("keeps booking writes aligned with the backend command", () => {

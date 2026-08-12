@@ -61,7 +61,7 @@ export function createMockBreeroApi(scenario: MockScenario = {}): BreeroApi {
         const items = (scenario.payments ?? []).map((payment) => ({
           id: payment.id, purpose: payment.payment_purpose ?? "BOOKING_DIAGNOSTIC", status: payment.status,
           amount_minor: payment.amount_minor, captured_amount_minor: payment.captured_amount_minor,
-          refunded_amount_minor: payment.status === "REFUNDED" ? payment.amount_minor : 0,
+          refunded_amount_minor: payment.status === "refunded" ? payment.amount_minor : 0,
           currency: payment.currency, created_at: payment.created_at,
         }));
         return { items, total: items.length, page: 1, page_size: 20 };
