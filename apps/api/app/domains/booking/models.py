@@ -1,0 +1,112 @@
+import enum
+import uuid
+from datetime import date, datetime, time
+from decimal import Decimal
+
+from geoalchemy2 import Geometry
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    Time,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base import Base
+from app.domains.common.models import TimestampMixin, UUIDPrimaryKeyMixin
+
+
+class BookingStatus(str, enum.Enum):
+    PENDING_PAYMENT = "PENDING_PAYMENT"
+    CONFIRMED = "CONFIRMED"
+    CANCELLED = "CANCELLED"
+    EXPIRED = "EXPIRED"
+
+
+class LegalEntity(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "legal_entities"
+    code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="EUR")
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class ServiceArea(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "service_areas"
+    legal_entity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("legal_entities.id"))
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    boundary: Mapped[object] = mapped_column(Geometry("MULTIPOLYGON", srid=4326), nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class Address(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "addresses"
+    formatted_address: Mapped[str] = mapped_column(String(500), nullable=False)
+    line1: Mapped[str] = mapped_column(String(200), nullable=False)
+    city: Mapped[str] = mapped_column(String(120), nullable=False)
+    postal_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    country_code: Mapped[str] = mapped_column(String(2), nullable=False)
+    location: Mapped[object] = mapped_column(Geometry("POINT", srid=4326), nullable=False)
+    service_area_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("service_areas.id"))
+    geocoding_provider: Mapped[str] = mapped_column(String(40), default="provided")
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="CASCADE"), index=True
+    )
+
+
+class AvailabilityRule(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "availability_rules"
+    service_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    service_area_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("service_areas.id"))
+    weekday: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_time: Mapped[time] = mapped_column(Time, nullable=False)
+    end_time: Mapped[time] = mapped_column(Time, nullable=False)
+    slot_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=120)
+    capacity: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
+    active_from: Mapped[date | None] = mapped_column(Date)
+    active_to: Mapped[date | None] = mapped_column(Date)
+
+
+class Customer(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "customers"
+    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
+    phone: Mapped[str] = mapped_column(String(40), nullable=False)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), unique=True
+    )
+
+
+class Booking(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "bookings"
+    reference: Mapped[str] = mapped_column(String(24), unique=True, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    idempotency_request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"), index=True)
+    address_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("addresses.id"))
+    legal_entity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("legal_entities.id"))
+    service_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[BookingStatus] = mapped_column(
+        Enum(BookingStatus, name="booking_status"), default=BookingStatus.PENDING_PAYMENT
+    )
+    pricing_snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class BookingAnswer(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "booking_answers"
+    booking_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bookings.id", ondelete="CASCADE"))
+    question_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    value: Mapped[str] = mapped_column(Text, nullable=False)

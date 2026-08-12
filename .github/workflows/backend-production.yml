@@ -1,0 +1,75 @@
+name: Backend production gates
+
+on:
+  pull_request:
+    paths: ["apps/api/**", "docker-compose.production.yml", ".github/workflows/backend-production.yml"]
+  push:
+    branches: ["codex/backend-master-final"]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_DB: breero_test
+          POSTGRES_USER: breero
+          POSTGRES_PASSWORD: test-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U breero -d breero_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://breero:test-only@localhost:5432/breero_test
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e '.[dev]' pip-audit
+      - run: ruff check .
+      - run: mypy app
+      - run: alembic upgrade head
+      - run: alembic check
+      - run: python scripts/check_schema_drift.py
+      - run: pytest -q
+      - name: Canonical, negative, and PostgreSQL concurrency acceptance
+        run: >-
+          pytest -q
+          tests/integration/test_canonical_lifecycle.py
+          tests/integration/test_negative_lifecycle.py
+          tests/integration/test_postgres_concurrency.py
+      - name: Validate upgrade paths from prior canonical and split heads
+        env:
+          PGPASSWORD: test-only
+        run: |
+          for scenario in baseline auth finance; do
+            createdb -h localhost -U breero "breero_${scenario}"
+          done
+          DATABASE_URL=postgresql+psycopg://breero:test-only@localhost:5432/breero_baseline alembic upgrade 005_booking_integrations
+          DATABASE_URL=postgresql+psycopg://breero:test-only@localhost:5432/breero_baseline alembic upgrade head
+          DATABASE_URL=postgresql+psycopg://breero:test-only@localhost:5432/breero_auth alembic upgrade 006_auth_customer_payments
+          DATABASE_URL=postgresql+psycopg://breero:test-only@localhost:5432/breero_auth alembic upgrade head
+          DATABASE_URL=postgresql+psycopg://breero:test-only@localhost:5432/breero_finance alembic upgrade 006_finance_integrations
+          DATABASE_URL=postgresql+psycopg://breero:test-only@localhost:5432/breero_finance alembic upgrade head
+      - run: python scripts/generate_openapi.py
+      - run: test -s openapi.json
+      - run: pip-audit
+      - run: docker build -t breero-api:${{ github.sha }} .
+        working-directory: apps/api
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: breero-api:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"

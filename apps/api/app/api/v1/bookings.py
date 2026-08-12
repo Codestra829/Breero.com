@@ -1,40 +1,33 @@
-from datetime import datetime
+from fastapi import APIRouter, Depends, Header
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi import APIRouter
-from pydantic import BaseModel, EmailStr
+from app.core.rate_limit import rate_limit
+from app.db.session import get_db
+from app.domains.booking.models import Booking
+from app.domains.booking.schemas import BookingCreateRequest, BookingResponse
+from app.domains.booking.service import BookingService
 
 router = APIRouter()
 
 
-class CustomerInput(BaseModel):
-    first_name: str
-    last_name: str
-    email: EmailStr
-    phone: str
+def to_response(booking: Booking) -> BookingResponse:
+    return BookingResponse(
+        id=booking.id,
+        reference=booking.reference,
+        status=booking.status.value,
+        total_amount=booking.total_amount,
+        currency=booking.currency,
+        window_start=booking.window_start,
+        window_end=booking.window_end,
+        payment_required=booking.status.value == "PENDING_PAYMENT",
+    )
 
 
-class BookingWindow(BaseModel):
-    start: datetime
-    end: datetime
-
-
-class BookingAnswer(BaseModel):
-    question_id: str
-    value: str
-
-
-class BookingCreateRequest(BaseModel):
-    service_id: str
-    customer: CustomerInput
-    address_id: str
-    window: BookingWindow
-    answers: list[BookingAnswer] = []
-
-
-@router.post("", status_code=201)
-async def create_booking(payload: BookingCreateRequest) -> dict:
-    return {
-        "status": "PENDING_PAYMENT",
-        "booking_id": None,
-        "payment_required": True,
-    }
+@router.post("", response_model=BookingResponse, status_code=201)
+async def create_booking(
+    payload: BookingCreateRequest,
+    idempotency_key: str = Header(min_length=8, max_length=128, alias="Idempotency-Key"),
+    session: AsyncSession = Depends(get_db),
+    _rate_limit: None = Depends(rate_limit("booking-create", 10, 60)),
+) -> BookingResponse:
+    return to_response(await BookingService(session).create(payload, idempotency_key))
