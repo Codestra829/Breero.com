@@ -28,8 +28,8 @@ class IntegrationEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     aggregate_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     aggregate_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     event_type: Mapped[str] = mapped_column(String(120), nullable=False)
-    aggregate_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    aggregate_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     idempotency_key: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
     status: Mapped[EventStatus] = mapped_column(

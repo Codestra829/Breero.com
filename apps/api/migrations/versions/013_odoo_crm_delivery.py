@@ -26,8 +26,6 @@ def upgrade() -> None:
     op.create_index("ix_integration_events_idempotency_key", "integration_events", ["idempotency_key"], unique=True)
     # Legacy rows predate versioned idempotency. Enforce the tuple for newly versioned events only.
     op.execute("CREATE UNIQUE INDEX uq_integration_event_version ON integration_events (event_type, aggregate_id, aggregate_version) WHERE idempotency_key IS NOT NULL")
-    op.alter_column("integration_events", "aggregate_version", server_default=None)
-    op.alter_column("integration_events", "schema_version", server_default=None)
 
 
 def downgrade() -> None:
