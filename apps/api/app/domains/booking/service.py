@@ -34,6 +34,7 @@ class AddressService:
                 formatted_address=payload.address,
                 line1=payload.line1 or payload.address,
                 city=payload.city or "",
+                state_code=payload.state_code.upper() if payload.state_code else None,
                 postal_code=payload.postal_code or "",
                 country_code=payload.country_code.upper(),
                 latitude=payload.latitude,
@@ -54,6 +55,7 @@ class AddressService:
             formatted_address=resolved.formatted_address,
             line1=resolved.line1,
             city=resolved.city,
+            state_code=resolved.state_code,
             postal_code=resolved.postal_code,
             country_code=resolved.country_code,
             service_area_id=area.id,
@@ -160,6 +162,8 @@ class BookingService:
         service = await CatalogRepository(self.session).active_detail(str(payload.service_id))
         if not service:
             raise DomainError("SERVICE_NOT_FOUND", "Service is not available", 404)
+        if not service.is_bookable:
+            raise DomainError("SERVICE_NOT_BOOKABLE", "Service is not currently bookable", 422)
         supplied = {answer.question_id for answer in payload.answers}
         required = {
             question.id
@@ -176,7 +180,7 @@ class BookingService:
                 "INVALID_QUESTION", "An answer references an invalid service question", 422
             )
         # Catalog pricing is copied into an immutable snapshot; never recomputed for an existing booking.
-        amount = service.base_price
+        amount = service.base_price or 0
         customer = await self.repository.customer_for_email(str(payload.customer.email).lower())
         if customer is None:
             customer = Customer(

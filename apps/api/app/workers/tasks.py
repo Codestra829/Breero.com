@@ -3,10 +3,12 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
+from app.config import settings
 from app.db.session import SessionLocal
 from app.domains.booking.models import Booking, BookingStatus
 from app.domains.common.outbox_service import OutboxService
 from app.domains.finance.service import FinanceService
+from app.domains.public_submissions.models import DownstreamStatus, PublicSubmission
 from app.integrations.email import EmailAdapter
 from app.integrations.odoo import OdooAdapter
 from app.workers.celery_app import celery_app
@@ -59,13 +61,24 @@ def publish_outbox() -> int:
                 if event.event_type in notification_events:
                     await email.send(event.event_type, event.payload)
                     return
-                aggregate = event.aggregate_type.lower()
-                if aggregate in {"customer", "vendor", "booking", "job", "payment", "payout"}:
-                    await adapter.upsert(aggregate, event.payload)
-                else:
-                    await adapter.execute("breero.event", "create", [[event.payload]])
+                if event.aggregate_type == "public_submission" and not settings.odoo_enabled:
+                    # BREERO has durably accepted the form. Delivery remains pending
+                    # configuration without turning a missing optional CRM into data loss.
+                    return
+                if event.event_type.startswith("breero."):
+                    result = await adapter.deliver(event)
+                    if event.aggregate_type == "public_submission":
+                        submission = await session.get(PublicSubmission, event.aggregate_id)
+                        if submission:
+                            submission.downstream_status = DownstreamStatus.DELIVERED
+                    return result
+                # Non-CRM notification events are handled above. Unknown events remain local.
+                return None
 
-            return await OutboxService(session).process(deliver)
+            outbox = OutboxService(session)
+            if settings.odoo_enabled:
+                await outbox.activate_pending_configuration()
+            return await outbox.process(deliver)
 
     return asyncio.run(run())
 

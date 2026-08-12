@@ -35,6 +35,7 @@ class PaymentStatus(str, enum.Enum):
 class PaymentPurpose(str, enum.Enum):
     BOOKING_DIAGNOSTIC = "BOOKING_DIAGNOSTIC"
     QUOTE_ADDITIONAL_WORK = "QUOTE_ADDITIONAL_WORK"
+    PROFESSIONAL_LEAD = "PROFESSIONAL_LEAD"
 
 
 class Payment(Base):
@@ -43,7 +44,7 @@ class Payment(Base):
         Index("ix_payments_booking_id_created_at", "booking_id", "created_at"),
         UniqueConstraint("provider", "provider_payment_id", name="uq_payments_provider_payment_id"),
         CheckConstraint(
-            "(payment_purpose = 'BOOKING_DIAGNOSTIC' AND booking_id IS NOT NULL AND quote_id IS NULL) OR (payment_purpose = 'QUOTE_ADDITIONAL_WORK' AND booking_id IS NULL AND quote_id IS NOT NULL)",
+            "(payment_purpose = 'BOOKING_DIAGNOSTIC' AND booking_id IS NOT NULL AND quote_id IS NULL AND lead_purchase_id IS NULL) OR (payment_purpose = 'QUOTE_ADDITIONAL_WORK' AND booking_id IS NULL AND quote_id IS NOT NULL AND lead_purchase_id IS NULL) OR (payment_purpose = 'PROFESSIONAL_LEAD' AND booking_id IS NULL AND quote_id IS NULL AND lead_purchase_id IS NOT NULL)",
             name="valid_payment_reference",
         ),
     )
@@ -51,6 +52,9 @@ class Payment(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     booking_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     quote_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
+    lead_purchase_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("professional_lead_purchases.id"), unique=True, index=True
+    )
     payment_purpose: Mapped[PaymentPurpose] = mapped_column(
         Enum(PaymentPurpose, name="payment_purpose"),
         nullable=False,

@@ -67,12 +67,12 @@ async def test_provider_success_then_application_crash_retry_creates_one_transfe
 def test_odoo_mappers_have_explicit_models_and_identifiers():
     identifier = uuid.uuid4()
     assert CustomerOdooMapper().model == "res.partner"
-    assert CustomerOdooMapper().map({"id": identifier, "first_name": "A", "last_name": "B"})["ref"] == str(identifier)
+    assert CustomerOdooMapper().map({"id": identifier, "first_name": "A", "last_name": "B"})["x_breero_customer_id"] == str(identifier)
     assert VendorOdooMapper().model == "res.partner"
-    assert BookingOdooMapper().model == "sale.order"
-    assert JobOdooMapper().model == "project.task"
-    assert PaymentOdooMapper().model == "account.payment"
-    assert PayoutOdooMapper().map({"total_minor": 1234})["amount"] == 12.34
+    assert BookingOdooMapper().model == "crm.lead"
+    assert JobOdooMapper().model == "crm.lead"
+    assert PaymentOdooMapper().model == "crm.lead"
+    assert PayoutOdooMapper().map({"total_minor": 1234}) == {}
 
 
 @pytest.mark.asyncio

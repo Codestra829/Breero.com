@@ -11,6 +11,8 @@ from app.api.v1 import (
     jobs,
     operations,
     payments,
+    provider_leads,
+    public_forms,
     services,
     vendors,
 )
@@ -28,3 +30,5 @@ api_router.include_router(vendors.router, prefix="/vendors", tags=["vendors"])
 api_router.include_router(operations.router, prefix="/operations", tags=["operations"])
 api_router.include_router(finance.router, prefix="/finance", tags=["finance"])
 api_router.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
+api_router.include_router(public_forms.router, tags=["public-forms"])
+api_router.include_router(provider_leads.router, prefix="/provider/leads", tags=["provider-leads"])

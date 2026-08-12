@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -11,12 +12,14 @@ from app.api.v1.bookings import to_response
 from app.db.session import get_db
 from app.domains.auth.dependencies import current_user
 from app.domains.auth.models import User
-from app.domains.booking.models import Address, Booking, Customer
+from app.domains.booking.models import Address, Booking, BookingStatus, Customer
 from app.domains.booking.schemas import BookingResponse
-from app.domains.jobs.models import Job, WorkRequest
+from app.domains.common.outbox import AuditLog
+from app.domains.jobs.models import Job, JobStatus, WorkRequest
 from app.domains.jobs.schemas import WorkRequestDecision, WorkRequestRead
 from app.domains.jobs.service import JobService
-from app.domains.payments.models import Payment, Refund
+from app.domains.payments.models import Payment, PaymentPurpose, PaymentStatus, Refund
+from app.domains.payments.schemas import PaymentView
 
 router = APIRouter()
 
@@ -57,6 +60,22 @@ class Page(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class CustomerPaymentRead(BaseModel):
+    id: uuid.UUID
+    booking_id: uuid.UUID | None
+    quote_id: uuid.UUID | None
+    payment_purpose: PaymentPurpose
+    provider: str
+    status: PaymentStatus
+    amount_minor: int
+    currency: str
+    captured_amount_minor: int
+    refunded_amount_minor: int
+    failure_code: str | None
+    created_at: datetime
+    updated_at: datetime
 
 
 async def customer_for(session: AsyncSession, user: User) -> Customer:
@@ -232,6 +251,49 @@ async def booking(
     return to_response(item)
 
 
+@router.post("/bookings/{booking_id}/cancel", response_model=BookingResponse)
+async def cancel_booking(
+    booking_id: uuid.UUID,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> BookingResponse:
+    customer = await customer_for(session, user)
+    item = await session.scalar(
+        select(Booking)
+        .where(Booking.id == booking_id, Booking.customer_id == customer.id)
+        .with_for_update()
+    )
+    if not item:
+        raise HTTPException(404, "Booking not found")
+    if item.status == BookingStatus.CANCELLED:
+        return to_response(item)
+    if item.status not in {BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED}:
+        raise HTTPException(409, "Booking cannot be cancelled in its current state")
+    job = await session.scalar(select(Job).where(Job.booking_id == item.id).with_for_update())
+    if job and job.status not in {JobStatus.CREATED, JobStatus.MATCHING, JobStatus.OFFERED}:
+        raise HTTPException(409, "Booking can no longer be cancelled online")
+    previous = item.status.value
+    item.status = BookingStatus.CANCELLED
+    item.guest_confirmation_revoked_at = datetime.now(UTC)
+    if job:
+        JobService(session).apply_transition(
+            job, JobStatus.CANCELLED, user.id, "customer", "customer_cancelled_booking"
+        )
+    session.add(
+        AuditLog(
+            actor_id=user.id,
+            actor_type="customer",
+            action="booking.cancel",
+            resource_type="booking",
+            resource_id=item.id,
+            metadata_json={"from_status": previous, "refund_automatic": False},
+            created_at=datetime.now(UTC),
+        )
+    )
+    await session.commit()
+    return to_response(item)
+
+
 @router.get("/quotes", response_model=Page)
 async def quotes(
     user: Annotated[User, Depends(current_user)],
@@ -329,3 +391,34 @@ async def payments(
             }
         )
     return Page(items=result, total=total, page=page, page_size=page_size)
+
+
+@router.get("/payments/{payment_id}", response_model=CustomerPaymentRead)
+async def payment(
+    payment_id: uuid.UUID,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> CustomerPaymentRead:
+    customer = await customer_for(session, user)
+    item = await session.scalar(
+        select(Payment)
+        .outerjoin(Booking, Booking.id == Payment.booking_id)
+        .outerjoin(WorkRequest, WorkRequest.id == Payment.quote_id)
+        .outerjoin(Job, Job.id == WorkRequest.job_id)
+        .where(
+            Payment.id == payment_id,
+            (Booking.customer_id == customer.id) | (Job.customer_id == customer.id),
+        )
+    )
+    if not item:
+        raise HTTPException(404, "Payment not found")
+    refunded = int(
+        await session.scalar(
+            select(func.coalesce(func.sum(Refund.amount_minor), 0)).where(
+                Refund.payment_id == item.id
+            )
+        )
+        or 0
+    )
+    view = PaymentView.model_validate(item).model_dump()
+    return CustomerPaymentRead(**view, refunded_amount_minor=refunded)

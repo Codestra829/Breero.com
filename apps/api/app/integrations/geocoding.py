@@ -19,6 +19,7 @@ class GeocodedAddress:
     provider_reference: str | None = None
     confidence: float | None = None
     quality: str | None = None
+    state_code: str | None = None
 
 
 class FakeGeocodingAdapter:
@@ -28,7 +29,7 @@ class FakeGeocodingAdapter:
 
 class GeocodingAdapter:
     async def geocode(self, address: str) -> GeocodedAddress:
-        if not settings.geocoding_api_key:
+        if not settings.geocoding_enabled or not settings.geocoding_api_key:
             raise DomainError(
                 "GEOCODING_UNAVAILABLE",
                 "Coordinates are required while geocoding is not configured",
@@ -48,6 +49,7 @@ class GeocodingAdapter:
             formatted_address=props.get("formatted", address),
             line1=props.get("address_line1", address),
             city=props.get("city", props.get("county", "")),
+            state_code=(props.get("state_code") or props.get("state")),
             postal_code=props.get("postcode", ""),
             country_code=props.get("country_code", "").upper(),
             latitude=float(props["lat"]),

@@ -42,6 +42,12 @@ class ServiceArea(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "service_areas"
     legal_entity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("legal_entities.id"))
     name: Mapped[str] = mapped_column(String(160), nullable=False)
+    country_code: Mapped[str | None] = mapped_column(String(2), index=True)
+    state_code: Mapped[str | None] = mapped_column(String(3), index=True)
+    city: Mapped[str | None] = mapped_column(String(120), index=True)
+    postal_codes: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    center: Mapped[object | None] = mapped_column(Geometry("POINT", srid=4326))
+    radius_meters: Mapped[int | None] = mapped_column(Integer)
     boundary: Mapped[object] = mapped_column(Geometry("MULTIPOLYGON", srid=4326), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
@@ -51,6 +57,7 @@ class Address(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     formatted_address: Mapped[str] = mapped_column(String(500), nullable=False)
     line1: Mapped[str] = mapped_column(String(200), nullable=False)
     city: Mapped[str] = mapped_column(String(120), nullable=False)
+    state_code: Mapped[str | None] = mapped_column(String(3))
     postal_code: Mapped[str] = mapped_column(String(32), nullable=False)
     country_code: Mapped[str] = mapped_column(String(2), nullable=False)
     location: Mapped[object] = mapped_column(Geometry("POINT", srid=4326), nullable=False)

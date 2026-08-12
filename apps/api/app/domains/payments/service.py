@@ -45,6 +45,8 @@ class PaymentService:
         self.provider = provider
 
     async def create_intent(self, payload: PaymentIntentCreate, key: str) -> PaymentView:
+        if payload.payment_purpose == PaymentPurpose.PROFESSIONAL_LEAD:
+            raise InvalidPaymentState("Professional lead payments must use the provider purchase endpoint")
         request = payload.model_dump(mode="json")
         request_hash = self._hash(request)
         await self.repo.lock_key("create_intent", key)
@@ -127,6 +129,53 @@ class PaymentService:
         await self.session.commit()
         return self._view(payment)
 
+    async def create_professional_lead_intent(
+        self,
+        *,
+        lead_purchase_id: uuid.UUID,
+        amount_minor: int,
+        currency: str,
+        provider_id: uuid.UUID,
+        lead_id: uuid.UUID,
+        key: str,
+    ) -> Payment:
+        """Create the server-authoritative Stripe intent for a locked lead purchase."""
+        existing = await self.session.scalar(
+            select(Payment).where(Payment.lead_purchase_id == lead_purchase_id)
+        )
+        if existing:
+            return existing
+        provider_intent = await self.provider.create_intent(
+            amount_minor=amount_minor,
+            currency=currency,
+            capture_method="automatic",
+            metadata={
+                "lead_purchase_id": str(lead_purchase_id),
+                "lead_id": str(lead_id),
+                "provider_id": str(provider_id),
+                "purpose": PaymentPurpose.PROFESSIONAL_LEAD.value,
+            },
+            idempotency_key=f"professional-lead:{key}",
+        )
+        return await self.repo.add(
+            Payment(
+                lead_purchase_id=lead_purchase_id,
+                payment_purpose=PaymentPurpose.PROFESSIONAL_LEAD,
+                provider_payment_id=provider_intent.id,
+                provider="stripe",
+                status=STRIPE_STATUS.get(provider_intent.status, PaymentStatus.CREATED),
+                amount_minor=amount_minor,
+                currency=currency.upper(),
+                captured_amount_minor=provider_intent.amount_received,
+                provider_client_secret=provider_intent.client_secret,
+                metadata_={
+                    "lead_purchase_id": str(lead_purchase_id),
+                    "lead_id": str(lead_id),
+                    "provider_id": str(provider_id),
+                },
+            )
+        )
+
     async def get(self, payment_id: uuid.UUID) -> PaymentView:
         payment = await self.repo.get(payment_id)
         if payment is None:
@@ -172,8 +221,10 @@ class PaymentService:
                 if event_type == "payment_intent.payment_failed":
                     payment.status = PaymentStatus.FAILED
                     payment.failure_code = obj.get("last_payment_error", {}).get("code")
+                    await self._release_failed_lead_purchase(payment)
                 elif event_type == "payment_intent.canceled":
                     payment.status = PaymentStatus.CANCELED
+                    await self._release_failed_lead_purchase(payment)
                 elif event_type.startswith("payment_intent."):
                     payment.status = STRIPE_STATUS.get(obj.get("status", ""), payment.status)
                     payment.captured_amount_minor = obj.get(
@@ -201,6 +252,8 @@ class PaymentService:
                             if refunded >= payment.captured_amount_minor
                             else PaymentStatus.PARTIALLY_REFUNDED
                         )
+                        if payment.payment_purpose == PaymentPurpose.PROFESSIONAL_LEAD:
+                            await self._mark_lead_purchase_refunded(payment)
             if recorded:
                 recorded.status = "processed"
                 recorded.attempts += 1
@@ -311,6 +364,8 @@ class PaymentService:
                 if requested == remaining
                 else PaymentStatus.PARTIALLY_REFUNDED
             )
+            if payment.payment_purpose == PaymentPurpose.PROFESSIONAL_LEAD:
+                await self._mark_lead_purchase_refunded(payment)
         self.session.add(
             IntegrationEvent(
                 aggregate_type="payment",
@@ -331,7 +386,27 @@ class PaymentService:
         return RefundView.model_validate(refund)
 
     async def _settle(self, payment: Payment) -> None:
-        if payment.payment_purpose == PaymentPurpose.QUOTE_ADDITIONAL_WORK:
+        if payment.payment_purpose == PaymentPurpose.PROFESSIONAL_LEAD:
+            from app.domains.professional_leads.models import (
+                LeadPurchase,
+                LeadPurchaseStatus,
+                LeadStatus,
+                ProfessionalLead,
+            )
+
+            purchase = await self.session.scalar(
+                select(LeadPurchase)
+                .where(LeadPurchase.id == payment.lead_purchase_id)
+                .with_for_update()
+            )
+            if not purchase:
+                raise PaymentNotFound("Payment references an unknown lead purchase")
+            purchase.status = LeadPurchaseStatus.PAID
+            lead = await self.session.get(ProfessionalLead, purchase.lead_id)
+            if not lead or lead.status not in {LeadStatus.RESERVED, LeadStatus.PURCHASED}:
+                raise InvalidPaymentState("Lead cannot be settled from its current state")
+            lead.status = LeadStatus.PURCHASED
+        elif payment.payment_purpose == PaymentPurpose.QUOTE_ADDITIONAL_WORK:
             quote = await self.session.scalar(
                 select(WorkRequest).where(WorkRequest.id == payment.quote_id).with_for_update()
             )
@@ -367,6 +442,32 @@ class PaymentService:
                 available_at=datetime.now(UTC),
             )
         )
+
+    async def _release_failed_lead_purchase(self, payment: Payment) -> None:
+        if payment.payment_purpose != PaymentPurpose.PROFESSIONAL_LEAD:
+            return
+        from app.domains.professional_leads.models import (
+            LeadPurchase,
+            LeadPurchaseStatus,
+            LeadStatus,
+            ProfessionalLead,
+        )
+
+        purchase = await self.session.get(LeadPurchase, payment.lead_purchase_id)
+        if not purchase:
+            return
+        purchase.status = LeadPurchaseStatus.FAILED
+        lead = await self.session.get(ProfessionalLead, purchase.lead_id)
+        if lead and lead.status == LeadStatus.RESERVED:
+            lead.status = LeadStatus.AVAILABLE
+            lead.purchased_by_vendor_id = None
+
+    async def _mark_lead_purchase_refunded(self, payment: Payment) -> None:
+        from app.domains.professional_leads.models import LeadPurchase, LeadPurchaseStatus
+
+        purchase = await self.session.get(LeadPurchase, payment.lead_purchase_id)
+        if purchase and payment.status == PaymentStatus.REFUNDED:
+            purchase.status = LeadPurchaseStatus.REFUNDED
 
     async def _confirm_booking_and_create_job(self, payment: Payment) -> None:
         booking = await self.session.scalar(
@@ -426,6 +527,7 @@ class PaymentService:
             id=payment.id,
             booking_id=payment.booking_id,
             quote_id=payment.quote_id,
+            lead_purchase_id=payment.lead_purchase_id,
             payment_purpose=payment.payment_purpose,
             provider=payment.provider,
             status=payment.status,

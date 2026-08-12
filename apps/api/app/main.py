@@ -7,12 +7,13 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+from app.api.internal_odoo import router as internal_odoo_router
 from app.api.v1.router import api_router
 from app.config import settings
 from app.core.errors import install_error_handlers
 from app.db.session import engine
 
-EXPECTED_SCHEMA_REVISION = "009_final_staging_boundaries"
+EXPECTED_SCHEMA_REVISION = "013_odoo_crm_delivery"
 logger = structlog.get_logger()
 app = FastAPI(title=settings.app_name, version="1.0.0")
 app.add_middleware(
@@ -24,6 +25,7 @@ app.add_middleware(
 )
 install_error_handlers(app)
 app.include_router(api_router, prefix=settings.api_v1_prefix)
+app.include_router(internal_odoo_router)
 
 
 @app.middleware("http")

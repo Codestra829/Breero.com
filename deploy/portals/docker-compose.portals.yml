@@ -1,0 +1,30 @@
+name: breero-portals
+
+x-portal: &portal
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs: [/tmp:rw,noexec,nosuid,size=64m]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  expose: ["3000"]
+  networks: [edge]
+
+services:
+  partner:
+    <<: *portal
+    image: ${BREERO_PARTNER_IMAGE:?Set immutable BREERO_PARTNER_IMAGE}
+    container_name: breero-partner
+  ops:
+    <<: *portal
+    image: ${BREERO_OPS_IMAGE:?Set immutable BREERO_OPS_IMAGE}
+    container_name: breero-ops
+  admin:
+    <<: *portal
+    image: ${BREERO_ADMIN_IMAGE:?Set immutable BREERO_ADMIN_IMAGE}
+    container_name: breero-admin
+
+networks:
+  edge:
+    name: ${BREERO_EDGE_NETWORK:?Set the existing reverse-proxy edge network}
+    external: true

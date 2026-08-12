@@ -1,3 +1,5 @@
+import random
+import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Awaitable, Callable
@@ -14,6 +16,18 @@ DEFAULT_LEASE_SECONDS = 300
 class OutboxService:
     def __init__(self, session: AsyncSession): self.session = session
 
+    async def activate_pending_configuration(self, event_prefix: str = "breero.") -> int:
+        events = list((await self.session.scalars(select(IntegrationEvent).where(
+            IntegrationEvent.status == EventStatus.PENDING_CONFIGURATION,
+            IntegrationEvent.event_type.like(f"{event_prefix}%"),
+        ).with_for_update(skip_locked=True))).all())
+        now = datetime.now(UTC)
+        for event in events:
+            event.status = EventStatus.PENDING
+            event.next_attempt_at = now
+        await self.session.commit()
+        return len(events)
+
     async def claim(
         self,
         limit: int = 50,
@@ -26,7 +40,11 @@ class OutboxService:
             select(IntegrationEvent).where(
                 or_(
                     and_(
-                        IntegrationEvent.status == EventStatus.PENDING,
+                        IntegrationEvent.status.in_([
+                            EventStatus.PENDING,
+                            EventStatus.RETRYING,
+                            EventStatus.FAILED_RETRYABLE,
+                        ]),
                         IntegrationEvent.next_attempt_at <= now,
                     ),
                     and_(
@@ -46,23 +64,33 @@ class OutboxService:
         await self.session.commit()
         return events
 
-    async def process(self, deliver: Callable[[IntegrationEvent], Awaitable[None]], limit=50) -> int:
+    async def process(self, deliver: Callable[[IntegrationEvent], Awaitable[object]], limit=50) -> int:
         events = await self.claim(limit)
         for event in events:
             try:
-                await deliver(event)
+                result = await deliver(event)
                 event.status = EventStatus.DELIVERED
                 event.processed_at = datetime.now(UTC)
                 event.last_error = None
+                event.last_error_code = None
+                if result is not None:
+                    event.external_model = getattr(result, "model", None)
+                    external_id = getattr(result, "external_id", None)
+                    event.external_record_id = str(external_id) if external_id is not None else None
             except Exception as exc:
-                event.last_error = str(exc)[:2000]
-                if event.attempt_count >= MAX_ATTEMPTS:
-                    event.status = EventStatus.DEAD_LETTER
+                # Persist a bounded, secret-safe diagnostic. Never persist URLs, credentials, or payloads.
+                message = re.sub(r"(?i)(password|secret|token|api[_-]?key)\s*[:=]\s*\S+", r"\1=[REDACTED]", str(exc))
+                event.last_error = message[:500]
+                event.last_error_code = getattr(exc, "code", type(exc).__name__).upper()[:80]
+                event.last_error_at = datetime.now(UTC)
+                terminal = bool(getattr(exc, "terminal", False))
+                if terminal or event.attempt_count >= MAX_ATTEMPTS:
+                    event.status = EventStatus.FAILED_TERMINAL
                     event.processed_at = datetime.now(UTC)
                 else:
-                    event.status = EventStatus.PENDING
+                    event.status = EventStatus.RETRYING
                     event.next_attempt_at = datetime.now(UTC) + timedelta(
-                        minutes=min(2 ** (event.attempt_count - 1), 60)
+                        seconds=min(30 * 2 ** (event.attempt_count - 1), 3600) + random.randint(0, 15)
                     )
             event.lease_expires_at = None
             event.claim_token = None
@@ -75,7 +103,7 @@ class OutboxService:
         )
         if not event:
             raise LookupError("Integration event not found")
-        if event.status not in (EventStatus.DEAD_LETTER, EventStatus.FAILED):
+        if event.status not in (EventStatus.DEAD_LETTER, EventStatus.FAILED, EventStatus.FAILED_TERMINAL):
             raise ValueError("Only failed integration events can be retried")
         event.status = EventStatus.PENDING
         event.attempt_count = 0

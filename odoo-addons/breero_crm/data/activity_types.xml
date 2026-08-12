@@ -1,0 +1,5 @@
+<odoo noupdate="1">
+  <record id="activity_customer_followup" model="mail.activity.type"><field name="name">BREERO Customer Follow-Up</field><field name="category">default</field></record>
+  <record id="activity_provider_documents" model="mail.activity.type"><field name="name">BREERO Provider Documents Requested</field><field name="category">default</field></record>
+  <record id="activity_dispute_evidence" model="mail.activity.type"><field name="name">BREERO Dispute Evidence Requested</field><field name="category">default</field></record>
+</odoo>
