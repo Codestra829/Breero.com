@@ -7,8 +7,8 @@ from app.config import settings
 from app.db.session import SessionLocal
 from app.domains.booking.models import Booking, BookingStatus
 from app.domains.common.outbox_service import OutboxService
-from app.domains.public_submissions.models import DownstreamStatus, PublicSubmission
 from app.domains.finance.service import FinanceService
+from app.domains.public_submissions.models import DownstreamStatus, PublicSubmission
 from app.integrations.email import EmailAdapter
 from app.integrations.odoo import OdooAdapter
 from app.workers.celery_app import celery_app
