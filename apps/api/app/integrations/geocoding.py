@@ -37,15 +37,32 @@ class GeocodingAdapter:
                 422,
             )
         async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(
-                "https://api.geoapify.com/v1/geocode/search",
-                params={"text": address, "apiKey": settings.geocoding_api_key, "limit": 1},
-            )
-            response.raise_for_status()
-        features = response.json().get("features", [])
+            try:
+                response = await client.get(
+                    "https://api.geoapify.com/v1/geocode/search",
+                    params={"text": address, "apiKey": settings.geocoding_api_key, "limit": 1},
+                )
+                response.raise_for_status()
+                payload = response.json()
+            except (httpx.HTTPError, ValueError) as exc:
+                raise DomainError(
+                    "GEOCODING_PROVIDER_FAILURE",
+                    "Address validation is temporarily unavailable",
+                    503,
+                ) from exc
+        features = payload.get("features", []) if isinstance(payload, dict) else []
         if not features:
             raise DomainError("ADDRESS_NOT_FOUND", "Address could not be resolved", 422)
-        props = features[0]["properties"]
+        try:
+            props = features[0]["properties"]
+            latitude = float(props["lat"])
+            longitude = float(props["lon"])
+        except (KeyError, TypeError, ValueError, IndexError) as exc:
+            raise DomainError(
+                "GEOCODING_PROVIDER_FAILURE",
+                "Address validation is temporarily unavailable",
+                503,
+            ) from exc
         return GeocodedAddress(
             formatted_address=props.get("formatted", address),
             line1=props.get("address_line1", address),
@@ -53,8 +70,8 @@ class GeocodingAdapter:
             state_code=str(props.get("state_code") or props.get("state") or "").upper() or None,
             postal_code=props.get("postcode", ""),
             country_code=props.get("country_code", "").upper(),
-            latitude=float(props["lat"]),
-            longitude=float(props["lon"]),
+            latitude=latitude,
+            longitude=longitude,
             provider="geoapify",
             provider_reference=props.get("place_id"),
             confidence=props.get("rank", {}).get("confidence"),

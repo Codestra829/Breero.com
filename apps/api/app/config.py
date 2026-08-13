@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,9 +19,14 @@ class Settings(BaseSettings):
     access_token_minutes: int = 30
     refresh_token_days: int = 30
     stripe_secret_key: str = ""
+    stripe_secret_key_file: str = ""
     stripe_webhook_secret: str = ""
+    stripe_webhook_secret_file: str = ""
+    stripe_publishable_key: str = ""
+    stripe_publishable_key_file: str = ""
     stripe_enabled: bool = False
     geocoding_api_key: str = ""
+    geocoding_api_key_file: str = ""
     geocoding_provider: str = "geoapify"
     geocoding_enabled: bool = False
     odoo_url: str = ""
@@ -62,6 +68,47 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production(self) -> "Settings":
+        secret_bindings = (
+            ("stripe_secret_key", "stripe_secret_key_file"),
+            ("stripe_webhook_secret", "stripe_webhook_secret_file"),
+            ("stripe_publishable_key", "stripe_publishable_key_file"),
+            ("geocoding_api_key", "geocoding_api_key_file"),
+        )
+        for value_name, file_name in secret_bindings:
+            value = getattr(self, value_name)
+            path = getattr(self, file_name)
+            if value and path:
+                raise ValueError(f"configure only one of {value_name.upper()} or {file_name.upper()}")
+            if path:
+                try:
+                    resolved = Path(path).read_text(encoding="ascii").strip()
+                except (OSError, UnicodeError) as exc:
+                    raise ValueError(f"cannot read configured secret file for {value_name.upper()}") from exc
+                if not resolved:
+                    raise ValueError(f"configured secret file for {value_name.upper()} is empty")
+                object.__setattr__(self, value_name, resolved)
+
+        stripe_secret_mode = next(
+            (mode for mode in ("test", "live") if self.stripe_secret_key.startswith(f"sk_{mode}_")),
+            None,
+        )
+        stripe_publishable_mode = next(
+            (
+                mode
+                for mode in ("test", "live")
+                if self.stripe_publishable_key.startswith(f"pk_{mode}_")
+            ),
+            None,
+        )
+        if self.stripe_secret_key and stripe_secret_mode is None:
+            raise ValueError("STRIPE_SECRET_KEY has an unsupported format")
+        if self.stripe_publishable_key and stripe_publishable_mode is None:
+            raise ValueError("STRIPE_PUBLISHABLE_KEY has an unsupported format")
+        if stripe_secret_mode and stripe_publishable_mode and stripe_secret_mode != stripe_publishable_mode:
+            raise ValueError("Stripe secret and publishable keys must use the same mode")
+        if self.stripe_webhook_secret and not self.stripe_webhook_secret.startswith("whsec_"):
+            raise ValueError("STRIPE_WEBHOOK_SECRET has an unsupported format")
+
         if self.app_env.lower() not in {"production", "staging"}:
             return self
         required = {
@@ -74,6 +121,7 @@ class Settings(BaseSettings):
             required |= {
                 "STRIPE_SECRET_KEY": self.stripe_secret_key,
                 "STRIPE_WEBHOOK_SECRET": self.stripe_webhook_secret,
+                "STRIPE_PUBLISHABLE_KEY": self.stripe_publishable_key,
             }
         if self.geocoding_enabled:
             required["GEOCODING_API_KEY"] = self.geocoding_api_key

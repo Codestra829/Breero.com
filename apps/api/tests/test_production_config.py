@@ -50,6 +50,44 @@ def test_staging_requires_credentials_for_enabled_provider():
         )
 
 
+def test_secret_file_bindings_are_resolved_without_environment_values(tmp_path):
+    stripe_secret = tmp_path / "stripe-secret"
+    stripe_webhook = tmp_path / "stripe-webhook"
+    stripe_publishable = tmp_path / "stripe-publishable"
+    geoapify = tmp_path / "geoapify"
+    stripe_secret.write_text("sk_test_abcdefghijklmnopqrstuvwxyz", encoding="ascii")
+    stripe_webhook.write_text("whsec_abcdefghijklmnopqrstuvwxyz", encoding="ascii")
+    stripe_publishable.write_text("pk_test_abcdefghijklmnopqrstuvwxyz", encoding="ascii")
+    geoapify.write_text("geoapify-key-material", encoding="ascii")
+
+    settings = Settings(
+        stripe_secret_key_file=str(stripe_secret),
+        stripe_webhook_secret_file=str(stripe_webhook),
+        stripe_publishable_key_file=str(stripe_publishable),
+        geocoding_api_key_file=str(geoapify),
+    )
+
+    assert settings.stripe_secret_key.startswith("sk_test_")
+    assert settings.stripe_webhook_secret.startswith("whsec_")
+    assert settings.stripe_publishable_key.startswith("pk_test_")
+    assert settings.geocoding_api_key == "geoapify-key-material"
+
+
+def test_secret_file_binding_rejects_inline_secret_too(tmp_path):
+    secret = tmp_path / "secret"
+    secret.write_text("file-value", encoding="ascii")
+    with pytest.raises(ValidationError, match="configure only one"):
+        Settings(stripe_secret_key="inline-value", stripe_secret_key_file=str(secret))
+
+
+def test_stripe_keys_cannot_mix_test_and_live_modes():
+    with pytest.raises(ValidationError, match="same mode"):
+        Settings(
+            stripe_secret_key="sk_test_abcdefghijklmnopqrstuvwxyz",
+            stripe_publishable_key="pk_live_abcdefghijklmnopqrstuvwxyz",
+        )
+
+
 def test_staging_allows_canonical_breero_middleware_tenant():
     settings = Settings(
         app_env="staging",

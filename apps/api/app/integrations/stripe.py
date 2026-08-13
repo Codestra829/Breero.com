@@ -47,9 +47,13 @@ class StripeAdapter:
 
     @classmethod
     def from_environment(cls) -> "StripeAdapter":
+        # Settings resolves supported *_FILE bindings without copying secrets
+        # into environment variables, command arguments, or image layers.
+        from app.config import settings
+
         return cls(
-            secret_key=os.getenv("STRIPE_SECRET_KEY", ""),
-            webhook_secret=os.getenv("STRIPE_WEBHOOK_SECRET", ""),
+            secret_key=settings.stripe_secret_key,
+            webhook_secret=settings.stripe_webhook_secret,
             api_base=os.getenv("STRIPE_API_BASE", "https://api.stripe.com/v1"),
         )
 
