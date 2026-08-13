@@ -1,60 +1,80 @@
 import { expect, test } from "@playwright/test";
+
+const service = {
+  id: "11111111-1111-1111-1111-111111111111",
+  slug: "cleaning",
+  name: "Cleaning",
+  is_active: true,
+  is_bookable: false,
+};
+
+async function mockCatalog(page: import("@playwright/test").Page) {
+  await page.route("**/api/v1/services", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([service]) }),
+  );
+}
+
 for (const width of [375, 430, 768, 1024, 1280, 1440])
-  test(`homepage and booking entry fit ${width}px`, async ({ page }) => {
+  test(`homepage and request-service entry fit ${width}px`, async ({ page }) => {
+    await mockCatalog(page);
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
-    await expect(
-      page.getByRole("heading", { name: /home services, without the hassle/i }),
-    ).toBeVisible();
-    expect(
-      await page.evaluate(
-        () =>
-          document.documentElement.scrollWidth <=
-          document.documentElement.clientWidth,
-      ),
-    ).toBe(true);
+    await expect(page.getByRole("heading", { name: /home services, without the hassle/i })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
     await page.goto("/booking?service=cleaning");
-    await expect(
-      page.getByRole("heading", { name: /what can we help/i }),
-    ).toBeVisible();
-    expect(
-      await page.evaluate(
-        () =>
-          document.documentElement.scrollWidth <=
-          document.documentElement.clientWidth,
-      ),
-    ).toBe(true);
+    await page.waitForURL("**/request-service");
+    await expect(page.getByRole("heading", { name: /tell us what your home needs/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send request" })).toBeEnabled();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   });
-test("booking happy path reaches authoritative pending confirmation", async ({
-  page,
-}) => {
-  await page.goto("/booking?service=cleaning");
-  await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByLabel("Full address").fill("24 Lindenstraße, Berlin");
-  await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByLabel("Standard clean").check();
-  await page.getByLabel("How many rooms?").fill("3");
-  await page.getByRole("button", { name: "Continue" }).click();
-  await page.locator('input[name="slot"]').first().check();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await page.getByLabel("First name").fill("Ada");
-  await page.getByLabel("Last name").fill("Lovelace");
-  await page.getByLabel("Email").fill("ada@example.com");
-  await page.getByLabel("Phone").fill("+4912345");
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await page.getByRole("button", { name: "Submit booking" }).click();
-  await page.getByRole("button", { name: "Continue to payment" }).click();
-  await expect(
-    page.getByRole("heading", { name: /confirming your booking/i }),
-  ).toBeVisible();
-  await expect(page.getByText(/Current status: requires_action/)).toBeVisible();
+
+test("request-service submission remains pending manual dispatch", async ({ page }) => {
+  await mockCatalog(page);
+  let submitted: Record<string, unknown> | undefined;
+  await page.route("**/api/v1/service-requests", async (route) => {
+    submitted = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({
+      status: 202,
+      contentType: "application/json",
+      body: JSON.stringify({ status: "REQUESTED", dispatch_state: "PENDING_MANUAL_DISPATCH" }),
+    });
+  });
+
+  await page.goto("/request-service?utm_source=canary&utm_campaign=request-only");
+  await page.getByLabel("Name").fill("Owner Controlled Canary");
+  await page.getByLabel("Email").fill("owner-canary@example.test");
+  await page.getByLabel("Phone").fill("+12025550123");
+  await page.getByLabel("Street address").fill("1600 Pennsylvania Avenue NW");
+  await page.getByLabel("City").fill("Washington");
+  await page.getByLabel("State or district").selectOption("DC");
+  await page.getByLabel("ZIP code").fill("20500");
+  await page.getByLabel("Preferred timing").fill("Weekday morning");
+  await page.getByLabel("What do you need help with?").fill("Owner-controlled request test");
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Send request" }).click();
+
+  await expect(page.getByText(/does not yet confirm availability or provider assignment/i)).toBeVisible();
+  expect(submitted).toMatchObject({
+    name: "Owner Controlled Canary",
+    service_slug: "cleaning",
+    state: "DC",
+    postal_code: "20500",
+    utm_source: "canary",
+    utm_campaign: "request-only",
+    transactional_contact_allowed: true,
+    marketing_consent: false,
+    sms_consent: false,
+    email_consent: false,
+  });
+  expect(submitted).not.toHaveProperty("paid");
+  expect(submitted).not.toHaveProperty("provider_id");
+  expect(submitted).not.toHaveProperty("appointment_status");
 });
-test("service-area failure remains recoverable", async ({ page }) => {
-  await page.goto("/booking?service=cleaning");
-  await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByLabel("Full address").fill("Outside area");
-  await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.locator("p[role=alert]")).toContainText(
-    "does not currently serve",
-  );
+
+test("catalog failure keeps manual request recovery visible", async ({ page }) => {
+  await page.route("**/api/v1/services", (route) => route.fulfill({ status: 503 }));
+  await page.goto("/request-service");
+  await expect(page.getByRole("alert")).toContainText("Live services are unavailable");
+  await expect(page.getByText(/not a confirmed booking, provider assignment, price or appointment/i)).toBeVisible();
 });
