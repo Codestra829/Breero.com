@@ -32,6 +32,7 @@ class Service(Base):
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     is_bookable: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    pre_scheduling_is_bookable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

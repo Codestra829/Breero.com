@@ -42,15 +42,8 @@ def upgrade() -> None:
     )
     op.create_index("ix_bookings_hold_expires_at", "bookings", ["hold_expires_at"])
     op.execute("UPDATE bookings SET status = 'REQUESTED' WHERE status = 'PENDING_PAYMENT'")
-    op.create_table(
-        "_migration_014_service_flags",
-        sa.Column("service_id", postgresql.UUID(), primary_key=True),
-        sa.Column("was_bookable", sa.Boolean(), nullable=False),
-    )
-    op.execute(
-        "INSERT INTO _migration_014_service_flags (service_id, was_bookable) "
-        "SELECT id, is_bookable FROM services"
-    )
+    op.add_column("services", sa.Column("pre_scheduling_is_bookable", sa.Boolean()))
+    op.execute("UPDATE services SET pre_scheduling_is_bookable = is_bookable")
     # Requestable nationwide does not imply coverage or automatic confirmation.
     op.execute("UPDATE services SET is_bookable = true WHERE is_active")
 
@@ -98,10 +91,10 @@ def downgrade() -> None:
     op.drop_column("vendors", "working_hours")
     op.drop_column("vendors", "covered_postal_codes")
     op.execute(
-        "UPDATE services s SET is_bookable = f.was_bookable "
-        "FROM _migration_014_service_flags f WHERE f.service_id = s.id"
+        "UPDATE services SET is_bookable = pre_scheduling_is_bookable "
+        "WHERE pre_scheduling_is_bookable IS NOT NULL"
     )
-    op.drop_table("_migration_014_service_flags")
+    op.drop_column("services", "pre_scheduling_is_bookable")
     op.execute(
         """
         UPDATE bookings SET status = CASE
