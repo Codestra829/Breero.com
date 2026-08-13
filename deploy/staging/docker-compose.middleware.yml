@@ -1,4 +1,30 @@
 services:
+  api:
+    env_file:
+      - ${BREERO_STAGING_API_ENV:?Set BREERO_STAGING_API_ENV}
+      - /etc/breero/staging/middleware.env
+    volumes:
+      - type: bind
+        source: ${BREERO_STAGING_MIDDLEWARE_CA_FILE:?Set the approved Codestra CA file}
+        target: /run/secrets/codestra_private_ca.pem
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${BREERO_STAGING_MIDDLEWARE_HMAC_FILE:?Set the staging HMAC secret file}
+        target: /run/secrets/breero_middleware_hmac
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${BREERO_STAGING_MIDDLEWARE_CLIENT_CERT_FILE:?Set the staging mTLS certificate}
+        target: /run/secrets/breero_middleware_client.pem
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${BREERO_STAGING_MIDDLEWARE_CLIENT_KEY_FILE:?Set the staging mTLS key}
+        target: /run/secrets/breero_middleware_client.key
+        read_only: true
+        bind: {create_host_path: false}
+
   worker:
     networks: [private, middleware_egress]
     extra_hosts:
