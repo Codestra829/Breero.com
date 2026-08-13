@@ -267,7 +267,11 @@ async def cancel_booking(
         raise HTTPException(404, "Booking not found")
     if item.status == BookingStatus.CANCELLED:
         return to_response(item)
-    if item.status not in {BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED}:
+    if item.status not in {
+        BookingStatus.PENDING_PAYMENT,
+        BookingStatus.PENDING_PROVIDER_CONFIRMATION,
+        BookingStatus.CONFIRMED,
+    }:
         raise HTTPException(409, "Booking cannot be cancelled in its current state")
     job = await session.scalar(select(Job).where(Job.booking_id == item.id).with_for_update())
     if job and job.status not in {JobStatus.CREATED, JobStatus.MATCHING, JobStatus.OFFERED}:

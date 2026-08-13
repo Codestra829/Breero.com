@@ -15,7 +15,7 @@ class DispatchRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def candidate_workers(self, capabilities: list[str], limit=20):
+    async def candidate_workers(self, capabilities: list[str], limit=20, worker_id=None):
         query = (
             select(Vendor, Worker)
             .join(Worker, Worker.vendor_id == Vendor.id)
@@ -25,6 +25,8 @@ class DispatchRepository:
         )
         if capabilities:
             query = query.where(Vendor.capabilities.contains(capabilities))
+        if worker_id is not None:
+            query = query.where(Worker.id == worker_id)
         return list((await self.session.execute(query)).all())
 
     async def get_offer(self, offer_id: uuid.UUID, lock=False) -> DispatchOffer | None:

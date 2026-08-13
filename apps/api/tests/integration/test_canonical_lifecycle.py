@@ -19,11 +19,12 @@ from app.domains.auth import models as _auth_models  # noqa: F401
 from app.domains.auth.models import User
 from app.domains.booking.models import (
     Address,
-    AvailabilityRule,
     Booking,
     BookingStatus,
     Customer,
     LegalEntity,
+    ProviderServiceCoverage,
+    ProviderWorkingHours,
     ServiceArea,
 )
 from app.domains.booking.schemas import (
@@ -55,6 +56,7 @@ from app.domains.jobs.service import JobService
 from app.domains.payments.models import Payment, PaymentPurpose, PaymentStatus
 from app.domains.payments.schemas import PaymentIntentCreate, ProviderIntent, ProviderRefund
 from app.domains.payments.service import PaymentService
+from app.domains.professional_leads import models as _professional_models  # noqa: F401
 from app.domains.workforce.models import Vendor, VendorStatus, Worker, WorkerStatus
 from app.integrations.geocoding import FakeGeocodingAdapter, GeocodedAddress
 from app.integrations.odoo import MAPPERS
@@ -112,14 +114,15 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
     marker = uuid.uuid4().hex
     service_date = (datetime.now(UTC) + timedelta(days=2)).date()
     async with SessionLocal() as session:
-        entity = LegalEntity(code=f"E2E-{marker[:8]}", name="E2E Entity", currency="EUR")
+        entity = LegalEntity(code=f"E2E-{marker[:8]}", name="E2E Entity", currency="USD")
         session.add(entity)
         await session.flush()
         area = ServiceArea(
             legal_entity_id=entity.id,
             name="E2E Area",
+            country_code="US",
             boundary=WKTElement(
-                "MULTIPOLYGON(((12 51,14 51,14 53,12 53,12 51)))", srid=4326
+                "MULTIPOLYGON(((-99 29,-97 29,-97 31,-99 31,-99 29)))", srid=4326
             ),
             active=True,
         )
@@ -142,17 +145,6 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
             required=True,
             sort_order=1,
             is_active=True,
-        )
-        session.add(
-            AvailabilityRule(
-                service_id=catalog_service.id,
-                service_area_id=area.id,
-                weekday=service_date.weekday(),
-                start_time=time(9),
-                end_time=time(11),
-                slot_minutes=120,
-                capacity=1,
-            )
         )
         session.add(question)
         vendor = Vendor(
@@ -177,6 +169,16 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
             available=True,
         )
         session.add(worker)
+        await session.flush()
+        session.add_all([
+            ProviderServiceCoverage(
+                worker_id=worker.id, service_id=catalog_service.id, postal_code="78701"
+            ),
+            ProviderWorkingHours(
+                worker_id=worker.id, weekday=service_date.weekday(),
+                start_time=time(7), end_time=time(19), capacity=1,
+            ),
+        ])
         await session.commit()
 
         discovered = await CatalogRepository(session).active_detail(str(catalog_service.id))
@@ -184,18 +186,20 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
 
         geocoder = FakeGeocodingAdapter(
             GeocodedAddress(
-                "E2E Street 1, Berlin",
+                "E2E Street 1, Austin",
                 "E2E Street 1",
-                "Berlin",
-                "10115",
-                "DE",
-                52.0,
-                13.0,
+                "Austin",
+                "78701",
+                "US",
+                30.0,
+                -98.0,
                 "fake",
+                state_code="TX",
+                timezone_name="America/Chicago",
             )
         )
         validated = await AddressService(session, geocoder).validate(
-            AddressValidateRequest(address="E2E Street 1, Berlin")
+            AddressValidateRequest(address="E2E Street 1, Austin")
         )
         assert validated.serviceable and validated.address_id
         # Multiple runs may leave overlapping test polygons; bind this run's validated address to
@@ -213,7 +217,7 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
                 date_to=service_date,
             )
         )
-        assert len(slots) == 1 and slots[0].remaining_capacity == 1
+        assert len(slots) == 12 and slots[0].remaining_capacity == 1
         booking = await BookingService(session).create(
             BookingCreateRequest(
                 service_id=catalog_service.id,
@@ -230,7 +234,7 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
             f"booking-{marker}",
         )
         assert booking.status == BookingStatus.PENDING_PAYMENT
-        assert booking.pricing_snapshot["total"] == "129.00"
+        assert booking.pricing_snapshot["total"] == "200.00"
         guest_token = getattr(booking, "guest_confirmation_token")
         customer = await session.get(Customer, booking.customer_id)
         assert customer
@@ -300,8 +304,8 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
             PaymentIntentCreate(
                 booking_id=booking.id,
                 payment_purpose=PaymentPurpose.BOOKING_DIAGNOSTIC,
-                amount_minor=12900,
-                currency="EUR",
+                amount_minor=20000,
+                currency="USD",
             ),
             f"booking-payment-{marker}",
         )
@@ -345,13 +349,13 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
             "fake-verified-signature",
         )
         await session.refresh(booking)
-        assert booking.status == BookingStatus.CONFIRMED
+        assert booking.status == BookingStatus.PENDING_PROVIDER_CONFIRMATION
         confirmed = await booking_confirmation(
             booking.id, f"Bearer {guest_token}", session, None
         )
-        assert confirmed.booking_status == "CONFIRMED"
+        assert confirmed.booking_status == "PENDING_PROVIDER_CONFIRMATION"
         assert confirmed.payment_status == "captured"
-        assert confirmed.next_action == "confirmed"
+        assert confirmed.next_action == "await_provider_confirmation"
         job = await session.scalar(select(Job).where(Job.booking_id == booking.id))
         assert job and job.status == JobStatus.CREATED
 
@@ -361,6 +365,8 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
             offer.id, vendor.id, True, worker.id, vendor.id
         )
         await session.refresh(job)
+        await session.refresh(booking)
+        assert booking.status == BookingStatus.CONFIRMED
         assert job.status == JobStatus.ASSIGNED and job.worker_id == worker.id
 
         jobs = JobService(session)
@@ -377,7 +383,7 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
                     WorkLineItem(description="Replacement pump", quantity=1, unit_price_minor=5000)
                 ],
                 tax_minor=950,
-                currency="EUR",
+                    currency="USD",
             ),
             worker.id,
         )
@@ -390,7 +396,7 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
                 quote_id=request.id,
                 payment_purpose=PaymentPurpose.QUOTE_ADDITIONAL_WORK,
                 amount_minor=5950,
-                currency="EUR",
+                currency="USD",
             ),
             f"quote-payment-{marker}",
         )
@@ -409,7 +415,7 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
                 name="E2E fixed plan",
                 method=CompensationMethod.FIXED_MINOR,
                 fixed_minor=7000,
-                currency="EUR",
+                currency="USD",
                 hold_days=0,
                 effective_from=datetime.now(UTC) - timedelta(minutes=1),
             ),
@@ -463,7 +469,7 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
             select(func.count()).select_from(VendorEarning).where(VendorEarning.job_id == job_id)
         ) == 1
         assert await finance.release_eligible() == 1
-        batch = await finance.create_batch("EUR", vendor_id, vendor_id)
+        batch = await finance.create_batch("USD", vendor_id, vendor_id)
         assert batch.status == PayoutStatus.PENDING_APPROVAL and batch.earning_count == 1
         await finance.approve_batch(batch.id, vendor_id)
         submitted = await finance.submit_batch(batch.id, vendor_id)

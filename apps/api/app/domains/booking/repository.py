@@ -11,8 +11,11 @@ from app.domains.booking.models import (
     Booking,
     Customer,
     LegalEntity,
+    ProviderServiceCoverage,
+    ProviderWorkingHours,
     ServiceArea,
 )
+from app.domains.workforce.models import Vendor, VendorStatus, Worker, WorkerStatus
 
 
 class BookingRepository:
@@ -20,7 +23,8 @@ class BookingRepository:
         self.session = session
 
     async def service_area_at(
-        self, longitude: float, latitude: float
+        self, longitude: float, latitude: float, country_code: str, state_code: str | None,
+        city: str, postal_code: str,
     ) -> tuple[ServiceArea, LegalEntity] | None:
         point = func.ST_SetSRID(func.ST_MakePoint(longitude, latitude), 4326)
         stmt = (
@@ -29,7 +33,17 @@ class BookingRepository:
             .where(
                 ServiceArea.active.is_(True),
                 LegalEntity.active.is_(True),
-                ST_Covers(ServiceArea.boundary, point),
+                ServiceArea.country_code == country_code,
+                (ServiceArea.state_code.is_(None) | (ServiceArea.state_code == state_code)),
+                (ServiceArea.city.is_(None) | (func.lower(ServiceArea.city) == city.lower())),
+                (
+                    (ServiceArea.postal_codes == [])
+                    | ServiceArea.postal_codes.contains([postal_code[:5]])
+                ),
+                (
+                    ServiceArea.boundary.is_(None)
+                    | ST_Covers(ServiceArea.boundary, point)
+                ),
             )
             .limit(1)
         )
@@ -65,6 +79,45 @@ class BookingRepository:
             Booking.status.in_(["PENDING_PAYMENT", "CONFIRMED"]),
         )
         return int(await self.session.scalar(stmt) or 0)
+
+    async def eligible_provider_hours(
+        self, service_id: uuid.UUID, postal_code: str, weekday: int
+    ) -> list[tuple[Worker, ProviderWorkingHours]]:
+        stmt = (
+            select(Worker, ProviderWorkingHours)
+            .join(Vendor, Vendor.id == Worker.vendor_id)
+            .join(ProviderServiceCoverage, ProviderServiceCoverage.worker_id == Worker.id)
+            .join(ProviderWorkingHours, ProviderWorkingHours.worker_id == Worker.id)
+            .where(
+                Vendor.status == VendorStatus.ACTIVE,
+                Worker.status == WorkerStatus.ACTIVE,
+                Worker.available.is_(True),
+                ProviderServiceCoverage.active.is_(True),
+                ProviderServiceCoverage.service_id == service_id,
+                ProviderServiceCoverage.postal_code == postal_code[:5],
+                ProviderWorkingHours.weekday == weekday,
+            )
+        )
+        return [(row[0], row[1]) for row in (await self.session.execute(stmt)).all()]
+
+    async def provider_booking_count(
+        self, worker_id: uuid.UUID, start: datetime, end: datetime
+    ) -> int:
+        stmt = select(func.count(Booking.id)).where(
+            Booking.provider_worker_id == worker_id,
+            Booking.window_start < end,
+            Booking.window_end > start,
+            Booking.status.in_([
+                "PENDING_PAYMENT", "PENDING_PROVIDER_CONFIRMATION", "CONFIRMED"
+            ]),
+        )
+        return int(await self.session.scalar(stmt) or 0)
+
+    async def lock_provider_slot(self, worker_id: uuid.UUID, start: datetime) -> None:
+        key = f"provider-slot:{worker_id}:{start.isoformat()}"
+        await self.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": key}
+        )
 
     async def lock_slot(self, service_id: uuid.UUID, start: datetime, end: datetime) -> None:
         """Serialize capacity decisions for one service/window across API processes."""

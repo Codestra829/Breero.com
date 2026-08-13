@@ -15,6 +15,7 @@ from sqlalchemy import (
     String,
     Text,
     Time,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -25,6 +26,7 @@ from app.domains.common.models import TimestampMixin, UUIDPrimaryKeyMixin
 
 class BookingStatus(str, enum.Enum):
     PENDING_PAYMENT = "PENDING_PAYMENT"
+    PENDING_PROVIDER_CONFIRMATION = "PENDING_PROVIDER_CONFIRMATION"
     CONFIRMED = "CONFIRMED"
     CANCELLED = "CANCELLED"
     EXPIRED = "EXPIRED"
@@ -48,7 +50,7 @@ class ServiceArea(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     postal_codes: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     center: Mapped[object | None] = mapped_column(Geometry("POINT", srid=4326))
     radius_meters: Mapped[int | None] = mapped_column(Integer)
-    boundary: Mapped[object] = mapped_column(Geometry("MULTIPOLYGON", srid=4326), nullable=False)
+    boundary: Mapped[object | None] = mapped_column(Geometry("MULTIPOLYGON", srid=4326))
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
@@ -63,6 +65,7 @@ class Address(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     location: Mapped[object] = mapped_column(Geometry("POINT", srid=4326), nullable=False)
     service_area_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("service_areas.id"))
     geocoding_provider: Mapped[str] = mapped_column(String(40), default="provided")
+    timezone_name: Mapped[str] = mapped_column(String(64), nullable=False, default="UTC")
     customer_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("customers.id", ondelete="CASCADE"), index=True
     )
@@ -79,6 +82,27 @@ class AvailabilityRule(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     capacity: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
     active_from: Mapped[date | None] = mapped_column(Date)
     active_to: Mapped[date | None] = mapped_column(Date)
+
+
+class ProviderServiceCoverage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Operator-approved ZIP/service coverage; absence always means unavailable."""
+
+    __tablename__ = "provider_service_coverage"
+    __table_args__ = (UniqueConstraint("worker_id", "service_id", "postal_code"),)
+    worker_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workers.id", ondelete="CASCADE"), index=True)
+    service_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    postal_code: Mapped[str] = mapped_column(String(10), index=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class ProviderWorkingHours(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "provider_working_hours"
+    __table_args__ = (UniqueConstraint("worker_id", "weekday"),)
+    worker_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workers.id", ondelete="CASCADE"), index=True)
+    weekday: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_time: Mapped[time] = mapped_column(Time, nullable=False)
+    end_time: Mapped[time] = mapped_column(Time, nullable=False)
+    capacity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
 
 class Customer(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -101,6 +125,7 @@ class Booking(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     address_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("addresses.id"))
     legal_entity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("legal_entities.id"))
     service_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    provider_worker_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workers.id"), index=True)
     window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status: Mapped[BookingStatus] = mapped_column(

@@ -475,11 +475,12 @@ class PaymentService:
         )
         if not booking:
             raise PaymentNotFound("Payment references an unknown booking")
-        if booking.status == BookingStatus.CONFIRMED:
+        if booking.status in {BookingStatus.PENDING_PROVIDER_CONFIRMATION, BookingStatus.CONFIRMED}:
             return
         if booking.status != BookingStatus.PENDING_PAYMENT:
             raise InvalidPaymentState("Booking cannot be confirmed from its current state")
-        booking.status = BookingStatus.CONFIRMED
+        # Payment authorizes the evaluation fee; only explicit provider assignment confirms time.
+        booking.status = BookingStatus.PENDING_PROVIDER_CONFIRMATION
         job = await self.session.scalar(select(Job).where(Job.booking_id == booking.id))
         if not job:
             job = Job(

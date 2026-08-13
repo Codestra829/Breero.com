@@ -20,6 +20,7 @@ class GeocodedAddress:
     confidence: float | None = None
     quality: str | None = None
     state_code: str | None = None
+    timezone_name: str | None = None
 
 
 class FakeGeocodingAdapter:
@@ -49,7 +50,7 @@ class GeocodingAdapter:
             formatted_address=props.get("formatted", address),
             line1=props.get("address_line1", address),
             city=props.get("city", props.get("county", "")),
-            state_code=(props.get("state_code") or props.get("state")),
+            state_code=str(props.get("state_code") or props.get("state") or "").upper() or None,
             postal_code=props.get("postcode", ""),
             country_code=props.get("country_code", "").upper(),
             latitude=float(props["lat"]),
@@ -58,4 +59,5 @@ class GeocodingAdapter:
             provider_reference=props.get("place_id"),
             confidence=props.get("rank", {}).get("confidence"),
             quality=props.get("rank", {}).get("match_type"),
+            timezone_name=(props.get("timezone") or {}).get("name"),
         )

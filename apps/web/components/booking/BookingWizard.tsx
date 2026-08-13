@@ -146,7 +146,7 @@ export function BookingWizard() {
       setSlots(found);
       if (!found.length)
         setError(
-          "No appointments are available in the next two weeks. Try again for updated availability.",
+          "No verified provider capacity is available in the next two weeks. Request Service for manual dispatch without a promised appointment.",
         );
     } catch {
       setError("Availability could not be loaded. Please retry.");
@@ -415,6 +415,11 @@ export function BookingWizard() {
             >
               Retry / check alternate dates
             </button>
+            {!busy && slots.length === 0 && (
+              <Link className="button-primary" href="/request-service">
+                Request Service
+              </Link>
+            )}
             <Actions back={back} next={next} disableNext={!state.slot} />
           </>
         )}
@@ -474,7 +479,8 @@ export function BookingWizard() {
                   {state.slot && new Date(state.slot.start).toLocaleString()}
                 </span>
               </div>
-              <div><b>Price</b><span>Confirmed by BREERO after this request</span></div>
+              <div><b>Evaluation and booking fee</b><span>$200 regular · $300 Sunday emergency</span></div>
+              <div><b>Job price</b><span>Quote required; no work begins until you accept the provider estimate</span></div>
             </div>
             <div className="notice"><strong>Independent-provider marketplace</strong><br/>BREERO helps connect and coordinate you with an independent service provider. Unless expressly stated otherwise, that provider is responsible for the final estimate, scope, pricing, licensing, permits, insurance, workmanship, and service performance. Additional work requires a separate quote and your approval.</div>
             <Actions
@@ -515,7 +521,7 @@ export function BookingWizard() {
             <p>
               {state.paymentStatus === "failed"
                 ? "Your booking is saved, but payment failed. Retry payment or contact support."
-                : "Payment is processing. We’ll show confirmed only after BREERO receives authoritative provider status."}
+                : "Payment is processing. The appointment remains pending until the selected provider manually confirms capacity."}
             </p>
             <p className="notice">
               Current status: {state.paymentStatus ?? "pending"}

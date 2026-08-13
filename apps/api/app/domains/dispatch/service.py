@@ -6,6 +6,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domains.booking.models import Booking, BookingStatus
 from app.domains.common.outbox import AuditLog
 from app.domains.jobs.models import JobStatus
 from app.domains.jobs.repository import JobRepository
@@ -33,7 +34,10 @@ class DispatchService:
             raise HTTPException(409, "Job cannot be matched in its current state")
         existing = await self.repo.offers_for_job(job_id)
         round_number = max((offer.round for offer in existing), default=0) + 1
-        candidates = await self.repo.candidate_workers([], limit=10)
+        booking = await self.session.get(Booking, job.booking_id)
+        candidates = await self.repo.candidate_workers(
+            [], limit=10, worker_id=booking.provider_worker_id if booking else None
+        )
         if not candidates:
             if job.status != JobStatus.MATCHING:
                 self.job_service.apply_transition(
@@ -129,10 +133,14 @@ class DispatchService:
             )
         )
         job.vendor_id, job.worker_id = vendor_id, worker.id
+        booking = await self.session.get(Booking, job.booking_id)
+        if booking and booking.provider_worker_id == worker.id and booking.status == BookingStatus.PENDING_PROVIDER_CONFIRMATION:
+            booking.status = BookingStatus.CONFIRMED
         self.job_service.apply_transition(
             job, JobStatus.ASSIGNED, actor_id, "vendor", "offer_accepted"
         )
-        worker.available = False
+        # ``available`` is an operator-controlled participation switch. Overlap is enforced by
+        # the provider-slot reservation, so assigning one future visit must not hide all others.
         await self.session.execute(
             update(DispatchOffer)
             .where(
@@ -162,6 +170,9 @@ class DispatchService:
             raise HTTPException(409, "Worker is unavailable or belongs to another vendor")
         if job.status not in {JobStatus.CREATED, JobStatus.MATCHING, JobStatus.OFFERED}:
             raise HTTPException(409, "Job is not assignable")
+        booking = await self.session.get(Booking, job.booking_id)
+        if booking and booking.provider_worker_id != worker_id:
+            raise HTTPException(409, "Worker does not hold the reserved provider slot")
         assignment = Assignment(
             job_id=job.id,
             vendor_id=vendor_id,
@@ -188,7 +199,8 @@ class DispatchService:
             job, JobStatus.ASSIGNED, actor_id, "operations", reason
         )
         job.vendor_id, job.worker_id = vendor_id, worker_id
-        worker.available = False
+        if booking and booking.status == BookingStatus.PENDING_PROVIDER_CONFIRMATION:
+            booking.status = BookingStatus.CONFIRMED
         await self.session.commit()
         await self.session.refresh(assignment)
         return assignment

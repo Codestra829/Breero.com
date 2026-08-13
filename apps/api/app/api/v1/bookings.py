@@ -109,6 +109,8 @@ async def booking_confirmation(
     payment_status = payment.status.value if payment else "not_started"
     if booking.status.value == "CONFIRMED":
         next_action = "confirmed"
+    elif booking.status.value == "PENDING_PROVIDER_CONFIRMATION":
+        next_action = "await_provider_confirmation"
     elif payment_status in {"failed", "canceled"}:
         next_action = "retry_payment"
     elif booking.status.value in {"EXPIRED", "CANCELLED"}:

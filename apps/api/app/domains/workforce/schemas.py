@@ -1,4 +1,5 @@
 import uuid
+from datetime import time
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
@@ -67,3 +68,22 @@ class LocationUpdate(BaseModel):
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
     accuracy_meters: int | None = Field(default=None, ge=0, le=10000)
+
+
+class BookingCoverageWrite(BaseModel):
+    service_ids: list[uuid.UUID] = Field(min_length=1, max_length=12)
+    postal_codes: list[str] = Field(min_length=1, max_length=500)
+    weekdays: list[int] = Field(default_factory=lambda: list(range(7)), min_length=1, max_length=7)
+    start_time: time = time(7)
+    end_time: time = time(19)
+    capacity: int = 1
+
+    @model_validator(mode="after")
+    def enforce_booking_policy(self):
+        if self.start_time != time(7) or self.end_time != time(19) or self.capacity != 1:
+            raise ValueError("Provider hours must be 07:00-19:00 with capacity one")
+        if any(day < 0 or day > 6 for day in self.weekdays):
+            raise ValueError("Weekdays must be between 0 and 6")
+        if any(not code.isdigit() or len(code) != 5 for code in self.postal_codes):
+            raise ValueError("Coverage requires five-digit ZIP codes")
+        return self

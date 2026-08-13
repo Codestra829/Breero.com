@@ -5,12 +5,13 @@ explicitly supplies BREERO_BOOKABLE_SERVICE_SLUGS after operational approval.
 """
 
 import asyncio
-import os
+from decimal import Decimal
 
 from sqlalchemy import select
 
 from app.config import settings
 from app.db.session import SessionLocal
+from app.domains.booking.models import LegalEntity, ServiceArea
 from app.domains.catalog.models import Service
 
 LAUNCH_SERVICES = (
@@ -35,16 +36,24 @@ async def seed() -> None:
     environment = settings.app_env.lower()
     if environment not in {"staging", "production"}:
         raise RuntimeError("Launch catalog seed requires APP_ENV=staging or production")
-    approved_bookable = {
-        slug.strip()
-        for slug in os.getenv("BREERO_BOOKABLE_SERVICE_SLUGS", "").split(",")
-        if slug.strip()
-    }
-    unknown = approved_bookable - {row[0] for row in LAUNCH_SERVICES}
-    if unknown:
-        raise RuntimeError(f"Unknown approved bookable service slugs: {sorted(unknown)}")
-
     async with SessionLocal() as session:
+        entity = await session.scalar(select(LegalEntity).where(LegalEntity.code == "US01"))
+        if entity is None:
+            entity = LegalEntity(code="US01", name="Codestra LLC", currency="USD", active=True)
+            session.add(entity)
+            await session.flush()
+        else:
+            entity.name, entity.currency, entity.active = "Codestra LLC", "USD", True
+        area = await session.scalar(select(ServiceArea).where(ServiceArea.name == "Nationwide USA"))
+        if area is None:
+            area = ServiceArea(legal_entity_id=entity.id, name="Nationwide USA")
+            session.add(area)
+        area.country_code = "US"
+        area.state_code = None
+        area.city = None
+        area.postal_codes = []
+        area.boundary = None
+        area.active = True
         rows = list((await session.scalars(select(Service))).all())
         launch_slugs = {row[0] for row in LAUNCH_SERVICES}
         for service in rows:
@@ -63,11 +72,12 @@ async def seed() -> None:
             launch_service.name = name
             launch_service.description = description
             launch_service.category = "home-services"
-            launch_service.base_price = None
-            launch_service.pricing_model = "quote_required"
-            launch_service.duration_minutes = None
+            launch_service.base_price = Decimal("200.00")
+            launch_service.pricing_model = "evaluation_fee_quote_required"
+            launch_service.duration_minutes = 30
             launch_service.is_active = True
-            launch_service.is_bookable = slug in approved_bookable
+            # Flow is enabled; exact availability still fails closed on provider ZIP/hours/capacity.
+            launch_service.is_bookable = True
             launch_service.sort_order = order
 
         # Never silently publish an unknown service in launch environments.

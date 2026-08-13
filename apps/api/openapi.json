@@ -429,6 +429,61 @@
         "title": "BookingConfirmation",
         "type": "object"
       },
+      "BookingCoverageWrite": {
+        "properties": {
+          "capacity": {
+            "default": 1,
+            "title": "Capacity",
+            "type": "integer"
+          },
+          "end_time": {
+            "default": "19:00:00",
+            "format": "time",
+            "title": "End Time",
+            "type": "string"
+          },
+          "postal_codes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Postal Codes",
+            "type": "array"
+          },
+          "service_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 12,
+            "minItems": 1,
+            "title": "Service Ids",
+            "type": "array"
+          },
+          "start_time": {
+            "default": "07:00:00",
+            "format": "time",
+            "title": "Start Time",
+            "type": "string"
+          },
+          "weekdays": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Weekdays",
+            "type": "array"
+          }
+        },
+        "required": [
+          "service_ids",
+          "postal_codes"
+        ],
+        "title": "BookingCoverageWrite",
+        "type": "object"
+      },
       "BookingCreateRequest": {
         "properties": {
           "address_id": {
@@ -581,6 +636,7 @@
       "BookingStatus": {
         "enum": [
           "PENDING_PAYMENT",
+          "PENDING_PROVIDER_CONFIRMATION",
           "CONFIRMED",
           "CANCELLED",
           "EXPIRED"
@@ -6570,6 +6626,57 @@
           }
         ],
         "summary": "Set Vendor Status",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/v1/operations/workers/{worker_id}/booking-coverage": {
+      "put": {
+        "operationId": "replace_booking_coverage_api_v1_operations_workers__worker_id__booking_coverage_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "worker_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Worker Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookingCoverageWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Replace Booking Coverage",
         "tags": [
           "operations"
         ]

@@ -2,6 +2,8 @@ import hashlib
 import json
 import secrets
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from geoalchemy2.elements import WKTElement
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +19,12 @@ from app.domains.booking.schemas import (
     BookingCreateRequest,
 )
 from app.domains.catalog.repository import CatalogRepository
-from app.integrations.geocoding import GeocodedAddress, GeocodingAdapter
+from app.domains.common.us import US_STATES_AND_DC
+from app.integrations.geocoding import GeocodingAdapter
+
+
+def evaluation_fee(local_start: datetime) -> Decimal:
+    return Decimal("300.00") if local_start.weekday() == 6 else Decimal("200.00")
 
 
 class AddressService:
@@ -27,21 +34,22 @@ class AddressService:
         self.geocoder = geocoder or GeocodingAdapter()
 
     async def validate(self, payload: AddressValidateRequest) -> AddressValidationResponse:
-        if payload.latitude is None or payload.longitude is None:
-            resolved = await self.geocoder.geocode(payload.address)
-        else:
-            resolved = GeocodedAddress(
-                formatted_address=payload.address,
-                line1=payload.line1 or payload.address,
-                city=payload.city or "",
-                state_code=payload.state_code.upper() if payload.state_code else None,
-                postal_code=payload.postal_code or "",
-                country_code=payload.country_code.upper(),
-                latitude=payload.latitude,
-                longitude=payload.longitude,
-                provider="provided",
+        # Customer-supplied coordinates never establish coverage; Geoapify is authoritative.
+        resolved = await self.geocoder.geocode(payload.address)
+        if (
+            resolved.country_code != "US"
+            or resolved.state_code not in US_STATES_AND_DC
+            or not resolved.postal_code
+            or not resolved.timezone_name
+        ):
+            return AddressValidationResponse(
+                serviceable=False, formatted_address=resolved.formatted_address,
+                address_id=None, service_area_id=None, legal_entity_code=None,
             )
-        match = await self.repository.service_area_at(resolved.longitude, resolved.latitude)
+        match = await self.repository.service_area_at(
+            resolved.longitude, resolved.latitude, resolved.country_code,
+            resolved.state_code, resolved.city, resolved.postal_code,
+        )
         if not match:
             return AddressValidationResponse(
                 serviceable=False,
@@ -60,6 +68,7 @@ class AddressService:
             country_code=resolved.country_code,
             service_area_id=area.id,
             geocoding_provider=resolved.provider,
+            timezone_name=resolved.timezone_name,
             location=WKTElement(f"POINT({resolved.longitude} {resolved.latitude})", srid=4326),
         )
         await self.repository.add_address(address)
@@ -83,33 +92,30 @@ class AvailabilityService:
             raise DomainError(
                 "ADDRESS_NOT_SERVICEABLE", "Address is outside an active service area", 422
             )
-        rules = await self.repository.availability_rules(
-            payload.service_id, address.service_area_id
-        )
         slots: list[AvailabilitySlot] = []
+        try:
+            local_zone = ZoneInfo(address.timezone_name)
+        except ZoneInfoNotFoundError as exc:
+            raise DomainError("ADDRESS_TIMEZONE_INVALID", "Service address timezone is invalid", 422) from exc
         current = payload.date_from
         while current <= payload.date_to:
-            for rule in rules:
-                if (
-                    rule.weekday != current.weekday()
-                    or rule.active_from
-                    and current < rule.active_from
-                    or rule.active_to
-                    and current > rule.active_to
-                ):
-                    continue
-                cursor = datetime.combine(current, rule.start_time, tzinfo=UTC)
-                boundary = datetime.combine(current, rule.end_time, tzinfo=UTC)
-                while cursor + timedelta(minutes=rule.slot_minutes) <= boundary:
-                    end = cursor + timedelta(minutes=rule.slot_minutes)
-                    used = await self.repository.booking_count(payload.service_id, cursor, end)
-                    if used < rule.capacity:
-                        slots.append(
-                            AvailabilitySlot(
-                                start=cursor, end=end, remaining_capacity=rule.capacity - used
-                            )
-                        )
-                    cursor = end
+            capacity_by_slot: dict[tuple[datetime, datetime], int] = {}
+            provider_hours = await self.repository.eligible_provider_hours(
+                payload.service_id, address.postal_code, current.weekday()
+            )
+            for worker, hours in provider_hours:
+                cursor = datetime.combine(current, hours.start_time, tzinfo=local_zone)
+                boundary = datetime.combine(current, hours.end_time, tzinfo=local_zone)
+                while cursor + timedelta(minutes=60) <= boundary:
+                    start, end = cursor.astimezone(UTC), (cursor + timedelta(minutes=60)).astimezone(UTC)
+                    used = await self.repository.provider_booking_count(worker.id, start, end)
+                    if used < hours.capacity:
+                        capacity_by_slot[(start, end)] = capacity_by_slot.get((start, end), 0) + 1
+                    cursor += timedelta(minutes=60)
+            slots.extend(
+                AvailabilitySlot(start=start, end=end, remaining_capacity=capacity)
+                for (start, end), capacity in sorted(capacity_by_slot.items())
+            )
             current += timedelta(days=1)
         return slots
 
@@ -156,14 +162,29 @@ class BookingService:
             raise DomainError(
                 "SLOT_UNAVAILABLE", "The selected time slot is no longer available", 409
             )
+        try:
+            local_zone = ZoneInfo(address.timezone_name)
+        except ZoneInfoNotFoundError as exc:
+            raise DomainError("ADDRESS_TIMEZONE_INVALID", "Service address timezone is invalid", 422) from exc
+        local_weekday = payload.window.start.astimezone(local_zone).weekday()
+        provider_worker_id = None
+        for worker, hours in await self.repository.eligible_provider_hours(
+            payload.service_id, address.postal_code, local_weekday
+        ):
+            await self.repository.lock_provider_slot(worker.id, payload.window.start)
+            if await self.repository.provider_booking_count(
+                worker.id, payload.window.start, payload.window.end
+            ) < hours.capacity:
+                provider_worker_id = worker.id
+                break
+        if provider_worker_id is None:
+            raise DomainError("SLOT_UNAVAILABLE", "Provider capacity is no longer available", 409)
         entity = await self.repository.legal_entity_for_area(address.service_area_id)
         if not entity:
             raise DomainError("LEGAL_ENTITY_NOT_FOUND", "No legal entity serves this address", 422)
         service = await CatalogRepository(self.session).active_detail(str(payload.service_id))
         if not service:
             raise DomainError("SERVICE_NOT_FOUND", "Service is not available", 404)
-        if not service.is_bookable:
-            raise DomainError("SERVICE_NOT_BOOKABLE", "Service is not currently bookable", 422)
         supplied = {answer.question_id for answer in payload.answers}
         required = {
             question.id
@@ -180,7 +201,8 @@ class BookingService:
                 "INVALID_QUESTION", "An answer references an invalid service question", 422
             )
         # Catalog pricing is copied into an immutable snapshot; never recomputed for an existing booking.
-        amount = service.base_price or 0
+        local_start = payload.window.start.astimezone(local_zone)
+        amount = evaluation_fee(local_start)
         customer = await self.repository.customer_for_email(str(payload.customer.email).lower())
         if customer is None:
             customer = Customer(
@@ -200,13 +222,17 @@ class BookingService:
             address_id=address.id,
             legal_entity_id=entity.id,
             service_id=payload.service_id,
+            provider_worker_id=provider_worker_id,
             window_start=payload.window.start,
             window_end=payload.window.end,
             status=BookingStatus.PENDING_PAYMENT,
             pricing_snapshot={
                 "service_id": str(payload.service_id),
                 "service_name": service.name,
-                "base_price": str(amount),
+                "evaluation_fee": str(amount),
+                "job_price": "QUOTE_REQUIRED",
+                "evaluation_minutes": 30,
+                "appointment_interval_minutes": 60,
                 "total": str(amount),
                 "currency": entity.currency,
             },

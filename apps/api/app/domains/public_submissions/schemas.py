@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import AnyHttpUrl, BaseModel, EmailStr, Field, field_validator
 
+from app.domains.common.us import US_STATES_AND_DC
+
 
 class TrackingFields(BaseModel):
     source_url: AnyHttpUrl
@@ -41,9 +43,9 @@ class ServiceRequestCreate(TrackingFields):
 
     @field_validator("state")
     @classmethod
-    def texas_only(cls, value: str) -> str:
-        if value != "TX":
-            raise ValueError("BREERO launch requests are currently limited to approved Texas coverage")
+    def supported_us_state(cls, value: str) -> str:
+        if value not in US_STATES_AND_DC:
+            raise ValueError("Service requests require a U.S. state or Washington, D.C.")
         return value
 
 
