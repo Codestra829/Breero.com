@@ -113,7 +113,15 @@ class Settings(BaseSettings):
             "change-me-too",
             "breero",
         }
-        missing = [name for name, value in required.items() if not value or value in insecure]
+        # ``breero`` is the canonical middleware tenant identifier, not a
+        # credential. Keep rejecting it as a development/default value for
+        # secrets and connection settings, while allowing the explicitly
+        # named tenant field required by the signed middleware contract.
+        missing = [
+            name
+            for name, value in required.items()
+            if not value or (value in insecure and name != "MIDDLEWARE_TENANT")
+        ]
         if len(self.jwt_secret) < 32 or len(self.jwt_refresh_secret) < 32:
             missing.append("JWT secrets (minimum 32 characters)")
         if self.jwt_secret == self.jwt_refresh_secret:

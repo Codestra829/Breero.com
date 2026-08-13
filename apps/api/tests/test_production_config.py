@@ -48,3 +48,27 @@ def test_staging_requires_credentials_for_enabled_provider():
             cors_origins="https://staging.breero.com",
             stripe_enabled=True,
         )
+
+
+def test_staging_allows_canonical_breero_middleware_tenant():
+    settings = Settings(
+        app_env="staging",
+        database_url="postgresql+psycopg://staging:strong-password@postgres:5432/staging",
+        redis_url="redis://:strong-password@redis:6379/0",
+        jwt_secret="a" * 32,
+        jwt_refresh_secret="b" * 32,
+        cors_origins="https://staging.breero.com",
+        middleware_enabled=True,
+        middleware_url="https://middleware.internal.codestra.agency",
+        middleware_ca_file="/run/secrets/codestra_private_ca.pem",
+        middleware_client_cert_file="/run/secrets/breero_middleware_client.pem",
+        middleware_client_key_file="/run/secrets/breero_middleware_client.key",
+        middleware_hmac_key_id="breero-staging-key-v1",
+        middleware_hmac_secret_file="/run/secrets/breero_middleware_hmac",
+        middleware_service_identity="breero-staging",
+        middleware_audience="codestra-middleware-breero",
+        middleware_tenant="breero",
+        middleware_scope="breero.crm.events.submit",
+    )
+
+    assert settings.middleware_tenant == "breero"
