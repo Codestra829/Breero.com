@@ -19,6 +19,8 @@ def configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     monkeypatch.setattr(settings, "middleware_enabled", True)
     monkeypatch.setattr(settings, "middleware_url", "https://middleware.internal.codestra.agency")
     monkeypatch.setattr(settings, "middleware_ca_file", "/run/secrets/codestra-ca.pem")
+    monkeypatch.setattr(settings, "middleware_client_cert_file", "/run/secrets/breero-client.pem")
+    monkeypatch.setattr(settings, "middleware_client_key_file", "/run/secrets/breero-client.key")
     monkeypatch.setattr(settings, "middleware_hmac_key_id", "breero-key-1")
     monkeypatch.setattr(settings, "middleware_hmac_secret_file", str(secret))
     monkeypatch.setattr(settings, "middleware_service_identity", "breero-staging")
@@ -63,7 +65,7 @@ async def test_delivery_uses_typed_route_and_ack(monkeypatch, tmp_path):
         envelope = json.loads(request.content)
         return httpx.Response(202, json={"event_id": envelope["event_id"], "status": "queued"})
     client_type = httpx.AsyncClient
-    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: client_type(transport=httpx.MockTransport(handler), **{k:v for k,v in kwargs.items() if k != "verify"}))
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: client_type(transport=httpx.MockTransport(handler), **{k:v for k,v in kwargs.items() if k not in {"verify", "cert"}}))
     result = await MiddlewareAdapter().deliver(event())
     assert result.model == "middleware.pending"
     assert requests[0].url.path == "/api/v1/integrations/breero/events"

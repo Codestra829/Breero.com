@@ -9,7 +9,8 @@ Allowed events are `breero.service_request.created`, `breero.contact_request.cre
 `breero.provider_interest.created`, and `breero.lead_dispute.created`.
 
 Required protected runtime configuration is documented in the staging and production environment
-examples. The HMAC secret and Codestra private CA must be read-only mounted files. Private routing
+examples. The HMAC secret, client certificate/key, and Codestra private CA must be read-only
+mounted files. The private listener requires mTLS in addition to HMAC-V2. Private routing
 must reach the middleware's private listener; a public-IP hosts-file override is not sufficient.
 Keep `ODOO_ENABLED=false` permanently. Set `MIDDLEWARE_ENABLED=true` first in staging only after
 private routing, CA verification and identity enrollment are complete.

@@ -31,12 +31,14 @@ class Settings(BaseSettings):
     middleware_enabled: bool = False
     middleware_url: str = ""
     middleware_ca_file: str = ""
+    middleware_client_cert_file: str = ""
+    middleware_client_key_file: str = ""
     middleware_hmac_key_id: str = ""
     middleware_hmac_secret_file: str = ""
     middleware_service_identity: str = ""
     middleware_audience: str = ""
     middleware_tenant: str = ""
-    middleware_scope: str = "breero.crm-events.write"
+    middleware_scope: str = "breero.crm.events.submit"
     payout_api_key: str = ""
     metrics_enabled: bool = True
     payout_provider: str = ""
@@ -81,6 +83,8 @@ class Settings(BaseSettings):
             required |= {
                 "MIDDLEWARE_URL": self.middleware_url,
                 "MIDDLEWARE_CA_FILE": self.middleware_ca_file,
+                "MIDDLEWARE_CLIENT_CERT_FILE": self.middleware_client_cert_file,
+                "MIDDLEWARE_CLIENT_KEY_FILE": self.middleware_client_key_file,
                 "MIDDLEWARE_HMAC_KEY_ID": self.middleware_hmac_key_id,
                 "MIDDLEWARE_HMAC_SECRET_FILE": self.middleware_hmac_secret_file,
                 "MIDDLEWARE_SERVICE_IDENTITY": self.middleware_service_identity,

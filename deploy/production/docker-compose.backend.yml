@@ -44,6 +44,16 @@ services:
         target: /run/secrets/breero_middleware_hmac
         read_only: true
         bind: {create_host_path: false}
+      - type: bind
+        source: ${BREERO_PROD_MIDDLEWARE_CLIENT_CERT_FILE:-/srv/breero-production/secrets/breero_middleware_client.pem}
+        target: /run/secrets/breero_middleware_client.pem
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${BREERO_PROD_MIDDLEWARE_CLIENT_KEY_FILE:-/srv/breero-production/secrets/breero_middleware_client.key}
+        target: /run/secrets/breero_middleware_client.key
+        read_only: true
+        bind: {create_host_path: false}
     healthcheck: {disable: true}
     depends_on:
       postgres: {condition: service_healthy}

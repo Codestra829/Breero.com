@@ -84,7 +84,14 @@ class MiddlewareAdapter:
         body = canonical_body(envelope)
         headers = self.headers(body, envelope["idempotency_key"], datetime.now(UTC).isoformat(), str(uuid.uuid4()))
         try:
-            async with httpx.AsyncClient(timeout=20, verify=settings.middleware_ca_file) as client:
+            async with httpx.AsyncClient(
+                timeout=20,
+                verify=settings.middleware_ca_file,
+                cert=(
+                    settings.middleware_client_cert_file,
+                    settings.middleware_client_key_file,
+                ),
+            ) as client:
                 response = await client.post(settings.middleware_url.rstrip("/") + PATH, content=body, headers=headers)
                 response.raise_for_status()
                 acknowledgement = response.json()
