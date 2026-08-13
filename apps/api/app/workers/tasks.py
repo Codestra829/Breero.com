@@ -10,7 +10,7 @@ from app.domains.common.outbox_service import OutboxService
 from app.domains.finance.service import FinanceService
 from app.domains.public_submissions.models import DownstreamStatus, PublicSubmission
 from app.integrations.email import EmailAdapter
-from app.integrations.odoo import OdooAdapter
+from app.integrations.middleware import MiddlewareAdapter
 from app.workers.celery_app import celery_app
 
 
@@ -47,7 +47,7 @@ def expire_bookings() -> int:
 def publish_outbox() -> int:
     async def run() -> int:
         async with SessionLocal() as session:
-            adapter = OdooAdapter()
+            adapter = MiddlewareAdapter()
             email = EmailAdapter()
             notification_events = {
                 "email_verification_requested",
@@ -61,7 +61,7 @@ def publish_outbox() -> int:
                 if event.event_type in notification_events:
                     await email.send(event.event_type, event.payload)
                     return
-                if event.aggregate_type == "public_submission" and not settings.odoo_enabled:
+                if event.aggregate_type == "public_submission" and not settings.middleware_enabled:
                     # BREERO has durably accepted the form. Delivery remains pending
                     # configuration without turning a missing optional CRM into data loss.
                     return
@@ -76,7 +76,7 @@ def publish_outbox() -> int:
                 return None
 
             outbox = OutboxService(session)
-            if settings.odoo_enabled:
+            if settings.middleware_enabled:
                 await outbox.activate_pending_configuration()
             return await outbox.process(deliver)
 
