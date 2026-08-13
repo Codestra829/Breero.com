@@ -14,9 +14,6 @@ x-app: &app
     - ALL
   secrets:
     - breero_geoapify_api_key
-    - breero_stripe_secret_key
-    - breero_stripe_webhook_secret
-    - breero_stripe_publishable_key
   networks:
     - breero_private
 
@@ -103,9 +100,3 @@ volumes:
 secrets:
   breero_geoapify_api_key:
     file: ${GEOAPIFY_API_KEY_REFERENCE:?Set GEOAPIFY_API_KEY_REFERENCE}
-  breero_stripe_secret_key:
-    file: ${STRIPE_SECRET_KEY_REFERENCE:?Set STRIPE_SECRET_KEY_REFERENCE}
-  breero_stripe_webhook_secret:
-    file: ${STRIPE_WEBHOOK_SECRET_REFERENCE:?Set STRIPE_WEBHOOK_SECRET_REFERENCE}
-  breero_stripe_publishable_key:
-    file: ${STRIPE_PUBLISHABLE_KEY_REFERENCE:?Set STRIPE_PUBLISHABLE_KEY_REFERENCE}

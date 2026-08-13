@@ -76,8 +76,9 @@ async def seed() -> None:
             launch_service.pricing_model = "evaluation_fee_quote_required"
             launch_service.duration_minutes = 30
             launch_service.is_active = True
-            # Flow is enabled; exact availability still fails closed on provider ZIP/hours/capacity.
-            launch_service.is_bookable = True
+            # This release accepts durable requests only. A later protected release may
+            # enable booking after provider capacity and payments are certified.
+            launch_service.is_bookable = False
             launch_service.sort_order = order
 
         # Never silently publish an unknown service in launch environments.

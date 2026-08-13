@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Button, Checkbox, FormField, Input } from "@breero/ui";
 import { customerApi, customerSession } from "@/lib/customer/api";
+import { keycloak } from "@/lib/keycloak";
 
 type Mode = "login" | "register" | "forgot" | "reset" | "verify";
 export function AuthForm({ mode }: { mode: Mode }) {
@@ -14,9 +15,14 @@ export function AuthForm({ mode }: { mode: Mode }) {
     setState("loading"); setMessage("");
     try {
       if (mode === "login") {
+        if (keycloak.enabled) {
+          await keycloak.login();
+          return;
+        }
         const session = await customerApi.auth.login({ email: String(data.get("email")), password: String(data.get("password")) });
         customerSession.save(session);
       } else if (mode === "register") {
+        if (keycloak.enabled) throw new Error("Account creation is not open for this release");
         const session = await customerApi.auth.register({ full_name: `${data.get("first_name")} ${data.get("last_name")}`.trim(), email: String(data.get("email")), password: String(data.get("password")) });
         customerSession.save(session);
       } else if (mode === "forgot") {

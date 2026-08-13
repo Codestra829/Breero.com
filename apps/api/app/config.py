@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     jwt_secret: str = "development-only-change-me"
     jwt_refresh_secret: str = "development-only-change-me-too"
     jwt_algorithm: str = "HS256"
+    keycloak_enabled: bool = False
+    keycloak_issuer: str = ""
+    keycloak_audience: str = "breero-api-production"
     access_token_minutes: int = 30
     refresh_token_days: int = 30
     stripe_secret_key: str = ""
@@ -25,6 +28,12 @@ class Settings(BaseSettings):
     stripe_publishable_key: str = ""
     stripe_publishable_key_file: str = ""
     stripe_enabled: bool = False
+    payments_enabled: bool = False
+    online_checkout_enabled: bool = False
+    paid_leads_enabled: bool = False
+    automatic_refunds_enabled: bool = False
+    automatic_booking_enabled: bool = False
+    automatic_confirmed_bookings: bool = False
     geocoding_api_key: str = ""
     geocoding_api_key_file: str = ""
     geocoding_provider: str = "geoapify"
@@ -109,6 +118,22 @@ class Settings(BaseSettings):
         if self.stripe_webhook_secret and not self.stripe_webhook_secret.startswith("whsec_"):
             raise ValueError("STRIPE_WEBHOOK_SECRET has an unsupported format")
 
+        release_payment_flags = {
+            "STRIPE_ENABLED": self.stripe_enabled,
+            "PAYMENTS_ENABLED": self.payments_enabled,
+            "ONLINE_CHECKOUT_ENABLED": self.online_checkout_enabled,
+            "PAID_LEADS_ENABLED": self.paid_leads_enabled,
+            "AUTOMATIC_REFUNDS_ENABLED": self.automatic_refunds_enabled,
+            "AUTOMATIC_BOOKING_ENABLED": self.automatic_booking_enabled,
+            "AUTOMATIC_CONFIRMED_BOOKINGS": self.automatic_confirmed_bookings,
+        }
+        enabled_release_flags = [name for name, enabled in release_payment_flags.items() if enabled]
+        if self.app_env.lower() == "production" and enabled_release_flags:
+            raise ValueError(
+                "request-service release requires disabled flags: "
+                + ", ".join(enabled_release_flags)
+            )
+
         if self.app_env.lower() not in {"production", "staging"}:
             return self
         required = {
@@ -125,6 +150,11 @@ class Settings(BaseSettings):
             }
         if self.geocoding_enabled:
             required["GEOCODING_API_KEY"] = self.geocoding_api_key
+        if self.keycloak_enabled:
+            required |= {
+                "KEYCLOAK_ISSUER": self.keycloak_issuer,
+                "KEYCLOAK_AUDIENCE": self.keycloak_audience,
+            }
         if self.odoo_enabled:
             required["DIRECT_ODOO_PROHIBITED_USE_MIDDLEWARE"] = ""
         if self.middleware_enabled:

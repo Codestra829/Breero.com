@@ -313,6 +313,7 @@ def test_dispatcher_cannot_approve_payout_or_read_arbitrary_payment() -> None:
         assert payout.status_code == 403
         dispatcher.role = UserRole.customer
         payment = client.get(f"/api/v1/payments/{uuid.uuid4()}")
-        assert payment.status_code == 403
+        # The request-only production release does not register payment routes.
+        assert payment.status_code == 404
     finally:
         app.dependency_overrides.clear()

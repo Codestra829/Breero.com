@@ -36,9 +36,23 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
     const form = event.currentTarget;
     setState("sending");
     const data = new FormData(form);
+    const source = new URL(window.location.href);
     const shared = {
       source_url: window.location.href,
       company: value(data, "company"),
+      utm_source: source.searchParams.get("utm_source") ?? undefined,
+      utm_medium: source.searchParams.get("utm_medium") ?? undefined,
+      utm_campaign: source.searchParams.get("utm_campaign") ?? undefined,
+      utm_content: source.searchParams.get("utm_content") ?? undefined,
+      utm_term: source.searchParams.get("utm_term") ?? undefined,
+      customer_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      transactional_contact_allowed: data.get("transactional_contact_allowed") === "on",
+      marketing_consent: false,
+      sms_consent: false,
+      email_consent: false,
+      consent_timestamp: new Date().toISOString(),
+      consent_source: "breero_public_intake",
+      policy_version: "2026-08-13-request-only",
     };
     const payload =
       kind === "service"
@@ -51,7 +65,7 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
             service_description: value(data, "message"),
             address_line1: value(data, "address_line1"),
             city: value(data, "city"),
-            state: "TX",
+            state: value(data, "state"),
             postal_code: value(data, "postal_code"),
             requested_timing: value(data, "requested_timing") || undefined,
             contact_preference: value(data, "contact_preference"),
@@ -75,7 +89,7 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
               business_website: value(data, "business_website") || undefined,
               service_categories: [value(data, "service_category")],
               city: value(data, "city"),
-              state: "TX",
+              state: value(data, "state"),
               postal_code: value(data, "postal_code"),
               license_details: value(data, "license_details") || undefined,
               notes: value(data, "message") || undefined,
@@ -115,6 +129,7 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
           {catalogError && <p role="alert">Live services are unavailable right now. Please try again shortly.</p>}
           <label>Street address<input name="address_line1" required autoComplete="street-address" /></label>
           <label>City<input name="city" required autoComplete="address-level2" /></label>
+          <label>State or district<select name="state" required autoComplete="address-level1"><option value="">Select state</option>{["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
           <label>ZIP code<input name="postal_code" required pattern="[0-9]{5}(-[0-9]{4})?" autoComplete="postal-code" /></label>
           <label>Preferred timing<input name="requested_timing" maxLength={200} placeholder="For example: weekday morning" /></label>
           <label>Contact preference<select name="contact_preference"><option value="email">Email</option><option value="phone">Phone</option><option value="text">Text</option></select></label>
@@ -132,11 +147,13 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
           <label>Website <span>(optional)</span><input name="business_website" type="url" /></label>
           <label>Primary service<select name="service_category">{["plumbing","electrical","handyman","heating","cooling","appliance-repair","cleaning","locksmith","painting","carpentry","moving-help","home-maintenance"].map((slug) => <option key={slug} value={slug}>{slug.replaceAll("-", " ")}</option>)}</select></label>
           <label>City<input name="city" required autoComplete="address-level2" /></label>
+          <label>State or district<select name="state" required autoComplete="address-level1"><option value="">Select state</option>{["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
           <label>ZIP code<input name="postal_code" required pattern="[0-9]{5}(-[0-9]{4})?" autoComplete="postal-code" /></label>
           <label>License information <span>(when applicable)</span><input name="license_details" maxLength={1000} /></label>
         </>
       )}
       {(kind === "service" || kind === "provider") && <label>{kind === "service" ? "What do you need help with?" : "Anything else we should know?"}<textarea name="message" required={kind === "service"} minLength={kind === "service" ? 5 : undefined} maxLength={4000} /></label>}
+      <label><input name="transactional_contact_allowed" type="checkbox" required /> I agree that BREERO may contact me about this request. I understand this is not a confirmed appointment.</label>
       <p className="mk-intake__disclosure">BREERO coordinates requests with independent service providers. Providers remain responsible for final estimates, scope, pricing, licensing, permits, insurance, workmanship and service performance.</p>
       <button className="mk-button mk-button--primary" type="submit" disabled={state === "sending" || (kind === "service" && !services.length)}>{state === "sending" ? "Sending…" : kind === "provider" ? "Submit interest" : "Send request"}</button>
       <div aria-live="polite">{state === "accepted" && <p className="mk-intake__success">Your request was accepted. This does not yet confirm availability or provider assignment.</p>}{state === "error" && <p role="alert">We could not accept the request. Please retry or email support@breero.com.</p>}</div>

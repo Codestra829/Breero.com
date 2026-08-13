@@ -2,6 +2,7 @@
 
 import { createBreeroApi, createConfiguredApi, readPublicApiConfig, type AuthSession } from "@breero/api-client";
 import { bookings, payments, profile, quotes } from "./data";
+import { keycloak } from "../keycloak";
 
 const ACCESS_KEY = "breero_access_token";
 const REFRESH_KEY = "breero_refresh_token";
@@ -16,7 +17,7 @@ const publicConfig = {
 };
 
 export const customerSession = {
-  save(session: AuthSession) {
+  save(session: Pick<AuthSession, "access_token" | "refresh_token">) {
     window.sessionStorage.setItem(ACCESS_KEY, session.access_token);
     if (session.refresh_token) window.sessionStorage.setItem(REFRESH_KEY, session.refresh_token);
   },
@@ -31,6 +32,11 @@ export const customerSession = {
       const refreshToken = window.sessionStorage.getItem(REFRESH_KEY);
       if (!refreshToken) return null;
       try {
+        if (keycloak.enabled) {
+          const session = await keycloak.refresh(refreshToken);
+          customerSession.save(session);
+          return session.access_token;
+        }
         const config = readPublicApiConfig({ ...publicConfig, NEXT_PUBLIC_API_MODE: "live" });
         const api = createBreeroApi({ baseUrl: config.apiBaseUrl, timeoutMs: config.timeoutMs });
         const session = await api.auth.refresh({ refresh_token: refreshToken });

@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { CalendarIcon, ChevronDownIcon, HomeIcon, UserIcon } from "@breero/ui";
 import { customerApi, customerSession } from "@/lib/customer/api";
+import { keycloak } from "@/lib/keycloak";
 
 const links = [
   { href: "/account", label: "Overview", icon: <HomeIcon /> },
@@ -16,6 +17,10 @@ const links = [
 export function AccountNav() {
   const pathname = usePathname();
   const logout = async () => {
+    if (keycloak.enabled) {
+      keycloak.logout();
+      return;
+    }
     const refreshToken = window.sessionStorage.getItem("breero_refresh_token");
     try {
       if (refreshToken) await customerApi.auth.logout({ refresh_token: refreshToken });

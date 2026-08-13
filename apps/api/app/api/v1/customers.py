@@ -385,7 +385,7 @@ async def payments(
         result.append(
             {
                 "id": str(p.id),
-                "purpose": p.payment_purpose.value,
+                "payment_purpose": p.payment_purpose.value,
                 "status": p.status.value,
                 "amount_minor": p.amount_minor,
                 "captured_amount_minor": p.captured_amount_minor,

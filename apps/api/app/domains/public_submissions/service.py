@@ -57,6 +57,23 @@ class PublicSubmissionService:
                 raise DomainError("SERVICE_NOT_FOUND", "Selected service is not available", 422)
             payload["service_id"] = str(service.id)
             payload["service_slug"] = service.slug
+            # Server-owned release state: public intake is never an appointment,
+            # assignment, or payment record.
+            payload.update(
+                {
+                    "request_status": "REQUESTED",
+                    "manual_dispatch_state": "PENDING_MANUAL_DISPATCH",
+                    "geoapify_verification_state": (
+                        "PENDING_MANUAL_VALIDATION"
+                        if not settings.geocoding_enabled
+                        else "PENDING_PROVIDER_VERIFICATION"
+                    ),
+                    "payment_required": False,
+                    "quote_required": True,
+                    "provider_assigned": False,
+                    "appointment_confirmed": False,
+                }
+            )
         email = str(payload["email"]).strip().lower()
         phone = re.sub(r"[^0-9+]", "", str(payload.get("phone") or "")) or None
         downstream = (

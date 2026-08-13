@@ -8,7 +8,10 @@ import time
 import uuid
 from typing import Any
 
+import jwt
 from fastapi import HTTPException, status
+
+from app.config import settings
 
 PBKDF2_ITERATIONS = 600_000
 TOKEN_TTL_SECONDS = 3600
@@ -80,6 +83,8 @@ def create_access_token(
 
 
 def decode_access_token(token: str) -> dict[str, Any]:
+    if settings.keycloak_enabled:
+        return decode_keycloak_access_token(token)
     error = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     try:
         header, payload, signature = token.split(".")
@@ -94,4 +99,23 @@ def decode_access_token(token: str) -> dict[str, Any]:
     except HTTPException:
         raise
     except (ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise error from exc
+
+
+def decode_keycloak_access_token(token: str) -> dict[str, Any]:
+    error = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    try:
+        issuer = settings.keycloak_issuer.rstrip("/")
+        signing_key = jwt.PyJWKClient(f"{issuer}/protocol/openid-connect/certs").get_signing_key_from_jwt(
+            token
+        )
+        return jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=settings.keycloak_audience,
+            issuer=issuer,
+            options={"require": ["exp", "iat", "sub"]},
+        )
+    except jwt.PyJWTError as exc:
         raise error from exc

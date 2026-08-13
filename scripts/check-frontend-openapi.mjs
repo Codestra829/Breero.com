@@ -13,12 +13,9 @@ const required = {
   "/api/v1/services": ["get"],
   "/api/v1/services/{service_id}": ["get"],
   "/api/v1/services/{service_id}/questions": ["get"],
-  "/api/v1/addresses/validate": ["post"],
-  "/api/v1/availability/search": ["post"],
-  "/api/v1/bookings": ["post"],
-  "/api/v1/bookings/{booking_id}/payment": ["post"],
-  "/api/v1/bookings/{booking_id}/confirmation": ["get"],
-  "/api/v1/payments/intents": ["post"],
+  "/api/v1/service-requests": ["post"],
+  "/api/v1/contact": ["post"],
+  "/api/v1/provider-interest": ["post"],
   "/api/v1/customer/profile": ["get", "patch"],
   "/api/v1/customer/addresses": ["get", "post"],
   "/api/v1/customer/addresses/{address_id}": ["patch", "delete"],
@@ -32,12 +29,30 @@ const required = {
   "/api/v1/customer/payments/{payment_id}": ["get"],
 };
 
+const forbidden = {
+  "/api/v1/availability/search": ["post"],
+  "/api/v1/bookings": ["post"],
+  "/api/v1/bookings/{booking_id}/payment": ["post"],
+  "/api/v1/bookings/{booking_id}/confirmation": ["get"],
+  "/api/v1/payments/intents": ["post"],
+  "/api/v1/payments/webhooks/stripe": ["post"],
+};
+
 const missing = [];
 for (const [path, methods] of Object.entries(required)) {
   for (const method of methods) if (!document.paths?.[path]?.[method]) missing.push(`${method.toUpperCase()} ${path}`);
 }
 if (missing.length) {
   console.error(`Frontend API contract is missing:\n${missing.join("\n")}`);
+  process.exit(1);
+}
+
+const exposed = [];
+for (const [path, methods] of Object.entries(forbidden)) {
+  for (const method of methods) if (document.paths?.[path]?.[method]) exposed.push(`${method.toUpperCase()} ${path}`);
+}
+if (exposed.length) {
+  console.error(`Request-only API contract exposes forbidden booking/payment routes:\n${exposed.join("\n")}`);
   process.exit(1);
 }
 
@@ -66,4 +81,4 @@ if (missing.length) {
   process.exit(1);
 }
 
-console.log(`Frontend API contract verified: ${Object.keys(required).length} paths and payment purposes.`);
+console.log(`Request-only frontend API contract verified: ${Object.keys(required).length} required paths; zero booking/payment mutation routes.`);

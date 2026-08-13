@@ -147,13 +147,18 @@ class BookingService:
             raise DomainError(
                 "ADDRESS_NOT_SERVICEABLE", "Address is outside an active service area", 422
             )
+        try:
+            local_zone = ZoneInfo(address.timezone_name)
+        except ZoneInfoNotFoundError as exc:
+            raise DomainError("ADDRESS_TIMEZONE_INVALID", "Service address timezone is invalid", 422) from exc
+        local_date = payload.window.start.astimezone(local_zone).date()
         await self.repository.lock_slot(payload.service_id, payload.window.start, payload.window.end)
         slots = await self.availability.search(
             AvailabilitySearchRequest(
                 service_id=payload.service_id,
                 address_id=payload.address_id,
-                date_from=payload.window.start.date(),
-                date_to=payload.window.start.date(),
+                date_from=local_date,
+                date_to=local_date,
             )
         )
         if not any(
@@ -162,10 +167,6 @@ class BookingService:
             raise DomainError(
                 "SLOT_UNAVAILABLE", "The selected time slot is no longer available", 409
             )
-        try:
-            local_zone = ZoneInfo(address.timezone_name)
-        except ZoneInfoNotFoundError as exc:
-            raise DomainError("ADDRESS_TIMEZONE_INVALID", "Service address timezone is invalid", 422) from exc
         local_weekday = payload.window.start.astimezone(local_zone).weekday()
         provider_worker_id = None
         for worker, hours in await self.repository.eligible_provider_hours(

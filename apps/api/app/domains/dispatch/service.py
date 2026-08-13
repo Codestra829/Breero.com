@@ -112,6 +112,9 @@ class DispatchService:
         job = await self.jobs.get(offer.job_id, lock=True)
         if not job or job.status not in {JobStatus.OFFERED, JobStatus.MATCHING}:
             raise HTTPException(409, "Job is no longer assignable")
+        booking = await self.session.get(Booking, job.booking_id)
+        if booking and booking.provider_worker_id != worker.id:
+            raise HTTPException(409, "Worker does not hold the reserved provider slot")
         offer.status = OfferStatus.ACCEPTED
         assignment = Assignment(
                 job_id=job.id,
@@ -133,7 +136,6 @@ class DispatchService:
             )
         )
         job.vendor_id, job.worker_id = vendor_id, worker.id
-        booking = await self.session.get(Booking, job.booking_id)
         if booking and booking.provider_worker_id == worker.id and booking.status == BookingStatus.PENDING_PROVIDER_CONFIRMATION:
             booking.status = BookingStatus.CONFIRMED
         self.job_service.apply_transition(

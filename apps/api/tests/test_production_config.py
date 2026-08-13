@@ -88,6 +88,32 @@ def test_stripe_keys_cannot_mix_test_and_live_modes():
         )
 
 
+@pytest.mark.parametrize(
+    "flag",
+    [
+        "stripe_enabled",
+        "payments_enabled",
+        "online_checkout_enabled",
+        "paid_leads_enabled",
+        "automatic_refunds_enabled",
+        "automatic_booking_enabled",
+        "automatic_confirmed_bookings",
+    ],
+)
+def test_request_only_production_rejects_payment_and_booking_flags(flag):
+    values = {
+        "app_env": "production",
+        "database_url": "postgresql+psycopg://prod:strong-password@postgres:5432/prod",
+        "redis_url": "redis://:strong-password@redis:6379/0",
+        "jwt_secret": "a" * 32,
+        "jwt_refresh_secret": "b" * 32,
+        "cors_origins": "https://breero.com",
+        flag: True,
+    }
+    with pytest.raises(ValidationError, match="request-service release"):
+        Settings(**values)
+
+
 def test_staging_allows_canonical_breero_middleware_tenant():
     settings = Settings(
         app_env="staging",
