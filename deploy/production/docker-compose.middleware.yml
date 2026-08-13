@@ -1,6 +1,8 @@
 services:
   worker:
     networks: [private, middleware_egress]
+    extra_hosts:
+      - "middleware.internal.codestra.agency:10.40.0.1"
     volumes:
       - type: bind
         source: ${BREERO_PROD_MIDDLEWARE_CA_FILE:?Set the approved Codestra CA file}
