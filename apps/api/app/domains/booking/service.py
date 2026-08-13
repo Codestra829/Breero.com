@@ -112,10 +112,12 @@ class AvailabilityService:
                     if used < hours.capacity:
                         capacity_by_slot[(start, end)] = capacity_by_slot.get((start, end), 0) + 1
                     cursor += timedelta(minutes=60)
-            slots.extend(
-                AvailabilitySlot(start=start, end=end, remaining_capacity=capacity)
-                for (start, end), capacity in sorted(capacity_by_slot.items())
-            )
+            for (start, end), capacity in sorted(capacity_by_slot.items()):
+                held = await self.repository.booking_count(payload.service_id, start, end)
+                if remaining := max(capacity - held, 0):
+                    slots.append(
+                        AvailabilitySlot(start=start, end=end, remaining_capacity=remaining)
+                    )
             current += timedelta(days=1)
         return slots
 
@@ -168,17 +170,10 @@ class BookingService:
                 "SLOT_UNAVAILABLE", "The selected time slot is no longer available", 409
             )
         local_weekday = payload.window.start.astimezone(local_zone).weekday()
-        provider_worker_id = None
-        for worker, hours in await self.repository.eligible_provider_hours(
+        eligible = await self.repository.eligible_provider_hours(
             payload.service_id, address.postal_code, local_weekday
-        ):
-            await self.repository.lock_provider_slot(worker.id, payload.window.start)
-            if await self.repository.provider_booking_count(
-                worker.id, payload.window.start, payload.window.end
-            ) < hours.capacity:
-                provider_worker_id = worker.id
-                break
-        if provider_worker_id is None:
+        )
+        if not eligible:
             raise DomainError("SLOT_UNAVAILABLE", "Provider capacity is no longer available", 409)
         entity = await self.repository.legal_entity_for_area(address.service_area_id)
         if not entity:
@@ -201,9 +196,7 @@ class BookingService:
             raise DomainError(
                 "INVALID_QUESTION", "An answer references an invalid service question", 422
             )
-        # Catalog pricing is copied into an immutable snapshot; never recomputed for an existing booking.
-        local_start = payload.window.start.astimezone(local_zone)
-        amount = evaluation_fee(local_start)
+        # This release records a quote-required request and never computes or collects an online fee.
         customer = await self.repository.customer_for_email(str(payload.customer.email).lower())
         if customer is None:
             customer = Customer(
@@ -223,21 +216,21 @@ class BookingService:
             address_id=address.id,
             legal_entity_id=entity.id,
             service_id=payload.service_id,
-            provider_worker_id=provider_worker_id,
+            provider_worker_id=None,
             window_start=payload.window.start,
             window_end=payload.window.end,
-            status=BookingStatus.PENDING_PAYMENT,
+            status=BookingStatus.TENTATIVE_HOLD,
             pricing_snapshot={
                 "service_id": str(payload.service_id),
                 "service_name": service.name,
-                "evaluation_fee": str(amount),
+                "evaluation_fee": "NOT_COLLECTED_ONLINE",
                 "job_price": "QUOTE_REQUIRED",
                 "evaluation_minutes": 30,
                 "appointment_interval_minutes": 60,
-                "total": str(amount),
+                "total": "QUOTE_REQUIRED",
                 "currency": entity.currency,
             },
-            total_amount=amount,
+            total_amount=Decimal("0.00"),
             currency=entity.currency,
             expires_at=datetime.now(UTC) + timedelta(minutes=30),
             guest_confirmation_token_hash="pending",

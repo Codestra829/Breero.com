@@ -6,15 +6,13 @@ import { customerApi } from "@/lib/customer/api";
 
 export function QuoteApproval({
   quoteId,
-  amountMinor,
-  currency,
 }: {
   quoteId: string;
   amountMinor: number;
   currency: string;
 }) {
   const [state, setState] = useState<
-    "idle" | "approving" | "declining" | "approved" | "declined" | "payment" | "ready" | "error"
+    "idle" | "approving" | "declining" | "approved" | "declined" | "error"
   >("idle");
   async function approve() {
     setState("approving");
@@ -34,23 +32,6 @@ export function QuoteApproval({
       setState("error");
     }
   }
-  async function preparePayment() {
-    setState("payment");
-    try {
-      await customerApi.payments.createIntent(
-        {
-          quote_id: quoteId,
-          payment_purpose: "QUOTE_ADDITIONAL_WORK",
-          amount_minor: amountMinor,
-          currency,
-        },
-        crypto.randomUUID(),
-      );
-      setState("ready");
-    } catch {
-      setState("error");
-    }
-  }
   if (state === "declined")
     return (
       <div className="approval-success" role="status">
@@ -60,29 +41,14 @@ export function QuoteApproval({
         <a href="/account/quotes">Return to quotes</a>
       </div>
     );
-  if (state === "approved" || state === "payment" || state === "ready")
+  if (state === "approved")
     return (
       <div className="approval-success" role="status">
         <span>
           <CheckIcon size={28} />
         </span>
-        <h2>
-          {state === "ready" ? "Payment authorization ready" : "Quote approved"}
-        </h2>
-        <p>
-          {state === "ready"
-            ? "The payment has been created. Final confirmation remains authoritative on the server."
-            : "Your approval is saved. Continue to prepare the secure additional-payment step."}
-        </p>
-        {state !== "ready" && (
-          <Button
-            fullWidth
-            loading={state === "payment"}
-            onClick={preparePayment}
-          >
-            Continue to payment
-          </Button>
-        )}
+        <h2>Quote response saved</h2>
+        <p>Your response is recorded. BREERO does not collect online payment. Final scope, price, and payment arrangements remain between you and the independent provider.</p>
         <a href="/account/quotes">Return to quotes</a>
       </div>
     );
@@ -90,8 +56,7 @@ export function QuoteApproval({
     <div>
       <h2>Approve this work?</h2>
       <p>
-        No additional work begins until you approve. Payment confirmation is
-        always checked with BREERO.
+        No additional work begins until you approve. Approval does not create an online charge.
       </p>
       {state === "error" && (
         <p className="auth-message auth-error" role="alert">

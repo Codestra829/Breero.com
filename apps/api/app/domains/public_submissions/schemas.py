@@ -17,6 +17,11 @@ class TrackingFields(BaseModel):
     language: str | None = Field(default=None, max_length=16)
     customer_timezone: str | None = Field(default=None, max_length=64)
     transactional_contact_allowed: bool = True
+    transactional_email_consent: bool = False
+    transactional_sms_consent: bool = False
+    marketing_email_consent: bool = False
+    marketing_sms_consent: bool = False
+    consent_disclosures: dict[str, str] = Field(default_factory=dict)
     marketing_consent: bool = False
     sms_consent: bool = False
     email_consent: bool = False

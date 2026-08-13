@@ -22,6 +22,7 @@ from app.domains.payments.models import Payment, PaymentPurpose, PaymentStatus, 
 from app.domains.payments.schemas import PaymentView
 
 router = APIRouter()
+payment_router = APIRouter()
 
 
 class ProfilePatch(BaseModel):
@@ -350,7 +351,7 @@ async def decide_quote(
     return await JobService(session).decide_work_request(quote_id, payload.approve, customer.id)
 
 
-@router.get("/payments", response_model=Page)
+@payment_router.get("/payments", response_model=Page)
 async def payments(
     user: Annotated[User, Depends(current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
@@ -397,7 +398,7 @@ async def payments(
     return Page(items=result, total=total, page=page, page_size=page_size)
 
 
-@router.get("/payments/{payment_id}", response_model=CustomerPaymentRead)
+@payment_router.get("/payments/{payment_id}", response_model=CustomerPaymentRead)
 async def payment(
     payment_id: uuid.UUID,
     user: Annotated[User, Depends(current_user)],

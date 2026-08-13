@@ -37,7 +37,13 @@ class Settings(BaseSettings):
     paid_leads_enabled: bool = False
     automatic_refunds_enabled: bool = False
     automatic_booking_enabled: bool = False
+    scheduling_enabled: bool = True
+    automatic_provider_assignment_enabled: bool = False
     automatic_confirmed_bookings: bool = False
+    transactional_email_mode: str = "controlled_canary"
+    transactional_sms_mode: str = "controlled_canary"
+    marketing_email_enabled: bool = False
+    marketing_sms_enabled: bool = False
     geocoding_api_key: str = ""
     geocoding_api_key_file: str = ""
     geocoding_provider: str = "geoapify"
@@ -132,8 +138,12 @@ class Settings(BaseSettings):
             "ONLINE_CHECKOUT_ENABLED": self.online_checkout_enabled,
             "PAID_LEADS_ENABLED": self.paid_leads_enabled,
             "AUTOMATIC_REFUNDS_ENABLED": self.automatic_refunds_enabled,
+            "PAYOUT_ENABLED": self.payout_enabled,
             "AUTOMATIC_BOOKING_ENABLED": self.automatic_booking_enabled,
+            "AUTOMATIC_PROVIDER_ASSIGNMENT_ENABLED": self.automatic_provider_assignment_enabled,
             "AUTOMATIC_CONFIRMED_BOOKINGS": self.automatic_confirmed_bookings,
+            "MARKETING_EMAIL_ENABLED": self.marketing_email_enabled,
+            "MARKETING_SMS_ENABLED": self.marketing_sms_enabled,
         }
         enabled_release_flags = [name for name, enabled in release_payment_flags.items() if enabled]
         if self.app_env.lower() == "production" and enabled_release_flags:
@@ -141,6 +151,12 @@ class Settings(BaseSettings):
                 "request-service release requires disabled flags: "
                 + ", ".join(enabled_release_flags)
             )
+        if self.app_env.lower() == "production" and not self.scheduling_enabled:
+            raise ValueError("SCHEDULING_ENABLED must remain enabled for this release")
+        if self.transactional_email_mode not in {"disabled", "controlled_canary"}:
+            raise ValueError("TRANSACTIONAL_EMAIL_MODE must be disabled or controlled_canary")
+        if self.transactional_sms_mode not in {"disabled", "controlled_canary"}:
+            raise ValueError("TRANSACTIONAL_SMS_MODE must be disabled or controlled_canary")
 
         if self.app_env.lower() == "production":
             missing_file_bindings = [

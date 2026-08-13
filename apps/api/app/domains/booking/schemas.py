@@ -110,3 +110,22 @@ class BookingConfirmation(BaseModel):
 
 class CustomerBookingList(BaseModel):
     items: list[BookingResponse]
+
+
+class OperatorBookingConfirmation(BaseModel):
+    worker_id: uuid.UUID
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class OperatorBookingReschedule(BaseModel):
+    window: BookingWindow
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class OperatorBookingReassignment(BaseModel):
+    worker_id: uuid.UUID
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class OperatorBookingCancellation(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)

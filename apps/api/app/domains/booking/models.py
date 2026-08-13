@@ -25,6 +25,9 @@ from app.domains.common.models import TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class BookingStatus(str, enum.Enum):
+    REQUESTED = "REQUESTED"
+    PENDING_MANUAL_DISPATCH = "PENDING_MANUAL_DISPATCH"
+    TENTATIVE_HOLD = "TENTATIVE_HOLD"
     PENDING_PAYMENT = "PENDING_PAYMENT"
     PENDING_PROVIDER_CONFIRMATION = "PENDING_PROVIDER_CONFIRMATION"
     CONFIRMED = "CONFIRMED"
@@ -129,7 +132,7 @@ class Booking(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status: Mapped[BookingStatus] = mapped_column(
-        Enum(BookingStatus, name="booking_status"), default=BookingStatus.PENDING_PAYMENT
+        Enum(BookingStatus, name="booking_status"), default=BookingStatus.REQUESTED
     )
     pricing_snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)

@@ -47,6 +47,14 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
       utm_term: source.searchParams.get("utm_term") ?? undefined,
       customer_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       transactional_contact_allowed: data.get("transactional_contact_allowed") === "on",
+      transactional_email_consent: data.get("transactional_email_consent") === "on",
+      transactional_sms_consent: data.get("transactional_sms_consent") === "on",
+      marketing_email_consent: data.get("marketing_email_consent") === "on",
+      marketing_sms_consent: data.get("marketing_sms_consent") === "on",
+      consent_disclosures: {
+        transactional_sms: "I agree to receive recurring automated appointment and service-status text messages from BREERO at the number provided. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help. Consent is not a condition of purchase.",
+        marketing_sms: "I agree to receive recurring automated promotional and marketing text messages from BREERO at the number provided. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help. Consent is not a condition of purchase. Marketing SMS is currently disabled.",
+      },
       marketing_consent: false,
       sms_consent: false,
       email_consent: false,
@@ -67,7 +75,8 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
             city: value(data, "city"),
             state: value(data, "state"),
             postal_code: value(data, "postal_code"),
-            requested_timing: value(data, "requested_timing") || undefined,
+            requested_date: value(data, "requested_date") || undefined,
+            requested_timing: value(data, "requested_time") || undefined,
             contact_preference: value(data, "contact_preference"),
           }
         : kind === "contact"
@@ -131,7 +140,8 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
           <label>City<input name="city" required autoComplete="address-level2" /></label>
           <label>State or district<select name="state" required autoComplete="address-level1"><option value="">Select state</option>{["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
           <label>ZIP code<input name="postal_code" required pattern="[0-9]{5}(-[0-9]{4})?" autoComplete="postal-code" /></label>
-          <label>Preferred timing<input name="requested_timing" maxLength={200} placeholder="For example: weekday morning" /></label>
+          <label>Preferred date<input name="requested_date" type="date" required /></label>
+          <label>Preferred local time<input name="requested_time" type="time" min="07:00" max="19:00" required /></label>
           <label>Contact preference<select name="contact_preference"><option value="email">Email</option><option value="phone">Phone</option><option value="text">Text</option></select></label>
         </>
       )}
@@ -154,6 +164,12 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
       )}
       {(kind === "service" || kind === "provider") && <label>{kind === "service" ? "What do you need help with?" : "Anything else we should know?"}<textarea name="message" required={kind === "service"} minLength={kind === "service" ? 5 : undefined} maxLength={4000} /></label>}
       <label><input name="transactional_contact_allowed" type="checkbox" required /> I agree that BREERO may contact me about this request. I understand this is not a confirmed appointment.</label>
+      <fieldset><legend>Optional communications</legend>
+        <label><input name="transactional_email_consent" type="checkbox" /> I agree to receive appointment and service-status email from BREERO.</label>
+        <label><input name="transactional_sms_consent" type="checkbox" /> I agree to receive recurring automated appointment and service-status text messages from BREERO at the number provided. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help. Consent is not a condition of purchase. See <a href="/sms-terms">SMS Terms</a> and <a href="/privacy">Privacy Policy</a>.</label>
+        <label><input name="marketing_email_consent" type="checkbox" /> I separately agree to marketing email. Marketing email is currently disabled.</label>
+        <label><input name="marketing_sms_consent" type="checkbox" /> I agree to receive recurring automated promotional and marketing text messages from BREERO at the number provided. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help. Consent is not a condition of purchase. Marketing SMS is currently disabled. See <a href="/sms-terms">SMS Terms</a> and <a href="/privacy">Privacy Policy</a>.</label>
+      </fieldset>
       <p className="mk-intake__disclosure">BREERO coordinates requests with independent service providers. Providers remain responsible for final estimates, scope, pricing, licensing, permits, insurance, workmanship and service performance.</p>
       <button className="mk-button mk-button--primary" type="submit" disabled={state === "sending" || (kind === "service" && !services.length)}>{state === "sending" ? "Sending…" : kind === "provider" ? "Submit interest" : "Send request"}</button>
       <div aria-live="polite">{state === "accepted" && <p className="mk-intake__success">Your request was accepted. This does not yet confirm availability or provider assignment.</p>}{state === "error" && <p role="alert">We could not accept the request. Please retry or email support@breero.com.</p>}</div>

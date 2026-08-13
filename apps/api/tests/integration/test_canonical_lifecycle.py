@@ -13,7 +13,6 @@ from sqlalchemy import func, select
 
 from app.api.v1.bookings import booking_confirmation, guest_booking
 from app.api.v1.customers import cancel_booking
-from app.api.v1.customers import payment as customer_payment
 from app.db.session import SessionLocal
 from app.domains.auth import models as _auth_models  # noqa: F401
 from app.domains.auth.models import User
@@ -27,6 +26,7 @@ from app.domains.booking.models import (
     ProviderWorkingHours,
     ServiceArea,
 )
+from app.domains.booking.scheduling import OperatorSchedulingService
 from app.domains.booking.schemas import (
     AddressValidateRequest,
     AvailabilitySearchRequest,
@@ -38,29 +38,25 @@ from app.domains.booking.schemas import (
 from app.domains.booking.service import AddressService, AvailabilityService, BookingService
 from app.domains.catalog.models import QuestionType, Service, ServiceQuestion
 from app.domains.catalog.repository import CatalogRepository
-from app.domains.common.outbox import AuditLog, EventStatus, IntegrationEvent
+from app.domains.common.outbox import AuditLog, IntegrationEvent
 from app.domains.common.outbox_service import OutboxService
-from app.domains.dispatch.service import DispatchService
-from app.domains.finance.models import (
-    CompensationMethod,
-    CompensationSnapshot,
-    EarningStatus,
-    PayoutStatus,
-    VendorEarning,
-)
-from app.domains.finance.schemas import CompensationPlanCreate
-from app.domains.finance.service import FinanceService
+from app.domains.finance.models import VendorEarning
 from app.domains.jobs.models import Job, JobStatus, WorkRequestStatus
 from app.domains.jobs.schemas import WorkLineItem, WorkRequestCreate
 from app.domains.jobs.service import JobService
-from app.domains.payments.models import Payment, PaymentPurpose, PaymentStatus
-from app.domains.payments.schemas import PaymentIntentCreate, ProviderIntent, ProviderRefund
-from app.domains.payments.service import PaymentService
+from app.domains.payments.models import Payment
+from app.domains.payments.schemas import ProviderIntent, ProviderRefund
 from app.domains.professional_leads import models as _professional_models  # noqa: F401
-from app.domains.workforce.models import Vendor, VendorStatus, Worker, WorkerStatus
+from app.domains.workforce.models import (
+    ProviderCredential,
+    ProviderCredentialType,
+    Vendor,
+    VendorStatus,
+    Worker,
+    WorkerStatus,
+)
 from app.integrations.geocoding import FakeGeocodingAdapter, GeocodedAddress
 from app.integrations.odoo import MAPPERS
-from app.integrations.payouts import FakePayoutGateway
 
 pytestmark = pytest.mark.skipif(
     not os.getenv("DATABASE_URL", "").startswith("postgresql"),
@@ -178,6 +174,24 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
                 worker_id=worker.id, weekday=service_date.weekday(),
                 start_time=time(7), end_time=time(19), capacity=1,
             ),
+            ProviderCredential(
+                vendor_id=vendor.id,
+                credential_type=ProviderCredentialType.LICENSE,
+                jurisdiction="TX",
+                verified=True,
+                verified_at=datetime.now(UTC),
+                expires_on=service_date + timedelta(days=365),
+                verified_by=vendor.id,
+            ),
+            ProviderCredential(
+                vendor_id=vendor.id,
+                credential_type=ProviderCredentialType.INSURANCE,
+                jurisdiction="US",
+                verified=True,
+                verified_at=datetime.now(UTC),
+                expires_on=service_date + timedelta(days=365),
+                verified_by=vendor.id,
+            ),
         ])
         await session.commit()
 
@@ -233,8 +247,9 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
             ),
             f"booking-{marker}",
         )
-        assert booking.status == BookingStatus.PENDING_PAYMENT
-        assert booking.pricing_snapshot["total"] == "200.00"
+        assert booking.status == BookingStatus.TENTATIVE_HOLD
+        assert booking.pricing_snapshot["total"] == "QUOTE_REQUIRED"
+        assert booking.total_amount == Decimal("0.00")
         guest_token = getattr(booking, "guest_confirmation_token")
         customer = await session.get(Customer, booking.customer_id)
         assert customer
@@ -288,7 +303,8 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
         pending_confirmation = await booking_confirmation(
             booking.id, f"Bearer {guest_token}", session, None
         )
-        assert pending_confirmation.payment_status == "not_started"
+        assert pending_confirmation.payment_status == "disabled"
+        assert pending_confirmation.next_action == "await_operator_confirmation"
         original_expiry = booking.guest_confirmation_expires_at
         booking.guest_confirmation_expires_at = datetime.now(UTC) - timedelta(seconds=1)
         await session.flush()
@@ -298,74 +314,15 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
         booking.guest_confirmation_expires_at = original_expiry
         await session.flush()
 
-        stripe = FakeStripeProvider(marker)
-        payments = PaymentService(session, stripe)
-        booking_payment_view = await payments.create_intent(
-            PaymentIntentCreate(
-                booking_id=booking.id,
-                payment_purpose=PaymentPurpose.BOOKING_DIAGNOSTIC,
-                amount_minor=20000,
-                currency="USD",
-            ),
-            f"booking-payment-{marker}",
+        job = await OperatorSchedulingService(session).confirm(
+            booking.id, worker.id, vendor.id, "Operator verified provider and capacity"
         )
-        booking_payment = await session.get(Payment, booking_payment_view.id)
-        assert booking_payment
-        owned_payment = await customer_payment(booking_payment.id, customer_user, session)
-        assert owned_payment.id == booking_payment.id
-        assert owned_payment.refunded_amount_minor == 0
-        other_user = User(
-            email=f"other-{marker}@example.com",
-            password_hash="not-used-by-route-test",
-            full_name="Other Customer",
-            email_verified=True,
-        )
-        session.add(other_user)
-        await session.flush()
-        session.add(
-            Customer(
-                first_name="Other",
-                last_name="Customer",
-                email=other_user.email,
-                phone="+49444444444",
-                user_id=other_user.id,
-            )
-        )
-        await session.commit()
-        with pytest.raises(HTTPException) as hidden_payment:
-            await customer_payment(booking_payment.id, other_user, session)
-        assert hidden_payment.value.status_code == 404
-        booking_payment.status = PaymentStatus.FAILED
-        await session.flush()
-        failed_confirmation = await booking_confirmation(
-            booking.id, f"Bearer {guest_token}", session, None
-        )
-        assert failed_confirmation.payment_status == "failed"
-        assert failed_confirmation.next_action == "retry_payment"
-        booking_payment.status = PaymentStatus.REQUIRES_ACTION
-        await session.flush()
-        await payments.process_webhook(
-            succeeded_event(f"evt-booking-{marker}", booking_payment),
-            "fake-verified-signature",
-        )
-        await session.refresh(booking)
-        assert booking.status == BookingStatus.PENDING_PROVIDER_CONFIRMATION
         confirmed = await booking_confirmation(
             booking.id, f"Bearer {guest_token}", session, None
         )
-        assert confirmed.booking_status == "PENDING_PROVIDER_CONFIRMATION"
-        assert confirmed.payment_status == "captured"
-        assert confirmed.next_action == "await_provider_confirmation"
-        job = await session.scalar(select(Job).where(Job.booking_id == booking.id))
-        assert job and job.status == JobStatus.CREATED
-
-        offers = await DispatchService(session).match(job.id)
-        offer = next(item for item in offers if item.vendor_id == vendor.id)
-        await DispatchService(session).decide_offer(
-            offer.id, vendor.id, True, worker.id, vendor.id
-        )
-        await session.refresh(job)
-        await session.refresh(booking)
+        assert confirmed.booking_status == "CONFIRMED"
+        assert confirmed.payment_status == "disabled"
+        assert confirmed.next_action == "confirmed"
         assert booking.status == BookingStatus.CONFIRMED
         assert job.status == JobStatus.ASSIGNED and job.worker_id == worker.id
 
@@ -389,92 +346,19 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
         )
         await jobs.review_work_request(request.id, True)
         await jobs.decide_work_request(request.id, True, booking.customer_id)
-        assert request.status == WorkRequestStatus.APPROVED_PENDING_PAYMENT
-
-        quote_payment_view = await payments.create_intent(
-            PaymentIntentCreate(
-                quote_id=request.id,
-                payment_purpose=PaymentPurpose.QUOTE_ADDITIONAL_WORK,
-                amount_minor=5950,
-                currency="USD",
-            ),
-            f"quote-payment-{marker}",
-        )
-        quote_payment = await session.get(Payment, quote_payment_view.id)
-        assert quote_payment
-        await payments.process_webhook(
-            succeeded_event(f"evt-quote-{marker}", quote_payment), "fake-verified-signature"
-        )
+        assert request.status == WorkRequestStatus.APPROVED
         await session.refresh(job)
-        assert request.status == WorkRequestStatus.APPROVED and job.status == JobStatus.IN_PROGRESS
+        assert job.status == JobStatus.IN_PROGRESS
 
-        finance = FinanceService(session, FakePayoutGateway())
-        await finance.create_compensation_plan(
-            CompensationPlanCreate(
-                vendor_id=vendor.id,
-                name="E2E fixed plan",
-                method=CompensationMethod.FIXED_MINOR,
-                fixed_minor=7000,
-                currency="USD",
-                hold_days=0,
-                effective_from=datetime.now(UTC) - timedelta(minutes=1),
-            ),
-            vendor.id,
-        )
-        job_id, worker_id, vendor_id = job.id, worker.id, vendor.id
-        original_recognize = FinanceService.recognize_earning
-
-        async def fail_after_earning(*args, **kwargs):
-            await original_recognize(*args, **kwargs)
-            raise RuntimeError("forced failure after earning creation")
-
-        monkeypatch.setattr(FinanceService, "recognize_earning", fail_after_earning)
-        with pytest.raises(RuntimeError, match="forced failure"):
-            await jobs.technician_note_transition(
-                job.id,
-                worker.id,
-                worker.id,
-                "completion_notes",
-                "Repair complete",
-                JobStatus.COMPLETED,
-            )
-        await session.rollback()
-        rolled_back_job = await session.get(Job, job_id)
-        booking_payment = await session.get(Payment, booking_payment_view.id)
-        quote_payment = await session.get(Payment, quote_payment_view.id)
-        assert rolled_back_job and rolled_back_job.status == JobStatus.IN_PROGRESS
-        assert booking_payment and quote_payment
-        assert await session.scalar(
-            select(func.count()).select_from(VendorEarning).where(VendorEarning.job_id == job_id)
-        ) == 0
-        assert await session.scalar(
-            select(func.count()).select_from(CompensationSnapshot).where(
-                CompensationSnapshot.vendor_id == vendor_id
-            )
-        ) == 0
-        assert await session.scalar(
-            select(func.count()).select_from(IntegrationEvent).where(
-                IntegrationEvent.aggregate_id == job_id,
-                IntegrationEvent.event_type == "job.completed",
-            )
-        ) == 0
-        monkeypatch.setattr(FinanceService, "recognize_earning", original_recognize)
+        job_id, worker_id = job.id, worker.id
         await jobs.technician_note_transition(
             job_id, worker_id, worker_id, "completion_notes", "Repair complete", JobStatus.COMPLETED
         )
         job = await session.get(Job, job_id)
-        earning = await session.scalar(select(VendorEarning).where(VendorEarning.job_id == job_id))
-        assert earning and earning.net_minor == 7000 and earning.status == EarningStatus.PENDING
+        assert job and job.status == JobStatus.COMPLETED
         assert await session.scalar(
             select(func.count()).select_from(VendorEarning).where(VendorEarning.job_id == job_id)
-        ) == 1
-        assert await finance.release_eligible() == 1
-        batch = await finance.create_batch("USD", vendor_id, vendor_id)
-        assert batch.status == PayoutStatus.PENDING_APPROVAL and batch.earning_count == 1
-        await finance.approve_batch(batch.id, vendor_id)
-        submitted = await finance.submit_batch(batch.id, vendor_id)
-        assert submitted.status == PayoutStatus.PROCESSING
-        assert submitted.provider_transfer_id.startswith("fake_")
+        ) == 0
 
         delivered: list[str] = []
 
@@ -485,16 +369,7 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
             delivered.append(event.event_type)
 
         processed = await OutboxService(session).process(fake_odoo, limit=100)
-        assert processed >= 5
-        assert "payout.submitted" in delivered and "job.completed" in delivered
-        remaining = await session.scalar(
-            select(IntegrationEvent).where(
-                IntegrationEvent.aggregate_id == submitted.id,
-                IntegrationEvent.status != EventStatus.DELIVERED,
-            )
-        )
-        assert remaining is None
-        assert booking_payment.status == PaymentStatus.CAPTURED
-        assert quote_payment.status == PaymentStatus.CAPTURED
+        assert processed >= 2
+        assert "booking.confirmed" in delivered and "job.completed" in delivered
         audit_actions = set((await session.scalars(select(AuditLog.action))).all())
-        assert {"assignment.create", "quote.approve", "compensation_plan.change", "payout.approve"} <= audit_actions
+        assert {"booking.operator_confirm", "quote.approve"} <= audit_actions

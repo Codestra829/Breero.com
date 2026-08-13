@@ -11,6 +11,7 @@ from app.domains.auth import models as auth_models  # noqa: F401
 from app.domains.booking import models as booking_models  # noqa: F401
 from app.domains.catalog import models as catalog_models  # noqa: F401
 from app.domains.common import outbox as outbox_models  # noqa: F401
+from app.domains.compliance import models as compliance_models  # noqa: F401
 from app.domains.dispatch import models as dispatch_models  # noqa: F401
 from app.domains.finance import models as finance_models  # noqa: F401
 from app.domains.jobs import models as job_models  # noqa: F401

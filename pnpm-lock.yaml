@@ -149,12 +149,6 @@ importers:
       '@breero/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      '@stripe/react-stripe-js':
-        specifier: ^6.8.1
-        version: 6.8.1(@stripe/stripe-js@9.13.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@stripe/stripe-js':
-        specifier: ^9.13.0
-        version: 9.13.0
       next:
         specifier: ^15.1.0
         version: 15.5.23(@playwright/test@1.62.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -947,17 +941,6 @@ packages:
 
   '@rushstack/eslint-patch@1.16.1':
     resolution: {integrity: sha512-TvZbIpeKqGQQ7X0zSCvPH9riMSFQFSggnfBjFZ1mEoILW+UuXCKwOoPcgjMwiUtRqFZ8jWhPJc4um14vC6I4ag==}
-
-  '@stripe/react-stripe-js@6.8.1':
-    resolution: {integrity: sha512-Wzy7KCF8lM819x8rVFSKUr2ofITdX1c/49ceJprJzGhPzHb3fhrcAoEmNQwV5UYRci7YY1joyG8oz3So3JAMRg==}
-    peerDependencies:
-      '@stripe/stripe-js': '>=9.5.0 <10.0.0'
-      react: '>=16.8.0 <20.0.0'
-      react-dom: '>=16.8.0 <20.0.0'
-
-  '@stripe/stripe-js@9.13.0':
-    resolution: {integrity: sha512-/0c72BUgzzVkVTlsw5uBn8x3waTdVJ/PZGfQ6jY1eu6K7olUPf4d9lgDPA9/0sIdsR8j7o3QIG8fOCO6ItcL7A==}
-    engines: {node: '>=12.16'}
 
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
@@ -3169,15 +3152,6 @@ snapshots:
   '@rtsao/scc@1.1.0': {}
 
   '@rushstack/eslint-patch@1.16.1': {}
-
-  '@stripe/react-stripe-js@6.8.1(@stripe/stripe-js@9.13.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
-    dependencies:
-      '@stripe/stripe-js': 9.13.0
-      prop-types: 15.8.1
-      react: 19.2.8
-      react-dom: 19.2.8(react@19.2.8)
-
-  '@stripe/stripe-js@9.13.0': {}
 
   '@swc/helpers@0.5.15':
     dependencies:

@@ -310,7 +310,7 @@ def test_dispatcher_cannot_approve_payout_or_read_arbitrary_payment() -> None:
     try:
         client = TestClient(app)
         payout = client.post(f"/api/v1/finance/payout-batches/{uuid.uuid4()}/approve")
-        assert payout.status_code == 403
+        assert payout.status_code == 404
         dispatcher.role = UserRole.customer
         payment = client.get(f"/api/v1/payments/{uuid.uuid4()}")
         # The request-only production release does not register payment routes.

@@ -1,10 +1,11 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from geoalchemy2 import Geography
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -30,6 +31,11 @@ class WorkerStatus(str, enum.Enum):
     INVITED = "INVITED"
     ACTIVE = "ACTIVE"
     INACTIVE = "INACTIVE"
+
+
+class ProviderCredentialType(str, enum.Enum):
+    LICENSE = "LICENSE"
+    INSURANCE = "INSURANCE"
 
 
 class Vendor(Base):
@@ -89,4 +95,29 @@ class WorkerLocationEvent(Base):
     accuracy_meters: Mapped[int | None] = mapped_column(Integer)
     recorded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+
+class ProviderCredential(Base):
+    """Operator-verified provider qualification metadata; never stores secret documents."""
+
+    __tablename__ = "provider_credentials"
+    __table_args__ = (UniqueConstraint("vendor_id", "credential_type", "jurisdiction"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    vendor_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("vendors.id", ondelete="CASCADE"), index=True
+    )
+    credential_type: Mapped[ProviderCredentialType] = mapped_column(
+        Enum(ProviderCredentialType, name="provider_credential_type"), index=True
+    )
+    jurisdiction: Mapped[str] = mapped_column(String(3), index=True)
+    reference_last4: Mapped[str | None] = mapped_column(String(4))
+    verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_on: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    verified_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

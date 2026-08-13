@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.domains.booking.models import Booking
 from app.domains.common.outbox import AuditLog, EventStatus, IntegrationEvent
 from app.domains.finance.models import VendorEarning
@@ -164,7 +165,7 @@ class JobService:
         existing = await self.session.scalar(
             select(VendorEarning).where(VendorEarning.job_id == job.id)
         )
-        if not existing:
+        if settings.payout_enabled and not existing:
             booking = await self.session.get(Booking, job.booking_id)
             if not booking:
                 raise HTTPException(409, "Job booking is unavailable")
@@ -226,12 +227,17 @@ class JobService:
             raise HTTPException(403, "Not permitted to decide this request")
         if request.status != WorkRequestStatus.PENDING_CUSTOMER:
             raise HTTPException(409, "Work request has already been decided")
-        self.apply_work_request_transition(
-            request,
-            WorkRequestStatus.APPROVED_PENDING_PAYMENT
-            if approve
-            else WorkRequestStatus.DECLINED,
-        )
+        target = WorkRequestStatus.DECLINED
+        if approve:
+            target = (
+                WorkRequestStatus.APPROVED_PENDING_PAYMENT
+                if settings.payments_enabled
+                else WorkRequestStatus.APPROVED
+            )
+        if target == WorkRequestStatus.APPROVED:
+            request.status = target
+        else:
+            self.apply_work_request_transition(request, target)
         request.customer_decided_at = datetime.now(UTC)
         self.session.add(
             AuditLog(
@@ -242,7 +248,7 @@ class JobService:
                 metadata_json={
                     "previous_status": WorkRequestStatus.PENDING_CUSTOMER.value,
                     "new_status": request.status.value,
-                    "payment_required": approve,
+                    "payment_required": approve and settings.payments_enabled,
                 },
                 created_at=datetime.now(UTC),
             )
@@ -250,6 +256,10 @@ class JobService:
         if not approve:
             self.apply_transition(
                 job, JobStatus.IN_PROGRESS, customer_id, "customer", "additional_work_declined"
+            )
+        elif not settings.payments_enabled:
+            self.apply_transition(
+                job, JobStatus.IN_PROGRESS, customer_id, "customer", "quote_approved_no_payment"
             )
         await self.session.commit()
         await self.session.refresh(request)

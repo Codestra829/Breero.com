@@ -9,6 +9,8 @@ from app.db.session import get_db
 from app.domains.auth.dependencies import require_roles
 from app.domains.auth.models import User, UserRole
 from app.domains.booking.models import ProviderServiceCoverage, ProviderWorkingHours
+from app.domains.booking.scheduling import OperatorSchedulingService
+from app.domains.booking.schemas import OperatorBookingConfirmation
 from app.domains.catalog.models import Service
 from app.domains.common.outbox import AuditLog
 from app.domains.dispatch.schemas import AssignmentRead, ManualAssignment, OfferRead
@@ -19,10 +21,79 @@ from app.domains.public_submissions.schemas import (
     DispatcherQueueItem,
     DispatcherQueueUpdate,
 )
+from app.domains.workforce.models import ProviderCredential
 from app.domains.workforce.repository import WorkforceRepository
-from app.domains.workforce.schemas import BookingCoverageWrite, VendorRead, VendorStatusUpdate
+from app.domains.workforce.schemas import (
+    BookingCoverageWrite,
+    ProviderCredentialRead,
+    ProviderCredentialWrite,
+    VendorRead,
+    VendorStatusUpdate,
+)
 
 router = APIRouter()
+
+
+@router.post("/bookings/{booking_id}/confirm", status_code=201)
+async def confirm_booking(
+    booking_id: uuid.UUID,
+    payload: OperatorBookingConfirmation,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.operations, UserRole.admin)),
+):
+    return await OperatorSchedulingService(session).confirm(
+        booking_id, payload.worker_id, user.id, payload.reason
+    )
+
+
+@router.put(
+    "/vendors/{vendor_id}/credentials/{credential_type}/{jurisdiction}",
+    response_model=ProviderCredentialRead,
+)
+async def upsert_provider_credential(
+    vendor_id: uuid.UUID,
+    credential_type: str,
+    jurisdiction: str,
+    payload: ProviderCredentialWrite,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.operations, UserRole.admin)),
+):
+    if payload.credential_type.value != credential_type.upper() or payload.jurisdiction.upper() != jurisdiction.upper():
+        raise HTTPException(422, "Credential path and payload must match")
+    vendor = await WorkforceRepository(session).get_vendor(vendor_id, lock=True)
+    if not vendor:
+        raise HTTPException(404, "Vendor not found")
+    credential = await session.scalar(select(ProviderCredential).where(
+        ProviderCredential.vendor_id == vendor_id,
+        ProviderCredential.credential_type == payload.credential_type,
+        ProviderCredential.jurisdiction == jurisdiction.upper(),
+    ))
+    if credential is None:
+        credential = ProviderCredential(
+            vendor_id=vendor_id,
+            credential_type=payload.credential_type,
+            jurisdiction=jurisdiction.upper(),
+            expires_on=payload.expires_on,
+        )
+        session.add(credential)
+    credential.reference_last4 = payload.reference_last4
+    credential.expires_on = payload.expires_on
+    credential.verified = payload.verified
+    credential.verified_at = datetime.now(UTC) if payload.verified else None
+    credential.verified_by = user.id if payload.verified else None
+    session.add(AuditLog(
+        actor_id=user.id, actor_type="user", action="provider_credential.update",
+        resource_type="vendor", resource_id=vendor_id,
+        metadata_json={
+            "credential_type": payload.credential_type.value,
+            "jurisdiction": jurisdiction.upper(),
+            "verified": payload.verified,
+            "expires_on": payload.expires_on.isoformat(),
+        }, created_at=datetime.now(UTC),
+    ))
+    await session.commit()
+    await session.refresh(credential)
+    return credential
 
 
 @router.get("/dispatcher/queue", response_model=list[DispatcherQueueItem])

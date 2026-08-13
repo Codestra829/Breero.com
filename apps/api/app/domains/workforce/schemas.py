@@ -1,9 +1,9 @@
 import uuid
-from datetime import time
+from datetime import date, time
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
-from .models import VendorStatus, WorkerStatus
+from .models import ProviderCredentialType, VendorStatus, WorkerStatus
 
 
 class VendorCreate(BaseModel):
@@ -87,3 +87,17 @@ class BookingCoverageWrite(BaseModel):
         if any(not code.isdigit() or len(code) != 5 for code in self.postal_codes):
             raise ValueError("Coverage requires five-digit ZIP codes")
         return self
+
+
+class ProviderCredentialWrite(BaseModel):
+    credential_type: ProviderCredentialType
+    jurisdiction: str = Field(min_length=2, max_length=3)
+    reference_last4: str | None = Field(default=None, min_length=4, max_length=4)
+    expires_on: date
+    verified: bool = False
+
+
+class ProviderCredentialRead(ProviderCredentialWrite):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    vendor_id: uuid.UUID

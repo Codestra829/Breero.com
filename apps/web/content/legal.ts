@@ -1,7 +1,6 @@
 export const legalBusiness = {
   brand: "Breero.com",
   operator: "Codestra LLC",
-  dba: "Breero.com",
   corporateSite: "https://codestra.co",
   supportEmail: "support@breero.com",
   address: {
@@ -13,5 +12,6 @@ export const legalBusiness = {
   },
 } as const;
 
-export const legalIdentity = `${legalBusiness.operator} DBA ${legalBusiness.dba}`;
+// Do not describe BREERO as a registered DBA unless corporate records establish that status.
+export const legalIdentity = `BREERO, operated by ${legalBusiness.operator}`;
 export const legalAddress = `${legalBusiness.address.line1}, ${legalBusiness.address.city}, ${legalBusiness.address.region} ${legalBusiness.address.postalCode}, ${legalBusiness.address.country}`;
