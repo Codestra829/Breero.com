@@ -13,7 +13,7 @@ from app.config import settings
 from app.core.errors import install_error_handlers
 from app.db.session import engine
 
-EXPECTED_SCHEMA_REVISION = "013_odoo_crm_delivery"
+EXPECTED_SCHEMA_REVISION = "014_nationwide_provider_booking"
 logger = structlog.get_logger()
 app = FastAPI(title=settings.app_name, version="1.0.0")
 app.add_middleware(
