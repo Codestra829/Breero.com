@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     odoo_username: str = ""
     odoo_api_key: str = ""
     odoo_enabled: bool = False
+    middleware_enabled: bool = False
+    middleware_url: str = ""
+    middleware_ca_file: str = ""
+    middleware_hmac_key_id: str = ""
+    middleware_hmac_secret_file: str = ""
+    middleware_service_identity: str = ""
+    middleware_audience: str = ""
+    middleware_tenant: str = ""
+    middleware_scope: str = "breero.crm-events.write"
     payout_api_key: str = ""
     metrics_enabled: bool = True
     payout_provider: str = ""
@@ -67,11 +76,17 @@ class Settings(BaseSettings):
         if self.geocoding_enabled:
             required["GEOCODING_API_KEY"] = self.geocoding_api_key
         if self.odoo_enabled:
+            required["DIRECT_ODOO_PROHIBITED_USE_MIDDLEWARE"] = ""
+        if self.middleware_enabled:
             required |= {
-                "ODOO_URL": self.odoo_url,
-                "ODOO_DATABASE": self.odoo_database,
-                "ODOO_USERNAME": self.odoo_username,
-                "ODOO_API_KEY": self.odoo_api_key,
+                "MIDDLEWARE_URL": self.middleware_url,
+                "MIDDLEWARE_CA_FILE": self.middleware_ca_file,
+                "MIDDLEWARE_HMAC_KEY_ID": self.middleware_hmac_key_id,
+                "MIDDLEWARE_HMAC_SECRET_FILE": self.middleware_hmac_secret_file,
+                "MIDDLEWARE_SERVICE_IDENTITY": self.middleware_service_identity,
+                "MIDDLEWARE_AUDIENCE": self.middleware_audience,
+                "MIDDLEWARE_TENANT": self.middleware_tenant,
+                "MIDDLEWARE_SCOPE": self.middleware_scope,
             }
         if self.email_enabled:
             required |= {
