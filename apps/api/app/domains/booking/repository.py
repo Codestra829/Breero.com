@@ -62,7 +62,7 @@ class BookingRepository:
             Booking.service_id == service_id,
             Booking.window_start == start,
             Booking.window_end == end,
-            Booking.status.in_(["PENDING_PAYMENT", "CONFIRMED"]),
+            Booking.status.in_(["TENTATIVE_HOLD", "PROVIDER_ASSIGNED", "SCHEDULED", "CONFIRMED"]),
         )
         return int(await self.session.scalar(stmt) or 0)
 

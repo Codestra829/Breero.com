@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import cast
 
 from sqlalchemy import select, update
@@ -15,12 +15,17 @@ class DispatchRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def candidate_workers(self, capabilities: list[str], limit=20):
+    async def candidate_workers(
+        self, capabilities: list[str], postal_code: str, on_date: date, limit=20
+    ):
         query = (
             select(Vendor, Worker)
             .join(Worker, Worker.vendor_id == Vendor.id)
             .where(Vendor.status == VendorStatus.ACTIVE)
             .where(Worker.status == WorkerStatus.ACTIVE, Worker.available.is_(True))
+            .where(Vendor.covered_postal_codes.contains([postal_code]))
+            .where(Vendor.license_valid_until >= on_date)
+            .where(Vendor.insurance_valid_until >= on_date)
             .limit(limit)
         )
         if capabilities:

@@ -11,7 +11,6 @@ import { ApiError } from "@breero/api-client";
 import { bookingApi } from "../../lib/booking-api";
 import { serviceCatalog as fallbackCatalog } from "../../lib/booking-catalog";
 import { track } from "../../lib/analytics";
-import { StripePaymentForm } from "./StripePaymentForm";
 type Answers = Record<string, string | string[] | boolean>;
 type State = {
   serviceId: string;
@@ -25,13 +24,13 @@ type State = {
   phone: string;
   bookingId?: string;
   bookingKey?: string;
-  paymentId?: string;
-  paymentKey?: string;
-  paymentStatus?: string;
+  requestStatus?: string;
   guestToken?: string;
   amountMinor?: number;
   currency?: string;
-  clientSecret?: string;
+  timezone?: string;
+  manualDispatch?: boolean;
+  urgent?: boolean;
 };
 const empty: State = {
   serviceId: "",
@@ -49,8 +48,8 @@ const labels = [
   "Availability",
   "Details",
   "Review",
-  "Payment",
-  "Confirmation",
+  "Request saved",
+  "Request status",
 ];
 export function BookingWizard() {
   const query = useSearchParams();
@@ -111,16 +110,16 @@ export function BookingWizard() {
     setError("");
     try {
       const result = await api.addresses.validate({ address: state.address });
-      if (!result.serviceable || !result.address_id) {
-        setError(
-          "BREERO does not currently serve this address. Try another address or check back soon.",
-        );
+      if (!result.address_id) {
+        setError("We could not safely save this address. Check it and try again.");
         return;
       }
       setState((v) => ({
         ...v,
         address: result.formatted_address,
         addressId: result.address_id!,
+        timezone: result.timezone ?? undefined,
+        manualDispatch: result.manual_dispatch_required,
       }));
       next();
     } catch {
@@ -144,10 +143,7 @@ export function BookingWizard() {
         date_to: to.toISOString().slice(0, 10),
       });
       setSlots(found);
-      if (!found.length)
-        setError(
-          "No appointments are available in the next two weeks. Try again for updated availability.",
-        );
+      if (!found.length) setState((value) => ({ ...value, manualDispatch: true }));
     } catch {
       setError("Availability could not be loaded. Please retry.");
     } finally {
@@ -183,6 +179,7 @@ export function BookingWizard() {
               value: Array.isArray(value) ? value.join(",") : String(value),
             }),
           ),
+          urgent: state.urgent ?? false,
         },
         key,
       );
@@ -208,39 +205,6 @@ export function BookingWizard() {
       setBusy(false);
     }
   }
-  async function pay() {
-    if (!state.bookingId || !state.guestToken) {
-      setError("This booking session cannot authorize payment. Start again or contact support.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    const key = state.paymentKey ?? crypto.randomUUID();
-    if (!state.paymentKey) setState((v) => ({ ...v, paymentKey: key }));
-    try {
-      const p = await api.bookings.prepareGuestPayment(
-        state.bookingId,
-        state.guestToken,
-        key,
-      );
-      track({ name: "payment_started", bookingId: state.bookingId });
-      setState((v) => ({
-        ...v,
-        paymentId: p.id,
-        paymentStatus: p.status,
-        amountMinor: p.amount_minor,
-        currency: p.currency,
-        clientSecret: p.client_secret ?? undefined,
-      }));
-      if (mockMode || !p.client_secret) setStep(7);
-    } catch {
-      setError(
-        "Payment could not be started. Your booking is saved but not confirmed.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
   async function checkConfirmation() {
     if (!state.bookingId || !state.guestToken) return;
     try {
@@ -250,7 +214,7 @@ export function BookingWizard() {
       );
       setState((v) => ({
         ...v,
-        paymentStatus: confirmation.payment_status,
+        requestStatus: confirmation.booking_status,
         amountMinor: confirmation.amount_minor,
         currency: confirmation.currency,
       }));
@@ -311,7 +275,7 @@ export function BookingWizard() {
                     <b>{s.name}</b>
                     <br />
                     <small>
-                      From €{s.base_price} · {s.duration_minutes} min
+                      Quote required · approximately {s.duration_minutes} min
                     </small>
                   </span>
                 </label>
@@ -325,8 +289,8 @@ export function BookingWizard() {
             <p className="eyebrow">Service address</p>
             <h1>Where do you need help?</h1>
             <p>
-              BREERO asks the platform to determine serviceability and the
-              responsible legal entity.
+              We validate the address and local time zone. If provider coverage is
+              unavailable, your request is saved for manual dispatch.
             </p>
             <div className="field">
               <label htmlFor="address">Full address</label>
@@ -373,6 +337,7 @@ export function BookingWizard() {
           <>
             <p className="eyebrow">Availability</p>
             <h1>Choose an arrival window</h1>
+            <p>Times are interpreted in the service-address time zone: {state.timezone ?? "being resolved"}.</p>
             {busy ? (
               <p className="loading">Checking available times…</p>
             ) : (
@@ -408,6 +373,34 @@ export function BookingWizard() {
                 ))}
               </div>
             )}
+            {!busy && !slots.length && (
+              <div className="field">
+                <label htmlFor="preferred-time">Preferred date and time</label>
+                <input
+                  id="preferred-time"
+                  type="datetime-local"
+                  min={new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16)}
+                  onChange={(event) => {
+                    const start = new Date(event.target.value);
+                    const end = new Date(start.getTime() + (service?.duration_minutes ?? 120) * 60000);
+                    setState((value) => ({
+                      ...value,
+                      slot: { start: start.toISOString(), end: end.toISOString(), remaining_capacity: 0 },
+                      manualDispatch: true,
+                    }));
+                  }}
+                />
+                <small>This is a preference, not a confirmed appointment. An authorized operator must confirm provider coverage and capacity.</small>
+              </div>
+            )}
+            <label className="choice">
+              <input
+                type="checkbox"
+                checked={state.urgent ?? false}
+                onChange={(event) => setState((value) => ({ ...value, urgent: event.target.checked }))}
+              />
+              Urgent home-service request (required for Sunday requests; not for medical or life-safety emergencies)
+            </label>
             <button
               className="button-secondary"
               type="button"
@@ -475,14 +468,14 @@ export function BookingWizard() {
                 </span>
               </div>
               <div>
-                <b>Starting total</b>
-                <span>€{service?.base_price}</span>
+                <b>Pricing</b>
+                <span>Quote required</span>
               </div>
             </div>
             <p>
               <small>
-                Additional work is never added without a separate quote and your
-                approval.
+                No online payment is required or collected. Every request requires
+                a quote, provider verification, capacity check, and operator confirmation.
               </small>
             </p>
             <Actions
@@ -495,38 +488,31 @@ export function BookingWizard() {
         )}
         {step === 6 && (
           <>
-            <p className="eyebrow">Secure payment</p>
-            <h1>Complete payment</h1>
+            <p className="eyebrow">Request saved</p>
+            <h1>Your service request was received</h1>
             <p>
-              Your booking reference is <b>{state.bookingId}</b>. Payment
-              confirmation comes from the backend/provider—not the browser
-              redirect.
+              Your reference is <b>{state.bookingId}</b>. This is not yet a confirmed
+              appointment. Operations will verify a qualified provider, ZIP coverage,
+              credentials, working hours, and capacity.
             </p>
             <div className="notice">
-              Secure provider handoff · {state.amountMinor !== undefined ? (state.amountMinor / 100).toFixed(2) : service?.base_price} {state.currency ?? ""}
+              Quote required · No online payment is required or collected at this time.
             </div>
-            {state.clientSecret && !mockMode ? (
-              <StripePaymentForm clientSecret={state.clientSecret} onSubmitted={() => setStep(7)} />
-            ) : (
-              <Actions back={back} next={pay} busy={busy} nextLabel="Continue to payment" />
-            )}
+            <Actions back={back} next={() => setStep(7)} nextLabel="View request status" />
           </>
         )}
         {step === 7 && (
           <>
             <p className="eyebrow">Status check</p>
             <h1>
-              {state.paymentStatus === "failed"
-                ? "Payment needs attention"
-                : "We’re confirming your booking"}
+              We’re reviewing your request
             </h1>
             <p>
-              {state.paymentStatus === "failed"
-                ? "Your booking is saved, but payment failed. Retry payment or contact support."
-                : "Payment is processing. We’ll show confirmed only after BREERO receives authoritative provider status."}
+              We will show a confirmed appointment only after provider capacity and
+              an authorized operator confirmation are recorded.
             </p>
             <p className="notice">
-              Current status: {state.paymentStatus ?? "pending"}
+              Current status: {state.requestStatus ?? (state.manualDispatch ? "PENDING_MANUAL_DISPATCH" : "TENTATIVE_HOLD")}
             </p>
             <button className="button-secondary" type="button" onClick={() => void checkConfirmation()}>
               Check status again

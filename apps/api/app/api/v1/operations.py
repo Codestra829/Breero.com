@@ -6,12 +6,40 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.domains.auth.dependencies import require_roles
 from app.domains.auth.models import User, UserRole
+from app.domains.booking.scheduling import SchedulingService
+from app.domains.booking.schemas import (
+    BookingCancellationRequest,
+    BookingRescheduleRequest,
+    BookingResponse,
+)
 from app.domains.dispatch.schemas import AssignmentRead, ManualAssignment, OfferRead
 from app.domains.dispatch.service import DispatchService
 from app.domains.workforce.repository import WorkforceRepository
 from app.domains.workforce.schemas import VendorRead, VendorStatusUpdate
 
 router = APIRouter()
+
+
+@router.post("/bookings/{booking_id}/reschedule", response_model=BookingResponse)
+async def reschedule_booking(
+    booking_id: uuid.UUID,
+    payload: BookingRescheduleRequest,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.operations, UserRole.admin)),
+):
+    return await SchedulingService(session).reschedule(booking_id, payload, user.id)
+
+
+@router.post("/bookings/{booking_id}/cancel", response_model=BookingResponse)
+async def cancel_booking(
+    booking_id: uuid.UUID,
+    payload: BookingCancellationRequest,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.operations, UserRole.admin)),
+):
+    return await SchedulingService(session).cancel(
+        booking_id, payload.reason, payload.expected_version, user.id
+    )
 
 
 @router.post("/jobs/{job_id}/match", response_model=list[OfferRead])
@@ -31,6 +59,18 @@ async def assign_job(
     user: User = Depends(require_roles(UserRole.operations, UserRole.admin)),
 ):
     return await DispatchService(session).manual_assign(
+        job_id, payload.vendor_id, payload.worker_id, user.id, payload.reason
+    )
+
+
+@router.post("/jobs/{job_id}/reassign", response_model=AssignmentRead, status_code=201)
+async def reassign_job(
+    job_id: uuid.UUID,
+    payload: ManualAssignment,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.operations, UserRole.admin)),
+):
+    return await DispatchService(session).reassign(
         job_id, payload.vendor_id, payload.worker_id, user.id, payload.reason
     )
 

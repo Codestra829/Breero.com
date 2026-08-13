@@ -18,7 +18,7 @@ TRANSITIONS: dict[JobStatus, set[JobStatus]] = {
     JobStatus.CREATED: {JobStatus.MATCHING, JobStatus.CANCELLED},
     JobStatus.MATCHING: {JobStatus.OFFERED, JobStatus.ASSIGNED, JobStatus.CANCELLED},
     JobStatus.OFFERED: {JobStatus.MATCHING, JobStatus.ASSIGNED, JobStatus.CANCELLED},
-    JobStatus.ASSIGNED: {JobStatus.EN_ROUTE, JobStatus.CANCELLED},
+    JobStatus.ASSIGNED: {JobStatus.MATCHING, JobStatus.EN_ROUTE, JobStatus.CANCELLED},
     JobStatus.EN_ROUTE: {JobStatus.ON_SITE, JobStatus.CANCELLED},
     JobStatus.ON_SITE: {JobStatus.DIAGNOSING, JobStatus.IN_PROGRESS, JobStatus.CANCELLED},
     JobStatus.DIAGNOSING: {JobStatus.AWAITING_APPROVAL, JobStatus.IN_PROGRESS, JobStatus.CANCELLED},
@@ -35,7 +35,7 @@ WORK_REQUEST_TRANSITIONS: dict[WorkRequestStatus, set[WorkRequestStatus]] = {
         WorkRequestStatus.DECLINED,
     },
     WorkRequestStatus.PENDING_CUSTOMER: {
-        WorkRequestStatus.APPROVED_PENDING_PAYMENT,
+        WorkRequestStatus.APPROVED,
         WorkRequestStatus.DECLINED,
     },
     WorkRequestStatus.APPROVED_PENDING_PAYMENT: {WorkRequestStatus.APPROVED},
@@ -228,7 +228,7 @@ class JobService:
             raise HTTPException(409, "Work request has already been decided")
         self.apply_work_request_transition(
             request,
-            WorkRequestStatus.APPROVED_PENDING_PAYMENT
+            WorkRequestStatus.APPROVED
             if approve
             else WorkRequestStatus.DECLINED,
         )
@@ -242,12 +242,17 @@ class JobService:
                 metadata_json={
                     "previous_status": WorkRequestStatus.PENDING_CUSTOMER.value,
                     "new_status": request.status.value,
-                    "payment_required": approve,
+                    "payment_required": False,
+                    "quote_required": True,
                 },
                 created_at=datetime.now(UTC),
             )
         )
-        if not approve:
+        if approve:
+            self.apply_transition(
+                job, JobStatus.IN_PROGRESS, customer_id, "customer", "quote_approved_no_payment"
+            )
+        else:
             self.apply_transition(
                 job, JobStatus.IN_PROGRESS, customer_id, "customer", "additional_work_declined"
             )

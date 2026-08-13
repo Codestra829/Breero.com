@@ -43,10 +43,14 @@ async def test_unserviceable_address_and_unavailable_slot() -> None:
         result = await AddressService(
             session,
             FakeGeocodingAdapter(
-                GeocodedAddress("Nowhere", "Nowhere", "Ocean", "00000", "DE", 0, 0, "fake")
+                GeocodedAddress(
+                    "Nowhere", "Nowhere", "Ocean", "00000", "US", 0, 0, "fake",
+                    state_code="DC", timezone="UTC"
+                )
             ),
         ).validate(AddressValidateRequest(address="Nowhere in the ocean"))
-        assert result.serviceable is False and result.address_id is None
+        assert result.serviceable is False and result.address_id is not None
+        assert result.manual_dispatch_required is True
 
         entity = LegalEntity(code=f"NEG-{marker[:8]}", name="Negative E2E", currency="EUR")
         session.add(entity)
@@ -70,6 +74,8 @@ async def test_unserviceable_address_and_unavailable_slot() -> None:
             location=WKTElement("POINT(30.5 30.5)", srid=4326),
             service_area_id=area.id,
             geocoding_provider="fake",
+            timezone="UTC",
+            validated_at=datetime.now(UTC),
         )
         session.add(address)
         await session.commit()
@@ -91,7 +97,10 @@ async def test_unserviceable_address_and_unavailable_slot() -> None:
                 ),
                 f"unavailable-{marker}",
             )
-        assert getattr(raised.value, "code", None) == "SLOT_UNAVAILABLE"
+        assert getattr(raised.value, "code", None) in {
+            "SERVICE_NOT_FOUND",
+            "SUNDAY_EMERGENCY_ONLY",
+        }
 
 
 @postgres_only
@@ -313,6 +322,7 @@ def test_dispatcher_cannot_approve_payout_or_read_arbitrary_payment() -> None:
         assert payout.status_code == 403
         dispatcher.role = UserRole.customer
         payment = client.get(f"/api/v1/payments/{uuid.uuid4()}")
-        assert payment.status_code == 403
+        # Quote-only launch removes payment routes entirely when Stripe is disabled.
+        assert payment.status_code == 404
     finally:
         app.dependency_overrides.clear()

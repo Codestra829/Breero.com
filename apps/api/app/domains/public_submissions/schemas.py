@@ -4,6 +4,11 @@ from typing import Literal
 
 from pydantic import AnyHttpUrl, BaseModel, EmailStr, Field, field_validator
 
+US_STATES_AND_DC = frozenset(
+    "AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT "
+    "NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC".split()
+)
+
 
 class TrackingFields(BaseModel):
     source_url: AnyHttpUrl
@@ -41,9 +46,9 @@ class ServiceRequestCreate(TrackingFields):
 
     @field_validator("state")
     @classmethod
-    def texas_only(cls, value: str) -> str:
-        if value != "TX":
-            raise ValueError("BREERO launch requests are currently limited to approved Texas coverage")
+    def valid_us_state_or_dc(cls, value: str) -> str:
+        if value not in US_STATES_AND_DC:
+            raise ValueError("state must be a valid U.S. state or Washington, D.C.")
         return value
 
 

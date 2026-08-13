@@ -39,8 +39,8 @@ export default function HomePage() {
       </section>
 
       <section id="how-it-works" className="shell market-section split">
-        <div><p className="market-eyebrow">How it works</p><h2>From “needs doing” to done.</h2><p>Tell us what you need. We confirm serviceability and availability with BREERO, then keep you informed through payment and confirmation.</p></div>
-        <div className="steps"><div><b>Choose your service</b><p>Answer only the questions relevant to the work.</p></div><div><b>Pick a time</b><p>See live availability for your validated address.</p></div><div><b>Book with confidence</b><p>Review everything before payment and track authoritative status.</p></div></div>
+        <div><p className="market-eyebrow">How it works</p><h2>From “needs doing” to done.</h2><p>Tell us what you need. We validate the address, recommend a qualified provider, and confirm the appointment only after an operator verifies capacity.</p></div>
+        <div className="steps"><div><b>Choose your service</b><p>Answer only the questions relevant to the work.</p></div><div><b>Request a time</b><p>Select a preferred time in the service-address time zone.</p></div><div><b>Schedule with confidence</b><p>All work requires a quote. No online payment is required or collected at this time.</p></div></div>
       </section>
 
       <section className="shell market-section split">
@@ -50,7 +50,7 @@ export default function HomePage() {
 
       <section className="shell market-section split">
         <div><p className="market-eyebrow">For professionals</p><h2>Do great work. We’ll help with the rest.</h2><p>Join a marketplace designed for dependable service businesses and skilled home professionals.</p><a className="market-button-secondary" href="mailto:partners@breero.com">Become a partner</a></div>
-        <div className="faq"><h2>Questions, answered.</h2><details><summary>How are professionals selected?</summary><p>BREERO verifies partner details and qualifications appropriate to each service.</p></details><details><summary>When do I pay?</summary><p>You review the booking before entering the secure payment handoff. A redirect alone never marks a booking paid.</p></details><details><summary>Can I change my booking?</summary><p>Sign in to view your booking and contact support for changes.</p></details></div>
+        <div className="faq"><h2>Questions, answered.</h2><details><summary>How are professionals selected?</summary><p>BREERO verifies service capability, ZIP coverage, licensing, insurance, working hours, and capacity before an operator confirms an appointment.</p></details><details><summary>When do I pay?</summary><p>Online payment is not required or collected at this time. All work requires a quote.</p></details><details><summary>Can I change my appointment request?</summary><p>Sign in to view your request and contact support to reschedule or cancel.</p></details></div>
       </section>
     </div>
   );

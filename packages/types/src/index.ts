@@ -21,11 +21,12 @@ export interface ServiceDetail extends ServiceSummary { questions: ServiceQuesti
 
 export interface AddressValidationRequest {
   address: string; line1?: string; city?: string; postal_code?: string;
-  country_code?: string; latitude?: number; longitude?: number;
+  country_code?: string; latitude?: number; longitude?: number; timezone?: string;
 }
 export interface AddressValidation {
   serviceable: boolean; formatted_address: string; address_id: UUID | null;
   service_area_id: UUID | null; legal_entity_code: string | null;
+  timezone: string | null; manual_dispatch_required: boolean;
 }
 export interface AvailabilitySearchRequest {
   service_id: UUID; address_id: UUID; date_from: ISODate; date_to: ISODate;
@@ -37,6 +38,7 @@ export interface BookingAnswerInput { question_id: UUID; value: string }
 export interface BookingCreateRequest {
   service_id: UUID; customer: CustomerInput; address_id: UUID;
   window: { start: ISODateTime; end: ISODateTime }; answers: BookingAnswerInput[];
+  urgent?: boolean;
 }
 export interface Booking {
   id: UUID; reference: string; status: string; total_amount: MoneyAmount; currency: string;
@@ -46,7 +48,8 @@ export interface BookingCreateResponse extends Booking { guest_confirmation_toke
 export interface BookingConfirmation {
   booking_id: UUID; reference: string; booking_status: string; payment_status: string;
   window_start: ISODateTime; window_end: ISODateTime; amount_minor: number; currency: string;
-  next_action: "confirmed" | "retry_payment" | "booking_unavailable" | "await_payment_confirmation";
+  next_action: "confirmed" | "booking_unavailable" | "await_manual_dispatch" | "await_operator_confirmation" | "await_provider_match";
+  payment_required: false; quote_required: true;
 }
 export interface CustomerBookingList { items: Booking[] }
 

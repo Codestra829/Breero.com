@@ -16,6 +16,7 @@ class AddressValidateRequest(BaseModel):
     country_code: str = Field(default="US", min_length=2, max_length=2)
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
+    timezone: str | None = Field(default=None, min_length=3, max_length=64)
 
     @model_validator(mode="after")
     def coordinates_are_a_pair(self) -> "AddressValidateRequest":
@@ -30,6 +31,8 @@ class AddressValidationResponse(BaseModel):
     address_id: uuid.UUID | None
     service_area_id: uuid.UUID | None
     legal_entity_code: str | None
+    timezone: str | None
+    manual_dispatch_required: bool
 
 
 class AvailabilitySearchRequest(BaseModel):
@@ -76,6 +79,7 @@ class BookingCreateRequest(BaseModel):
     address_id: uuid.UUID
     window: BookingWindow
     answers: list[BookingAnswerInput] = Field(default_factory=list)
+    urgent: bool = False
 
 
 class BookingResponse(BaseModel):
@@ -106,7 +110,21 @@ class BookingConfirmation(BaseModel):
     amount_minor: int
     currency: str
     next_action: str
+    payment_required: bool = False
+    quote_required: bool = True
 
 
 class CustomerBookingList(BaseModel):
     items: list[BookingResponse]
+
+
+class BookingRescheduleRequest(BaseModel):
+    window: BookingWindow
+    reason: str = Field(min_length=3, max_length=500)
+    expected_version: int = Field(ge=1)
+    urgent: bool = False
+
+
+class BookingCancellationRequest(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+    expected_version: int = Field(ge=1)

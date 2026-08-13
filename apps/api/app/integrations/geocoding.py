@@ -20,6 +20,7 @@ class GeocodedAddress:
     confidence: float | None = None
     quality: str | None = None
     state_code: str | None = None
+    timezone: str | None = None
 
 
 class FakeGeocodingAdapter:
@@ -58,4 +59,5 @@ class GeocodingAdapter:
             provider_reference=props.get("place_id"),
             confidence=props.get("rank", {}).get("confidence"),
             quality=props.get("rank", {}).get("match_type"),
+            timezone=(props.get("timezone") or {}).get("name"),
         )

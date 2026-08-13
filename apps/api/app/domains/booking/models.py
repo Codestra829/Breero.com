@@ -24,6 +24,11 @@ from app.domains.common.models import TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class BookingStatus(str, enum.Enum):
+    REQUESTED = "REQUESTED"
+    PENDING_MANUAL_DISPATCH = "PENDING_MANUAL_DISPATCH"
+    TENTATIVE_HOLD = "TENTATIVE_HOLD"
+    PROVIDER_ASSIGNED = "PROVIDER_ASSIGNED"
+    SCHEDULED = "SCHEDULED"
     PENDING_PAYMENT = "PENDING_PAYMENT"
     CONFIRMED = "CONFIRMED"
     CANCELLED = "CANCELLED"
@@ -63,6 +68,8 @@ class Address(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     location: Mapped[object] = mapped_column(Geometry("POINT", srid=4326), nullable=False)
     service_area_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("service_areas.id"))
     geocoding_provider: Mapped[str] = mapped_column(String(40), default="provided")
+    timezone: Mapped[str | None] = mapped_column(String(64))
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     customer_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("customers.id", ondelete="CASCADE"), index=True
     )
@@ -99,12 +106,12 @@ class Booking(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     idempotency_request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"), index=True)
     address_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("addresses.id"))
-    legal_entity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("legal_entities.id"))
+    legal_entity_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("legal_entities.id"))
     service_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status: Mapped[BookingStatus] = mapped_column(
-        Enum(BookingStatus, name="booking_status"), default=BookingStatus.PENDING_PAYMENT
+        Enum(BookingStatus, name="booking_status"), default=BookingStatus.REQUESTED
     )
     pricing_snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -117,6 +124,15 @@ class Booking(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     guest_confirmation_revoked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )
+    hold_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confirmed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    cancellation_reason: Mapped[str | None] = mapped_column(Text)
+    scheduling_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    @property
+    def payment_required(self) -> bool:
+        return False
 
 
 class BookingAnswer(UUIDPrimaryKeyMixin, Base):

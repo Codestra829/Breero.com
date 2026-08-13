@@ -47,7 +47,7 @@ export function createMockBreeroApi(scenario: MockScenario = {}): BreeroApi {
       guestConfirmation: (id, _token, s) => run("bookings", () => {
         const booking = scenario.bookings?.find((item) => item.id === id) ?? missing(`booking ${id}`);
         const payment = scenario.payments?.find((item) => item.booking_id === id);
-        return { booking_id: booking.id, reference: booking.reference, booking_status: booking.status, payment_status: payment?.status ?? "not_started", window_start: booking.window_start, window_end: booking.window_end, amount_minor: Math.round(Number(booking.total_amount) * 100), currency: booking.currency, next_action: booking.status === "CONFIRMED" ? "confirmed" as const : "await_payment_confirmation" as const };
+        return { booking_id: booking.id, reference: booking.reference, booking_status: booking.status, payment_status: payment?.status ?? "disabled", window_start: booking.window_start, window_end: booking.window_end, amount_minor: Math.round(Number(booking.total_amount) * 100), currency: booking.currency, next_action: booking.status === "CONFIRMED" ? "confirmed" as const : "await_operator_confirmation" as const, payment_required: false as const, quote_required: true as const };
       }, s),
       mine: (_params, s) => run("bookings", () => ({ items: scenario.bookings ?? [], total: scenario.bookings?.length ?? 0, page: 1, page_size: 20 }), s),
       getMine: (id, s) => run("bookings", () => scenario.bookings?.find((item) => item.id === id) ?? missing(`booking ${id}`), s),

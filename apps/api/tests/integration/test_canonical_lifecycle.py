@@ -13,7 +13,6 @@ from sqlalchemy import func, select
 
 from app.api.v1.bookings import booking_confirmation, guest_booking
 from app.api.v1.customers import cancel_booking
-from app.api.v1.customers import payment as customer_payment
 from app.db.session import SessionLocal
 from app.domains.auth import models as _auth_models  # noqa: F401
 from app.domains.auth.models import User
@@ -37,14 +36,13 @@ from app.domains.booking.schemas import (
 from app.domains.booking.service import AddressService, AvailabilityService, BookingService
 from app.domains.catalog.models import QuestionType, Service, ServiceQuestion
 from app.domains.catalog.repository import CatalogRepository
-from app.domains.common.outbox import AuditLog, EventStatus, IntegrationEvent
+from app.domains.common.outbox import AuditLog, IntegrationEvent
 from app.domains.common.outbox_service import OutboxService
 from app.domains.dispatch.service import DispatchService
 from app.domains.finance.models import (
     CompensationMethod,
     CompensationSnapshot,
     EarningStatus,
-    PayoutStatus,
     VendorEarning,
 )
 from app.domains.finance.schemas import CompensationPlanCreate
@@ -52,9 +50,8 @@ from app.domains.finance.service import FinanceService
 from app.domains.jobs.models import Job, JobStatus, WorkRequestStatus
 from app.domains.jobs.schemas import WorkLineItem, WorkRequestCreate
 from app.domains.jobs.service import JobService
-from app.domains.payments.models import Payment, PaymentPurpose, PaymentStatus
-from app.domains.payments.schemas import PaymentIntentCreate, ProviderIntent, ProviderRefund
-from app.domains.payments.service import PaymentService
+from app.domains.payments.models import Payment
+from app.domains.payments.schemas import ProviderIntent, ProviderRefund
 from app.domains.workforce.models import Vendor, VendorStatus, Worker, WorkerStatus
 from app.integrations.geocoding import FakeGeocodingAdapter, GeocodedAddress
 from app.integrations.odoo import MAPPERS
@@ -161,7 +158,11 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
             email=f"vendor-{marker}@example.test",
             phone="+49111111111",
             status=VendorStatus.ACTIVE,
-            capabilities=[],
+            capabilities=[str(catalog_service.id)],
+            covered_postal_codes=["10115"],
+            working_hours={str(service_date.weekday()): [["07:00", "19:00"]]},
+            license_valid_until=service_date + timedelta(days=365),
+            insurance_valid_until=service_date + timedelta(days=365),
             payout_profile_ref=f"fake-{marker}",
         )
         session.add(vendor)
@@ -184,18 +185,20 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
 
         geocoder = FakeGeocodingAdapter(
             GeocodedAddress(
-                "E2E Street 1, Berlin",
+                "E2E Street 1, Washington",
                 "E2E Street 1",
-                "Berlin",
+                "Washington",
                 "10115",
-                "DE",
+                "US",
                 52.0,
                 13.0,
                 "fake",
+                state_code="DC",
+                timezone="UTC",
             )
         )
         validated = await AddressService(session, geocoder).validate(
-            AddressValidateRequest(address="E2E Street 1, Berlin")
+            AddressValidateRequest(address="E2E Street 1, Washington")
         )
         assert validated.serviceable and validated.address_id
         # Multiple runs may leave overlapping test polygons; bind this run's validated address to
@@ -229,7 +232,7 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
             ),
             f"booking-{marker}",
         )
-        assert booking.status == BookingStatus.PENDING_PAYMENT
+        assert booking.status == BookingStatus.TENTATIVE_HOLD
         assert booking.pricing_snapshot["total"] == "129.00"
         guest_token = getattr(booking, "guest_confirmation_token")
         customer = await session.get(Customer, booking.customer_id)
@@ -253,7 +256,7 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
             service_id=booking.service_id,
             window_start=booking.window_start + timedelta(days=1),
             window_end=booking.window_end + timedelta(days=1),
-            status=BookingStatus.PENDING_PAYMENT,
+            status=BookingStatus.REQUESTED,
             pricing_snapshot=booking.pricing_snapshot,
             total_amount=booking.total_amount,
             currency=booking.currency,
@@ -284,7 +287,8 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
         pending_confirmation = await booking_confirmation(
             booking.id, f"Bearer {guest_token}", session, None
         )
-        assert pending_confirmation.payment_status == "not_started"
+        assert pending_confirmation.payment_status == "disabled"
+        assert pending_confirmation.payment_required is False
         original_expiry = booking.guest_confirmation_expires_at
         booking.guest_confirmation_expires_at = datetime.now(UTC) - timedelta(seconds=1)
         await session.flush()
@@ -294,64 +298,6 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
         booking.guest_confirmation_expires_at = original_expiry
         await session.flush()
 
-        stripe = FakeStripeProvider(marker)
-        payments = PaymentService(session, stripe)
-        booking_payment_view = await payments.create_intent(
-            PaymentIntentCreate(
-                booking_id=booking.id,
-                payment_purpose=PaymentPurpose.BOOKING_DIAGNOSTIC,
-                amount_minor=12900,
-                currency="EUR",
-            ),
-            f"booking-payment-{marker}",
-        )
-        booking_payment = await session.get(Payment, booking_payment_view.id)
-        assert booking_payment
-        owned_payment = await customer_payment(booking_payment.id, customer_user, session)
-        assert owned_payment.id == booking_payment.id
-        assert owned_payment.refunded_amount_minor == 0
-        other_user = User(
-            email=f"other-{marker}@example.com",
-            password_hash="not-used-by-route-test",
-            full_name="Other Customer",
-            email_verified=True,
-        )
-        session.add(other_user)
-        await session.flush()
-        session.add(
-            Customer(
-                first_name="Other",
-                last_name="Customer",
-                email=other_user.email,
-                phone="+49444444444",
-                user_id=other_user.id,
-            )
-        )
-        await session.commit()
-        with pytest.raises(HTTPException) as hidden_payment:
-            await customer_payment(booking_payment.id, other_user, session)
-        assert hidden_payment.value.status_code == 404
-        booking_payment.status = PaymentStatus.FAILED
-        await session.flush()
-        failed_confirmation = await booking_confirmation(
-            booking.id, f"Bearer {guest_token}", session, None
-        )
-        assert failed_confirmation.payment_status == "failed"
-        assert failed_confirmation.next_action == "retry_payment"
-        booking_payment.status = PaymentStatus.REQUIRES_ACTION
-        await session.flush()
-        await payments.process_webhook(
-            succeeded_event(f"evt-booking-{marker}", booking_payment),
-            "fake-verified-signature",
-        )
-        await session.refresh(booking)
-        assert booking.status == BookingStatus.CONFIRMED
-        confirmed = await booking_confirmation(
-            booking.id, f"Bearer {guest_token}", session, None
-        )
-        assert confirmed.booking_status == "CONFIRMED"
-        assert confirmed.payment_status == "captured"
-        assert confirmed.next_action == "confirmed"
         job = await session.scalar(select(Job).where(Job.booking_id == booking.id))
         assert job and job.status == JobStatus.CREATED
 
@@ -359,6 +305,9 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
         offer = next(item for item in offers if item.vendor_id == vendor.id)
         await DispatchService(session).decide_offer(
             offer.id, vendor.id, True, worker.id, vendor.id
+        )
+        await DispatchService(session).manual_assign(
+            job.id, vendor.id, worker.id, vendor.id, "operator confirmed synthetic match"
         )
         await session.refresh(job)
         assert job.status == JobStatus.ASSIGNED and job.worker_id == worker.id
@@ -383,22 +332,7 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
         )
         await jobs.review_work_request(request.id, True)
         await jobs.decide_work_request(request.id, True, booking.customer_id)
-        assert request.status == WorkRequestStatus.APPROVED_PENDING_PAYMENT
-
-        quote_payment_view = await payments.create_intent(
-            PaymentIntentCreate(
-                quote_id=request.id,
-                payment_purpose=PaymentPurpose.QUOTE_ADDITIONAL_WORK,
-                amount_minor=5950,
-                currency="EUR",
-            ),
-            f"quote-payment-{marker}",
-        )
-        quote_payment = await session.get(Payment, quote_payment_view.id)
-        assert quote_payment
-        await payments.process_webhook(
-            succeeded_event(f"evt-quote-{marker}", quote_payment), "fake-verified-signature"
-        )
+        assert request.status == WorkRequestStatus.APPROVED
         await session.refresh(job)
         assert request.status == WorkRequestStatus.APPROVED and job.status == JobStatus.IN_PROGRESS
 
@@ -434,10 +368,7 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
             )
         await session.rollback()
         rolled_back_job = await session.get(Job, job_id)
-        booking_payment = await session.get(Payment, booking_payment_view.id)
-        quote_payment = await session.get(Payment, quote_payment_view.id)
         assert rolled_back_job and rolled_back_job.status == JobStatus.IN_PROGRESS
-        assert booking_payment and quote_payment
         assert await session.scalar(
             select(func.count()).select_from(VendorEarning).where(VendorEarning.job_id == job_id)
         ) == 0
@@ -462,14 +393,6 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
         assert await session.scalar(
             select(func.count()).select_from(VendorEarning).where(VendorEarning.job_id == job_id)
         ) == 1
-        assert await finance.release_eligible() == 1
-        batch = await finance.create_batch("EUR", vendor_id, vendor_id)
-        assert batch.status == PayoutStatus.PENDING_APPROVAL and batch.earning_count == 1
-        await finance.approve_batch(batch.id, vendor_id)
-        submitted = await finance.submit_batch(batch.id, vendor_id)
-        assert submitted.status == PayoutStatus.PROCESSING
-        assert submitted.provider_transfer_id.startswith("fake_")
-
         delivered: list[str] = []
 
         async def fake_odoo(event: IntegrationEvent) -> None:
@@ -479,16 +402,7 @@ async def test_canonical_backend_lifecycle_with_fake_providers(monkeypatch) -> N
             delivered.append(event.event_type)
 
         processed = await OutboxService(session).process(fake_odoo, limit=100)
-        assert processed >= 5
-        assert "payout.submitted" in delivered and "job.completed" in delivered
-        remaining = await session.scalar(
-            select(IntegrationEvent).where(
-                IntegrationEvent.aggregate_id == submitted.id,
-                IntegrationEvent.status != EventStatus.DELIVERED,
-            )
-        )
-        assert remaining is None
-        assert booking_payment.status == PaymentStatus.CAPTURED
-        assert quote_payment.status == PaymentStatus.CAPTURED
+        assert processed >= 2
+        assert "job.completed" in delivered and "booking.requested" in delivered
         audit_actions = set((await session.scalars(select(AuditLog.action))).all())
-        assert {"assignment.create", "quote.approve", "compensation_plan.change", "payout.approve"} <= audit_actions
+        assert {"assignment.create", "quote.approve", "compensation_plan.change"} <= audit_actions

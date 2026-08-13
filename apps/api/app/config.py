@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_enabled: bool = False
+    scheduling_enabled: bool = True
+    automatic_booking_enabled: bool = False
+    automatic_provider_assignment_enabled: bool = False
     geocoding_api_key: str = ""
     geocoding_provider: str = "geoapify"
     geocoding_enabled: bool = False
@@ -43,6 +46,7 @@ class Settings(BaseSettings):
     metrics_enabled: bool = True
     payout_provider: str = ""
     payout_enabled: bool = False
+    paid_leads_enabled: bool = False
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_username: str = ""
@@ -75,6 +79,17 @@ class Settings(BaseSettings):
                 "STRIPE_SECRET_KEY": self.stripe_secret_key,
                 "STRIPE_WEBHOOK_SECRET": self.stripe_webhook_secret,
             }
+        if self.app_env.lower() == "production" and (
+            self.stripe_enabled or self.payout_enabled or self.paid_leads_enabled
+        ):
+            raise ValueError(
+                "BREERO production launch is quote-only; payments, payouts, and paid leads "
+                "must remain disabled"
+            )
+        if self.automatic_booking_enabled or self.automatic_provider_assignment_enabled:
+            raise ValueError(
+                "automatic booking and provider assignment require a separate production approval"
+            )
         if self.geocoding_enabled:
             required["GEOCODING_API_KEY"] = self.geocoding_api_key
         if self.odoo_enabled:

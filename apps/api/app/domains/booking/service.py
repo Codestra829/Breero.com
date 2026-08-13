@@ -2,6 +2,7 @@ import hashlib
 import json
 import secrets
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from geoalchemy2.elements import WKTElement
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,8 @@ from app.domains.booking.schemas import (
     BookingCreateRequest,
 )
 from app.domains.catalog.repository import CatalogRepository
+from app.domains.common.outbox import EventStatus, IntegrationEvent
+from app.domains.jobs.models import Job, JobEvent, JobStatus
 from app.integrations.geocoding import GeocodedAddress, GeocodingAdapter
 
 
@@ -40,17 +43,27 @@ class AddressService:
                 latitude=payload.latitude,
                 longitude=payload.longitude,
                 provider="provided",
+                timezone=payload.timezone,
             )
+        if not resolved.postal_code or not resolved.state_code or not resolved.city:
+            raise DomainError("ADDRESS_INCOMPLETE", "Street, city, state, and ZIP are required", 422)
+        if resolved.country_code != "US":
+            raise DomainError(
+                "ADDRESS_COUNTRY_UNSUPPORTED", "Only United States addresses are supported", 422
+            )
+        timezone_name = resolved.timezone or payload.timezone
+        try:
+            if not timezone_name:
+                raise ZoneInfoNotFoundError
+            ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError as exc:
+            raise DomainError(
+                "ADDRESS_TIMEZONE_UNRESOLVED",
+                "The service-address time zone could not be resolved; manual dispatch is required",
+                422,
+            ) from exc
         match = await self.repository.service_area_at(resolved.longitude, resolved.latitude)
-        if not match:
-            return AddressValidationResponse(
-                serviceable=False,
-                formatted_address=resolved.formatted_address,
-                address_id=None,
-                service_area_id=None,
-                legal_entity_code=None,
-            )
-        area, entity = match
+        area, entity = match if match else (None, None)
         address = Address(
             formatted_address=resolved.formatted_address,
             line1=resolved.line1,
@@ -58,18 +71,22 @@ class AddressService:
             state_code=resolved.state_code,
             postal_code=resolved.postal_code,
             country_code=resolved.country_code,
-            service_area_id=area.id,
+            service_area_id=area.id if area else None,
             geocoding_provider=resolved.provider,
+            timezone=timezone_name,
+            validated_at=datetime.now(UTC),
             location=WKTElement(f"POINT({resolved.longitude} {resolved.latitude})", srid=4326),
         )
         await self.repository.add_address(address)
         await self.session.commit()
         return AddressValidationResponse(
-            serviceable=True,
+            serviceable=bool(area),
             formatted_address=address.formatted_address,
             address_id=address.id,
-            service_area_id=area.id,
-            legal_entity_code=entity.code,
+            service_area_id=area.id if area else None,
+            legal_entity_code=entity.code if entity else None,
+            timezone=timezone_name,
+            manual_dispatch_required=not bool(area),
         )
 
 
@@ -98,8 +115,9 @@ class AvailabilityService:
                     and current > rule.active_to
                 ):
                     continue
-                cursor = datetime.combine(current, rule.start_time, tzinfo=UTC)
-                boundary = datetime.combine(current, rule.end_time, tzinfo=UTC)
+                zone = ZoneInfo(address.timezone or "UTC")
+                cursor = datetime.combine(current, rule.start_time, tzinfo=zone).astimezone(UTC)
+                boundary = datetime.combine(current, rule.end_time, tzinfo=zone).astimezone(UTC)
                 while cursor + timedelta(minutes=rule.slot_minutes) <= boundary:
                     end = cursor + timedelta(minutes=rule.slot_minutes)
                     used = await self.repository.booking_count(payload.service_id, cursor, end)
@@ -137,28 +155,42 @@ class BookingService:
         if payload.window.start >= payload.window.end or payload.window.start <= datetime.now(UTC):
             raise DomainError("INVALID_BOOKING_WINDOW", "Booking window must be in the future", 422)
         address = await self.repository.address(payload.address_id)
-        if not address or not address.service_area_id:
+        if not address or not address.validated_at or not address.timezone:
+            raise DomainError("ADDRESS_NOT_VALIDATED", "Address and time zone must be validated", 422)
+        zone = ZoneInfo(address.timezone)
+        local_start = payload.window.start.astimezone(zone)
+        local_end = payload.window.end.astimezone(zone)
+        if local_start.date() != local_end.date() or local_start.hour < 7 or local_end.hour > 19:
             raise DomainError(
-                "ADDRESS_NOT_SERVICEABLE", "Address is outside an active service area", 422
+                "OUTSIDE_SERVICE_HOURS",
+                "Requested time must be between 7:00 AM and 7:00 PM local time",
+                422,
             )
-        await self.repository.lock_slot(payload.service_id, payload.window.start, payload.window.end)
-        slots = await self.availability.search(
-            AvailabilitySearchRequest(
-                service_id=payload.service_id,
-                address_id=payload.address_id,
-                date_from=payload.window.start.date(),
-                date_to=payload.window.start.date(),
-            )
-        )
-        if not any(
-            slot.start == payload.window.start and slot.end == payload.window.end for slot in slots
-        ):
+        if local_start.weekday() == 6 and not payload.urgent:
             raise DomainError(
-                "SLOT_UNAVAILABLE", "The selected time slot is no longer available", 409
+                "SUNDAY_EMERGENCY_ONLY",
+                "Sunday requests must be urgent home-service requests",
+                422,
             )
-        entity = await self.repository.legal_entity_for_area(address.service_area_id)
-        if not entity:
-            raise DomainError("LEGAL_ENTITY_NOT_FOUND", "No legal entity serves this address", 422)
+        entity = None
+        slot_available = False
+        if address.service_area_id:
+            await self.repository.lock_slot(
+                payload.service_id, payload.window.start, payload.window.end
+            )
+            slots = await self.availability.search(
+                AvailabilitySearchRequest(
+                    service_id=payload.service_id,
+                    address_id=payload.address_id,
+                    date_from=local_start.date(),
+                    date_to=local_start.date(),
+                )
+            )
+            slot_available = any(
+                slot.start == payload.window.start and slot.end == payload.window.end
+                for slot in slots
+            )
+            entity = await self.repository.legal_entity_for_area(address.service_area_id)
         service = await CatalogRepository(self.session).active_detail(str(payload.service_id))
         if not service:
             raise DomainError("SERVICE_NOT_FOUND", "Service is not available", 404)
@@ -198,27 +230,76 @@ class BookingService:
             idempotency_request_hash=request_hash,
             customer_id=customer.id,
             address_id=address.id,
-            legal_entity_id=entity.id,
+            legal_entity_id=entity.id if entity else None,
             service_id=payload.service_id,
             window_start=payload.window.start,
             window_end=payload.window.end,
-            status=BookingStatus.PENDING_PAYMENT,
+            status=(
+                BookingStatus.TENTATIVE_HOLD
+                if slot_available
+                else BookingStatus.PENDING_MANUAL_DISPATCH
+            ),
             pricing_snapshot={
                 "service_id": str(payload.service_id),
                 "service_name": service.name,
                 "base_price": str(amount),
                 "total": str(amount),
-                "currency": entity.currency,
+                "currency": entity.currency if entity else "USD",
+                "quote_required": True,
+                "payment_required": False,
+                "urgent": payload.urgent,
             },
             total_amount=amount,
-            currency=entity.currency,
-            expires_at=datetime.now(UTC) + timedelta(minutes=30),
+            currency=entity.currency if entity else "USD",
+            expires_at=datetime.now(UTC) + timedelta(hours=24),
+            hold_expires_at=(
+                datetime.now(UTC) + timedelta(minutes=15) if slot_available else None
+            ),
             guest_confirmation_token_hash="pending",
             guest_confirmation_expires_at=datetime.now(UTC) + timedelta(hours=24),
         )
         guest_token = secrets.token_urlsafe(32)
         booking.guest_confirmation_token_hash = hashlib.sha256(guest_token.encode()).hexdigest()
         await self.repository.add(booking)
+        job = Job(
+            booking_id=booking.id,
+            customer_id=booking.customer_id,
+            service_id=booking.service_id,
+            address_id=booking.address_id,
+            status=JobStatus.CREATED,
+            scheduled_start=booking.window_start,
+            scheduled_end=booking.window_end,
+            version=1,
+        )
+        await self.repository.add(job)
+        await self.repository.add(
+            JobEvent(
+                job_id=job.id,
+                from_status=None,
+                to_status=JobStatus.CREATED,
+                actor_id=None,
+                actor_type="customer",
+                reason="quote_only_service_requested",
+            )
+        )
+        await self.repository.add(
+            IntegrationEvent(
+                aggregate_type="booking",
+                aggregate_id=booking.id,
+                event_type="booking.requested",
+                idempotency_key=f"booking.requested:{booking.id}:1",
+                payload={
+                    "booking_id": str(booking.id),
+                    "job_id": str(job.id),
+                    "status": booking.status.value,
+                    "payment_required": False,
+                    "quote_required": True,
+                },
+                status=EventStatus.PENDING,
+                attempts=0,
+                available_at=datetime.now(UTC),
+            )
+        )
         # The reusable token is returned only at this creation boundary; only its hash is stored.
         setattr(booking, "guest_confirmation_token", guest_token)
         for answer in payload.answers:

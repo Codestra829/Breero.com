@@ -12,7 +12,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID, ExcludeConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -58,6 +58,13 @@ class Assignment(Base):
             unique=True,
             postgresql_where=text("status = 'ACTIVE'"),
         ),
+        ExcludeConstraint(
+            ("worker_id", "="),
+            (text("tstzrange(scheduled_start, scheduled_end, '[)')"), "&&"),
+            where=text("status = 'ACTIVE'"),
+            using="gist",
+            name="excl_active_worker_schedule_overlap",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -73,3 +80,5 @@ class Assignment(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    scheduled_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    scheduled_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

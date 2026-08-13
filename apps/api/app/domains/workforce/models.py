@@ -1,10 +1,11 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from geoalchemy2 import Geography
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -47,6 +48,10 @@ class Vendor(Base):
     service_radius_meters: Mapped[int] = mapped_column(Integer, default=40000)
     home_location: Mapped[object | None] = mapped_column(Geography("POINT", srid=4326))
     capabilities: Mapped[list] = mapped_column(JSONB, default=list)
+    covered_postal_codes: Mapped[list] = mapped_column(JSONB, default=list)
+    working_hours: Mapped[dict] = mapped_column(JSONB, default=dict)
+    license_valid_until: Mapped[date | None] = mapped_column(Date)
+    insurance_valid_until: Mapped[date | None] = mapped_column(Date)
     payout_profile_ref: Mapped[str | None] = mapped_column(String(255))
     odoo_partner_id: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

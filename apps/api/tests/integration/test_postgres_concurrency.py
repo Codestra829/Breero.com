@@ -4,7 +4,7 @@ import uuid
 
 import psycopg
 import pytest
-from psycopg.errors import UniqueViolation
+from psycopg.errors import ExclusionViolation, UniqueViolation
 
 pytestmark = pytest.mark.skipif(
     not os.getenv("DATABASE_URL", "").startswith("postgresql"),
@@ -140,8 +140,10 @@ async def test_simultaneous_assignment_allows_only_one_active_assignment():
     vendor_id, worker_id, job_id = await create_dispatch_fixture(setup)
     first = await psycopg.AsyncConnection.connect(dsn())
     second = await psycopg.AsyncConnection.connect(dsn())
-    insert = """INSERT INTO assignments (id, job_id, vendor_id, worker_id, status)
-                VALUES (%s, %s, %s, %s, 'ACTIVE')"""
+    insert = """INSERT INTO assignments
+                (id, job_id, vendor_id, worker_id, status, scheduled_start, scheduled_end)
+                VALUES (%s, %s, %s, %s, 'ACTIVE',
+                        now() + interval '1 day', now() + interval '1 day 2 hours')"""
     try:
         await first.execute(insert, (uuid.uuid4(), job_id, vendor_id, worker_id))
         duplicate = asyncio.create_task(
@@ -161,6 +163,42 @@ async def test_simultaneous_assignment_allows_only_one_active_assignment():
         await first.close()
         await second.close()
         await setup.close()
+
+
+@pytest.mark.asyncio
+async def test_worker_cannot_receive_overlapping_active_jobs():
+    connection = await psycopg.AsyncConnection.connect(dsn())
+    vendor_id, worker_id, first_job_id = await create_dispatch_fixture(connection)
+    second_job_id = uuid.uuid4()
+    insert_assignment = """INSERT INTO assignments
+        (id, job_id, vendor_id, worker_id, status, scheduled_start, scheduled_end)
+        VALUES (%s, %s, %s, %s, 'ACTIVE',
+                now() + interval '1 day', now() + interval '1 day 2 hours')"""
+    try:
+        await connection.execute(
+            """INSERT INTO jobs
+            (id, booking_id, service_id, address_id, status, scheduled_start, scheduled_end, version)
+            VALUES (%s, %s, %s, %s, 'CREATED', now() + interval '1 day 1 hour',
+                    now() + interval '1 day 3 hours', 1)""",
+            (second_job_id, uuid.uuid4(), uuid.uuid4(), uuid.uuid4()),
+        )
+        await connection.execute(
+            insert_assignment,
+            (uuid.uuid4(), first_job_id, vendor_id, worker_id),
+        )
+        await connection.commit()
+        with pytest.raises(ExclusionViolation):
+            await connection.execute(
+                insert_assignment,
+                (uuid.uuid4(), second_job_id, vendor_id, worker_id),
+            )
+    finally:
+        await connection.rollback()
+        await connection.execute("DELETE FROM jobs WHERE id IN (%s, %s)", (first_job_id, second_job_id))
+        await connection.execute("DELETE FROM workers WHERE id = %s", (worker_id,))
+        await connection.execute("DELETE FROM vendors WHERE id = %s", (vendor_id,))
+        await connection.commit()
+        await connection.close()
 
 
 @pytest.mark.asyncio

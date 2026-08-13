@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.domains.booking.models import Booking
@@ -34,7 +35,7 @@ def to_response(booking: Booking) -> BookingCreateResponse:
         currency=booking.currency,
         window_start=booking.window_start,
         window_end=booking.window_end,
-        payment_required=booking.status.value == "PENDING_PAYMENT",
+        payment_required=False,
         guest_confirmation_token=getattr(booking, "guest_confirmation_token", None),
     )
 
@@ -77,6 +78,8 @@ async def prepare_booking_payment(
     session: AsyncSession = Depends(get_db),
     _rate_limit: None = Depends(rate_limit("guest-payment-prepare", 10, 60)),
 ) -> PaymentView:
+    if not settings.stripe_enabled:
+        raise HTTPException(404, "Online payments are disabled; all work requires a quote")
     booking = await guest_booking(session, booking_id, authorization)
     amount_minor = int(
         (booking.total_amount * Decimal(100)).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
@@ -106,15 +109,17 @@ async def booking_confirmation(
         .order_by(Payment.created_at.desc())
         .limit(1)
     )
-    payment_status = payment.status.value if payment else "not_started"
+    payment_status = payment.status.value if payment else "disabled"
     if booking.status.value == "CONFIRMED":
         next_action = "confirmed"
-    elif payment_status in {"failed", "canceled"}:
-        next_action = "retry_payment"
     elif booking.status.value in {"EXPIRED", "CANCELLED"}:
         next_action = "booking_unavailable"
+    elif booking.status.value == "PENDING_MANUAL_DISPATCH":
+        next_action = "await_manual_dispatch"
+    elif booking.status.value == "TENTATIVE_HOLD":
+        next_action = "await_operator_confirmation"
     else:
-        next_action = "await_payment_confirmation"
+        next_action = "await_provider_match"
     return BookingConfirmation(
         booking_id=booking.id,
         reference=booking.reference,
@@ -125,4 +130,6 @@ async def booking_confirmation(
         amount_minor=int(booking.total_amount * 100),
         currency=booking.currency,
         next_action=next_action,
+        payment_required=False,
+        quote_required=True,
     )
