@@ -6,6 +6,7 @@ Odoo credentials and generic model names never cross this boundary.
 import hashlib
 import hmac
 import json
+import ssl
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -30,6 +31,18 @@ def canonical_body(payload: dict) -> bytes:
 
 
 class MiddlewareAdapter:
+    @staticmethod
+    def _ssl_context() -> ssl.SSLContext:
+        try:
+            context = ssl.create_default_context(cafile=settings.middleware_ca_file)
+            context.load_cert_chain(
+                certfile=settings.middleware_client_cert_file,
+                keyfile=settings.middleware_client_key_file,
+            )
+        except (OSError, ssl.SSLError) as exc:
+            raise OdooDeliveryError("MIDDLEWARE_TLS_CONFIGURATION_INVALID", terminal=True) from exc
+        return context
+
     @staticmethod
     def envelope(event: object) -> dict:
         envelope = OdooAdapter.envelope(event)
@@ -86,11 +99,7 @@ class MiddlewareAdapter:
         try:
             async with httpx.AsyncClient(
                 timeout=20,
-                verify=settings.middleware_ca_file,
-                cert=(
-                    settings.middleware_client_cert_file,
-                    settings.middleware_client_key_file,
-                ),
+                verify=self._ssl_context(),
             ) as client:
                 response = await client.post(settings.middleware_url.rstrip("/") + PATH, content=body, headers=headers)
                 response.raise_for_status()

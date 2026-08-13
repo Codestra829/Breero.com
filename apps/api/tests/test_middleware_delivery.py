@@ -59,6 +59,7 @@ def test_rejects_non_allowlisted_event():
 @pytest.mark.asyncio
 async def test_delivery_uses_typed_route_and_ack(monkeypatch, tmp_path):
     configure(monkeypatch, tmp_path)
+    monkeypatch.setattr(MiddlewareAdapter, "_ssl_context", staticmethod(lambda: True))
     requests = []
     def handler(request: httpx.Request):
         requests.append(request)
