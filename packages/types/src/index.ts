@@ -15,7 +15,8 @@ export interface ServiceQuestion {
 }
 export interface ServiceSummary {
   id: UUID; slug: string; name: string; description: string | null;
-  base_price: MoneyAmount; duration_minutes: number;
+  base_price: MoneyAmount | null; duration_minutes: number | null;
+  pricing_model?: string; is_active?: boolean; is_bookable?: boolean;
 }
 export interface ServiceDetail extends ServiceSummary { questions: ServiceQuestion[] }
 
@@ -81,4 +82,10 @@ export interface CustomerProfilePatch { full_name?: string; phone?: string }
 export interface CustomerAddress { id: UUID; line1: string; city: string; postal_code: string; country_code: string }
 export interface CustomerAddressInput { line1: string; city: string; postal_code: string; country_code: string; latitude: number; longitude: number }
 export interface Page<T> { items: T[]; total: number; page: number; page_size: number }
-export interface CustomerPayment { id: UUID; purpose: string; status: PaymentStatus; amount_minor: number; captured_amount_minor: number; refunded_amount_minor: number; currency: string; created_at: ISODateTime }
+export interface CustomerPayment {
+  id: UUID; booking_id: UUID | null; quote_id: UUID | null;
+  payment_purpose: "BOOKING_DIAGNOSTIC" | "QUOTE_ADDITIONAL_WORK";
+  provider: string; status: PaymentStatus; amount_minor: number;
+  captured_amount_minor: number; refunded_amount_minor: number; currency: string;
+  failure_code: string | null; created_at: ISODateTime; updated_at: ISODateTime;
+}

@@ -24,10 +24,12 @@ const required = {
   "/api/v1/customer/addresses/{address_id}": ["patch", "delete"],
   "/api/v1/customer/bookings": ["get"],
   "/api/v1/customer/bookings/{booking_id}": ["get"],
+  "/api/v1/customer/bookings/{booking_id}/cancel": ["post"],
   "/api/v1/customer/quotes": ["get"],
   "/api/v1/customer/quotes/{quote_id}": ["get"],
   "/api/v1/customer/quotes/{quote_id}/decision": ["post"],
   "/api/v1/customer/payments": ["get"],
+  "/api/v1/customer/payments/{payment_id}": ["get"],
 };
 
 const missing = [];

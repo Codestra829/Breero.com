@@ -51,6 +51,7 @@ export function createMockBreeroApi(scenario: MockScenario = {}): BreeroApi {
       }, s),
       mine: (_params, s) => run("bookings", () => ({ items: scenario.bookings ?? [], total: scenario.bookings?.length ?? 0, page: 1, page_size: 20 }), s),
       getMine: (id, s) => run("bookings", () => scenario.bookings?.find((item) => item.id === id) ?? missing(`booking ${id}`), s),
+      cancelMine: (id, s) => run("bookings", () => ({ ...(scenario.bookings?.find((item) => item.id === id) ?? missing(`booking ${id}`)), status: "CANCELLED" }), s),
     },
     payments: {
       createIntent: (_input, _key, s) => run("payments", () => scenario.payments?.[0] ?? missing("payment"), s),
@@ -64,12 +65,21 @@ export function createMockBreeroApi(scenario: MockScenario = {}): BreeroApi {
       deleteAddress: (_id, s) => run("customer", () => undefined, s),
       payments: (_params, s) => run("customer", () => {
         const items = (scenario.payments ?? []).map((payment) => ({
-          id: payment.id, purpose: payment.payment_purpose ?? "BOOKING_DIAGNOSTIC", status: payment.status,
+          id: payment.id, booking_id: payment.booking_id, quote_id: payment.quote_id ?? null,
+          payment_purpose: payment.payment_purpose ?? "BOOKING_DIAGNOSTIC", provider: payment.provider, status: payment.status,
           amount_minor: payment.amount_minor, captured_amount_minor: payment.captured_amount_minor,
           refunded_amount_minor: payment.status === "refunded" ? payment.amount_minor : 0,
-          currency: payment.currency, created_at: payment.created_at,
+          currency: payment.currency, failure_code: payment.failure_code, created_at: payment.created_at, updated_at: payment.updated_at,
         }));
         return { items, total: items.length, page: 1, page_size: 20 };
+      }, s),
+      payment: (id, s) => run("customer", () => {
+        const payment = scenario.payments?.find((item) => item.id === id) ?? missing(`payment ${id}`);
+        return { id: payment.id, booking_id: payment.booking_id, quote_id: payment.quote_id ?? null,
+          payment_purpose: payment.payment_purpose ?? "BOOKING_DIAGNOSTIC", provider: payment.provider, status: payment.status,
+          amount_minor: payment.amount_minor, captured_amount_minor: payment.captured_amount_minor,
+          refunded_amount_minor: payment.status === "refunded" ? payment.amount_minor : 0,
+          currency: payment.currency, failure_code: payment.failure_code, created_at: payment.created_at, updated_at: payment.updated_at };
       }, s),
     },
     quotes: {

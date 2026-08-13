@@ -1,7 +1,7 @@
 :root {
-  --br-ink: #14251f; --br-ink-soft: #40534b; --br-muted: #66766f; --br-paper: #fffdfa; --br-canvas: #f7f6f1;
-  --br-line: #dce2de; --br-line-strong: #bcc8c2; --br-brand: #176b52; --br-brand-dark: #0c4a38; --br-brand-light: #dff3e9;
-  --br-accent: #ef8354; --br-accent-soft: #fff0e8; --br-danger: #b42318; --br-danger-soft: #fef3f2; --br-warning: #9a6700;
+  --br-ink: #10243e; --br-ink-soft: #41536a; --br-muted: #58697d; --br-paper: #fff; --br-canvas: #f5f7fa;
+  --br-line: #dce4ec; --br-line-strong: #b7c5d3; --br-brand: #146ef5; --br-brand-dark: #0e52c6; --br-brand-light: #eaf4ff;
+  --br-accent: #ff6b6b; --br-accent-soft: #fff1f1; --br-danger: #c93838; --br-danger-soft: #fef3f2; --br-warning: #805400;
   --br-success: #157347; --br-white: #fff; --br-font-sans: var(--font-br-sans, "Inter"), ui-sans-serif, system-ui, sans-serif;
   --br-font-display: var(--font-br-display, "Fraunces"), Georgia, serif; --br-radius-sm: .5rem; --br-radius: .875rem; --br-radius-lg: 1.25rem;
   --br-shadow-sm: 0 1px 2px rgb(20 37 31 / 5%), 0 4px 16px rgb(20 37 31 / 4%); --br-shadow-lg: 0 24px 64px rgb(12 42 33 / 18%);

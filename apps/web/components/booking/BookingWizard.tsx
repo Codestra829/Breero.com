@@ -298,10 +298,11 @@ export function BookingWizard() {
             <h1>What can we help with?</h1>
             <div className="choices">
               {serviceCatalog.map((s) => (
-                <label className="choice" key={s.id}>
+                <label className="choice" key={s.id} aria-disabled={s.is_bookable === false}>
                   <input
                     type="radio"
                     name="service"
+                    disabled={s.is_bookable === false}
                     checked={state.serviceId === s.id}
                     onChange={() =>
                       setState((v) => ({ ...v, serviceId: s.id }))
@@ -310,13 +311,12 @@ export function BookingWizard() {
                   <span>
                     <b>{s.name}</b>
                     <br />
-                    <small>
-                      From €{s.base_price} · {s.duration_minutes} min
-                    </small>
+                    <small>{s.is_bookable === false ? "Request only—online booking is not available yet" : s.duration_minutes ? `${s.duration_minutes} min estimated visit time` : "Timing confirmed during booking"}</small>
                   </span>
                 </label>
               ))}
             </div>
+            {serviceCatalog.length > 0 && serviceCatalog.every((item) => item.is_bookable === false) && <p className="notice">Online booking is not open for these services yet. <Link href="/request-service">Send a service request</Link> and BREERO will confirm coverage before any appointment.</p>}
             <Actions next={next} disableNext={!state.serviceId} />
           </>
         )}
@@ -474,17 +474,9 @@ export function BookingWizard() {
                   {state.slot && new Date(state.slot.start).toLocaleString()}
                 </span>
               </div>
-              <div>
-                <b>Starting total</b>
-                <span>€{service?.base_price}</span>
-              </div>
+              <div><b>Price</b><span>Confirmed by BREERO after this request</span></div>
             </div>
-            <p>
-              <small>
-                Additional work is never added without a separate quote and your
-                approval.
-              </small>
-            </p>
+            <div className="notice"><strong>Independent-provider marketplace</strong><br/>BREERO helps connect and coordinate you with an independent service provider. Unless expressly stated otherwise, that provider is responsible for the final estimate, scope, pricing, licensing, permits, insurance, workmanship, and service performance. Additional work requires a separate quote and your approval.</div>
             <Actions
               back={back}
               next={submit}

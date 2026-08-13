@@ -12,6 +12,7 @@ const publicConfig = {
   NEXT_PUBLIC_API_MODE: process.env.NEXT_PUBLIC_API_MODE,
   NEXT_PUBLIC_API_TIMEOUT_MS: process.env.NEXT_PUBLIC_API_TIMEOUT_MS,
   NEXT_PUBLIC_E2E_ALLOW_MOCK: process.env.NEXT_PUBLIC_E2E_ALLOW_MOCK,
+  NEXT_PUBLIC_DEPLOYMENT_ENV: process.env.NEXT_PUBLIC_DEPLOYMENT_ENV,
 };
 
 export const customerSession = {

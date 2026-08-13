@@ -1,0 +1,12 @@
+.git
+.github
+**/.next
+**/node_modules
+**/test-results
+**/playwright-report
+**/coverage
+docs/brand/screenshots
+.env
+.env.*
+!.env.example
+!deploy/frontend/.env.frontend.example
