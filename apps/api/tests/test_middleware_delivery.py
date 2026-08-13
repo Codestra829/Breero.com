@@ -22,9 +22,9 @@ def configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     monkeypatch.setattr(settings, "middleware_hmac_key_id", "breero-key-1")
     monkeypatch.setattr(settings, "middleware_hmac_secret_file", str(secret))
     monkeypatch.setattr(settings, "middleware_service_identity", "breero-staging")
-    monkeypatch.setattr(settings, "middleware_audience", "codestra-middleware-breero-crm")
+    monkeypatch.setattr(settings, "middleware_audience", "codestra-middleware-breero")
     monkeypatch.setattr(settings, "middleware_tenant", "breero")
-    monkeypatch.setattr(settings, "middleware_scope", "breero.crm-events.write")
+    monkeypatch.setattr(settings, "middleware_scope", "breero.crm.events.submit")
     monkeypatch.setattr(settings, "app_env", "staging")
     return secret
 
@@ -42,7 +42,7 @@ def test_hmac_binds_identity_tenant_scope_and_exact_body(monkeypatch, tmp_path):
     headers = MiddlewareAdapter.headers(body, "idem-1", "2026-08-13T00:00:00+00:00", "nonce-1")
     material = "\n".join(("HMAC-V2", "POST", "/api/v1/integrations/breero/events",
         headers["X-Codestra-Timestamp"], headers["X-Codestra-Nonce"], "breero-staging",
-        "codestra-middleware-breero-crm", "staging", "breero.crm-events.write", "idem-1",
+        "codestra-middleware-breero", "staging", "breero.crm.events.submit", "idem-1",
         hashlib.sha256(body).hexdigest())).encode()
     assert hmac.compare_digest(headers["X-Codestra-Signature"], hmac.new(secret.read_bytes(), material, hashlib.sha256).hexdigest())
     assert headers["X-Codestra-Tenant"] == "breero"

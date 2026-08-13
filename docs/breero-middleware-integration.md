@@ -15,8 +15,8 @@ Keep `ODOO_ENABLED=false` permanently. Set `MIDDLEWARE_ENABLED=true` first in st
 private routing, CA verification and identity enrollment are complete.
 
 Middleware must register identity `breero-staging` or `breero-production`, audience
-`codestra-middleware-breero-crm`, tenant `breero`, source IP restrictions and only scope
-`breero.crm-events.write`. It must persist an audit receipt and its own outbox transactionally,
+`codestra-middleware-breero`, tenant `breero`, source IP restrictions and only scope
+`breero.crm.events.submit`. It must persist an audit receipt and its own outbox transactionally,
 deduplicate by event ID and idempotency key, reject changed-payload replay, retry transient Odoo
 failures, and expose status/reconciliation without returning unrestricted Odoo access.
 
