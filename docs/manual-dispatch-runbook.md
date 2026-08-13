@@ -4,6 +4,9 @@ This release accepts service requests; it does not create bookings, collect paym
 assign providers automatically, or promise appointment times. Dispatcher access requires
 the `breero_dispatcher` or `breero_admin` Keycloak realm role. The queue is available at
 `GET /api/v1/operations/dispatcher/queue` and must never be exposed publicly.
+Record work with `PATCH /api/v1/operations/dispatcher/queue/{request_id}`. Its schema
+only permits non-confirming manual-dispatch states; it cannot assign a provider, mark a
+request paid, schedule work, or confirm an appointment.
 
 ## Queue review
 

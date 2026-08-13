@@ -68,6 +68,10 @@ class PublicSubmissionService:
                         if not settings.geocoding_enabled
                         else "PENDING_PROVIDER_VERIFICATION"
                     ),
+                    "address_timezone": None,
+                    "address_timezone_state": "PENDING_MANUAL_CALCULATION",
+                    "contact_attempts": [],
+                    "required_follow_up": True,
                     "payment_required": False,
                     "quote_required": True,
                     "provider_assigned": False,

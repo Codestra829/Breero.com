@@ -99,3 +99,25 @@ class DispatcherQueueItem(BaseModel):
     downstream_status: str
     payload: dict[str, Any]
     audit_history: list[DispatcherAuditEntry]
+
+
+class DispatcherQueueUpdate(BaseModel):
+    manual_dispatch_state: Literal[
+        "PENDING_MANUAL_DISPATCH",
+        "CUSTOMER_CONTACT_PENDING",
+        "CUSTOMER_CONTACTED",
+        "ADDRESS_VALIDATION_PENDING",
+        "PROVIDER_MATCH_PENDING",
+        "QUOTE_COORDINATION_PENDING",
+        "CANCELLED",
+        "CLOSED",
+    ] | None = None
+    address_verification_state: Literal[
+        "PENDING_MANUAL_VALIDATION", "MANUALLY_VERIFIED", "REJECTED"
+    ] | None = None
+    address_timezone: str | None = Field(default=None, max_length=64)
+    contact_outcome: Literal[
+        "NO_ANSWER", "VOICEMAIL", "CUSTOMER_REACHED", "FOLLOW_UP_REQUESTED", "CANCELLED"
+    ] | None = None
+    required_follow_up: bool | None = None
+    note: str | None = Field(default=None, max_length=1000)

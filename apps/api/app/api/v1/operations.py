@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +14,11 @@ from app.domains.common.outbox import AuditLog
 from app.domains.dispatch.schemas import AssignmentRead, ManualAssignment, OfferRead
 from app.domains.dispatch.service import DispatchService
 from app.domains.public_submissions.models import PublicSubmission
-from app.domains.public_submissions.schemas import DispatcherAuditEntry, DispatcherQueueItem
+from app.domains.public_submissions.schemas import (
+    DispatcherAuditEntry,
+    DispatcherQueueItem,
+    DispatcherQueueUpdate,
+)
 from app.domains.workforce.repository import WorkforceRepository
 from app.domains.workforce.schemas import BookingCoverageWrite, VendorRead, VendorStatusUpdate
 
@@ -78,7 +82,9 @@ async def dispatcher_queue(
                 created_at=created_at,
                 request_age_seconds=max(0, int((now - created_at).total_seconds())),
                 required_follow_up=(
-                    submission.submission_type.value != "SERVICE_REQUEST"
+                    payload.get("required_follow_up")
+                    if isinstance(payload.get("required_follow_up"), bool)
+                    else submission.submission_type.value != "SERVICE_REQUEST"
                     or manual_state == "PENDING_MANUAL_DISPATCH"
                     or not provider_assigned
                 ),
@@ -93,6 +99,59 @@ async def dispatcher_queue(
             )
         )
     return result
+
+
+@router.patch("/dispatcher/queue/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def update_dispatcher_queue_item(
+    request_id: uuid.UUID,
+    update: DispatcherQueueUpdate,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.operations, UserRole.admin)),
+) -> None:
+    submission = await session.scalar(
+        select(PublicSubmission)
+        .where(PublicSubmission.id == request_id)
+        .with_for_update()
+    )
+    if not submission:
+        raise HTTPException(status_code=404, detail="Service request not found")
+
+    changes = update.model_dump(exclude_none=True)
+    payload = dict(submission.payload)
+    if "manual_dispatch_state" in changes:
+        payload["manual_dispatch_state"] = changes["manual_dispatch_state"]
+    if "address_verification_state" in changes:
+        payload["geoapify_verification_state"] = changes["address_verification_state"]
+    if "address_timezone" in changes:
+        payload["address_timezone"] = changes["address_timezone"]
+    if "required_follow_up" in changes:
+        payload["required_follow_up"] = changes["required_follow_up"]
+    if "contact_outcome" in changes:
+        attempts = list(payload.get("contact_attempts") or [])
+        attempts.append(
+            {
+                "outcome": changes["contact_outcome"],
+                "note": changes.get("note"),
+                "actor_id": str(user.id),
+                "created_at": datetime.now(UTC).isoformat(),
+            }
+        )
+        payload["contact_attempts"] = attempts
+    submission.payload = payload
+    session.add(
+        AuditLog(
+            actor_id=user.id,
+            actor_type="user",
+            action="manual_dispatch.update",
+            resource_type="public_submission",
+            resource_id=submission.id,
+            metadata_json={
+                key: value for key, value in changes.items() if key not in {"note"}
+            },
+            created_at=datetime.now(UTC),
+        )
+    )
+    await session.commit()
 
 
 @router.put("/workers/{worker_id}/booking-coverage", status_code=204)

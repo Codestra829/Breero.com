@@ -859,6 +859,102 @@
         "title": "DispatcherQueueItem",
         "type": "object"
       },
+      "DispatcherQueueUpdate": {
+        "properties": {
+          "address_timezone": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address Timezone"
+          },
+          "address_verification_state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "PENDING_MANUAL_VALIDATION",
+                  "MANUALLY_VERIFIED",
+                  "REJECTED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address Verification State"
+          },
+          "contact_outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "NO_ANSWER",
+                  "VOICEMAIL",
+                  "CUSTOMER_REACHED",
+                  "FOLLOW_UP_REQUESTED",
+                  "CANCELLED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Outcome"
+          },
+          "manual_dispatch_state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "PENDING_MANUAL_DISPATCH",
+                  "CUSTOMER_CONTACT_PENDING",
+                  "CUSTOMER_CONTACTED",
+                  "ADDRESS_VALIDATION_PENDING",
+                  "PROVIDER_MATCH_PENDING",
+                  "QUOTE_COORDINATION_PENDING",
+                  "CANCELLED",
+                  "CLOSED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Dispatch State"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "required_follow_up": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Follow Up"
+          }
+        },
+        "title": "DispatcherQueueUpdate",
+        "type": "object"
+      },
       "EarningAdjustmentCreate": {
         "properties": {
           "adjustment_type": {
@@ -5348,6 +5444,57 @@
           }
         ],
         "summary": "Dispatcher Queue",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/v1/operations/dispatcher/queue/{request_id}": {
+      "patch": {
+        "operationId": "update_dispatcher_queue_item_api_v1_operations_dispatcher_queue__request_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DispatcherQueueUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Dispatcher Queue Item",
         "tags": [
           "operations"
         ]
