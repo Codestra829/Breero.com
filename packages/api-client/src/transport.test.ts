@@ -5,6 +5,22 @@ import { ApiTransport } from "./transport";
 const json = (body: unknown, init: ResponseInit = {}) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json", ...init.headers }, ...init });
 
 describe("ApiTransport", () => {
+  it("binds the native global fetch implementation to its global receiver", async () => {
+    const originalFetch = globalThis.fetch;
+    let receiver: unknown;
+    globalThis.fetch = function (this: unknown) {
+      receiver = this;
+      return Promise.resolve(new Response(JSON.stringify({ ok: true })));
+    } as typeof globalThis.fetch;
+    try {
+      const transport = new ApiTransport({ baseUrl: "https://api.test" });
+      await transport.request("/health");
+      expect(receiver).toBe(globalThis);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("invokes the configured fetch function without a transport receiver", async () => {
     let receiver: unknown = Symbol("unset");
     function fetcher(this: unknown) {
