@@ -41,7 +41,9 @@ ENV NODE_ENV=production \
     NEXT_PUBLIC_API_MODE=live \
     HOSTNAME=0.0.0.0 \
     PORT=3000
-RUN addgroup --system --gid 1001 breero && adduser --system --uid 1001 --ingroup breero breero
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+ && addgroup --system --gid 1001 breero \
+ && adduser --system --uid 1001 --ingroup breero breero
 WORKDIR /app
 COPY --from=build --chown=breero:breero /workspace/apps/web/.next/standalone ./
 COPY --from=build --chown=breero:breero /workspace/apps/web/.next/static ./apps/web/.next/static
