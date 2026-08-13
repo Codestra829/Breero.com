@@ -35,8 +35,12 @@ def upgrade():
         sa.Column("verified_at", sa.DateTime(timezone=True)),
         sa.Column("expires_on", sa.Date, nullable=False),
         sa.Column("verified_by", postgresql.UUID(as_uuid=True)),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
         sa.UniqueConstraint("vendor_id", "credential_type", "jurisdiction"),
     )
     op.create_index("ix_provider_credentials_vendor_id", "provider_credentials", ["vendor_id"])
