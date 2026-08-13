@@ -42,7 +42,7 @@ services:
   beat:
     <<: *app
     container_name: breero-staging-beat
-    command: [celery, -A, app.workers.celery_app:celery_app, beat, --loglevel=info]
+    command: [celery, -A, app.workers.celery_app:celery_app, beat, --loglevel=info, --schedule, /tmp/celerybeat-schedule]
     healthcheck: {disable: true}
     depends_on:
       postgres: {condition: service_healthy}
