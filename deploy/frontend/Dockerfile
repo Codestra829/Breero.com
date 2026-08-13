@@ -13,13 +13,17 @@ FROM dependencies AS build
 ARG NEXT_PUBLIC_APP_URL=https://breero.com
 ARG NEXT_PUBLIC_API_BASE_URL=https://api.breero.com/api/v1
 ARG NEXT_PUBLIC_DEPLOYMENT_ENV=production
-ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+ARG NEXT_PUBLIC_KEYCLOAK_ENABLED=true
+ARG NEXT_PUBLIC_KEYCLOAK_ISSUER=https://auth.codestra.agency/realms/codestra
+ARG NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=breero-web-production
 ENV NODE_ENV=production \
     NEXT_PUBLIC_API_MODE=live \
     NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL} \
     NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL} \
     NEXT_PUBLIC_DEPLOYMENT_ENV=${NEXT_PUBLIC_DEPLOYMENT_ENV} \
-    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}
+    NEXT_PUBLIC_KEYCLOAK_ENABLED=${NEXT_PUBLIC_KEYCLOAK_ENABLED} \
+    NEXT_PUBLIC_KEYCLOAK_ISSUER=${NEXT_PUBLIC_KEYCLOAK_ISSUER} \
+    NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=${NEXT_PUBLIC_KEYCLOAK_CLIENT_ID}
 COPY . .
 RUN case "$NEXT_PUBLIC_DEPLOYMENT_ENV" in \
       production) test "$NEXT_PUBLIC_APP_URL" = "https://breero.com" && test "$NEXT_PUBLIC_API_BASE_URL" = "https://api.breero.com/api/v1" ;; \
@@ -27,6 +31,9 @@ RUN case "$NEXT_PUBLIC_DEPLOYMENT_ENV" in \
       *) exit 1 ;; \
     esac \
  && test "$NEXT_PUBLIC_API_MODE" = "live" \
+ && test "$NEXT_PUBLIC_KEYCLOAK_ENABLED" = "true" \
+ && test "$NEXT_PUBLIC_KEYCLOAK_ISSUER" = "https://auth.codestra.agency/realms/codestra" \
+ && test "$NEXT_PUBLIC_KEYCLOAK_CLIENT_ID" = "breero-web-production" \
  && pnpm --filter @breero/web build
 
 FROM node:22-alpine AS runtime
