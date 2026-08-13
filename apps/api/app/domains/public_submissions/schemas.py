@@ -1,6 +1,6 @@
 import uuid
-from datetime import date
-from typing import Literal
+from datetime import date, datetime
+from typing import Any, Literal
 
 from pydantic import AnyHttpUrl, BaseModel, EmailStr, Field, field_validator
 
@@ -76,3 +76,26 @@ class SubmissionAccepted(BaseModel):
     request_id: uuid.UUID
     status: Literal["REQUEST_ACCEPTED"] = "REQUEST_ACCEPTED"
     downstream_status: str
+
+
+class DispatcherAuditEntry(BaseModel):
+    action: str
+    actor_id: uuid.UUID | None
+    metadata: dict[str, Any]
+    created_at: datetime
+
+
+class DispatcherQueueItem(BaseModel):
+    request_id: uuid.UUID
+    submission_type: str
+    created_at: datetime
+    request_age_seconds: int
+    required_follow_up: bool
+    customer_timezone: str | None
+    address_verification_state: str | None
+    manual_dispatch_state: str | None
+    provider_assigned: bool
+    contact_attempts: list[dict[str, Any]]
+    downstream_status: str
+    payload: dict[str, Any]
+    audit_history: list[DispatcherAuditEntry]

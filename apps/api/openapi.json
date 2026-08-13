@@ -717,6 +717,148 @@
         "title": "CustomerPaymentRead",
         "type": "object"
       },
+      "DispatcherAuditEntry": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          }
+        },
+        "required": [
+          "action",
+          "actor_id",
+          "metadata",
+          "created_at"
+        ],
+        "title": "DispatcherAuditEntry",
+        "type": "object"
+      },
+      "DispatcherQueueItem": {
+        "properties": {
+          "address_verification_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address Verification State"
+          },
+          "audit_history": {
+            "items": {
+              "$ref": "#/components/schemas/DispatcherAuditEntry"
+            },
+            "title": "Audit History",
+            "type": "array"
+          },
+          "contact_attempts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Contact Attempts",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "customer_timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Timezone"
+          },
+          "downstream_status": {
+            "title": "Downstream Status",
+            "type": "string"
+          },
+          "manual_dispatch_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Dispatch State"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "provider_assigned": {
+            "title": "Provider Assigned",
+            "type": "boolean"
+          },
+          "request_age_seconds": {
+            "title": "Request Age Seconds",
+            "type": "integer"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "required_follow_up": {
+            "title": "Required Follow Up",
+            "type": "boolean"
+          },
+          "submission_type": {
+            "title": "Submission Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "submission_type",
+          "created_at",
+          "request_age_seconds",
+          "required_follow_up",
+          "customer_timezone",
+          "address_verification_state",
+          "manual_dispatch_state",
+          "provider_assigned",
+          "contact_attempts",
+          "downstream_status",
+          "payload",
+          "audit_history"
+        ],
+        "title": "DispatcherQueueItem",
+        "type": "object"
+      },
       "EarningAdjustmentCreate": {
         "properties": {
           "adjustment_type": {
@@ -5178,6 +5320,36 @@
         "summary": "Create Work Request",
         "tags": [
           "jobs"
+        ]
+      }
+    },
+    "/api/v1/operations/dispatcher/queue": {
+      "get": {
+        "operationId": "dispatcher_queue_api_v1_operations_dispatcher_queue_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DispatcherQueueItem"
+                  },
+                  "title": "Response Dispatcher Queue Api V1 Operations Dispatcher Queue Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Dispatcher Queue",
+        "tags": [
+          "operations"
         ]
       }
     },
