@@ -158,7 +158,11 @@ class ProfessionalLeadService:
                 "amount_minor": purchase.price_minor,
                 "currency": purchase.currency,
             },
-            status=EventStatus.PENDING if settings.odoo_enabled else EventStatus.PENDING_CONFIGURATION,
+            status=(
+                EventStatus.PENDING
+                if settings.middleware_enabled or settings.odoo_enabled
+                else EventStatus.PENDING_CONFIGURATION
+            ),
             next_attempt_at=datetime.now(UTC),
         ))
         await self.session.commit()
