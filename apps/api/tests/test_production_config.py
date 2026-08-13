@@ -4,8 +4,8 @@ from pydantic import ValidationError
 from app.config import Settings
 
 
-def test_production_rejects_development_defaults():
-    with pytest.raises(ValidationError, match="unsafe production configuration"):
+def test_production_rejects_environment_credentials():
+    with pytest.raises(ValidationError, match="secret-file bindings"):
         Settings(
             app_env="production",
             database_url="postgresql+psycopg://breero:breero@postgres:5432/breero",
@@ -51,22 +51,38 @@ def test_staging_requires_credentials_for_enabled_provider():
 
 
 def test_secret_file_bindings_are_resolved_without_environment_values(tmp_path):
+    database_url = tmp_path / "database-url"
+    redis_url = tmp_path / "redis-url"
+    jwt_secret = tmp_path / "jwt-secret"
+    jwt_refresh_secret = tmp_path / "jwt-refresh-secret"
     stripe_secret = tmp_path / "stripe-secret"
     stripe_webhook = tmp_path / "stripe-webhook"
     stripe_publishable = tmp_path / "stripe-publishable"
     geoapify = tmp_path / "geoapify"
+    database_url.write_text("postgresql+psycopg://prod:secret@postgres/prod", encoding="ascii")
+    redis_url.write_text("redis://:secret@redis:6379/0", encoding="ascii")
+    jwt_secret.write_text("a" * 32, encoding="ascii")
+    jwt_refresh_secret.write_text("b" * 32, encoding="ascii")
     stripe_secret.write_text("sk_test_abcdefghijklmnopqrstuvwxyz", encoding="ascii")
     stripe_webhook.write_text("whsec_abcdefghijklmnopqrstuvwxyz", encoding="ascii")
     stripe_publishable.write_text("pk_test_abcdefghijklmnopqrstuvwxyz", encoding="ascii")
     geoapify.write_text("geoapify-key-material", encoding="ascii")
 
     settings = Settings(
+        database_url_file=str(database_url),
+        redis_url_file=str(redis_url),
+        jwt_secret_file=str(jwt_secret),
+        jwt_refresh_secret_file=str(jwt_refresh_secret),
         stripe_secret_key_file=str(stripe_secret),
         stripe_webhook_secret_file=str(stripe_webhook),
         stripe_publishable_key_file=str(stripe_publishable),
         geocoding_api_key_file=str(geoapify),
     )
 
+    assert settings.database_url.startswith("postgresql+psycopg://")
+    assert settings.redis_url.startswith("redis://")
+    assert settings.jwt_secret == "a" * 32
+    assert settings.jwt_refresh_secret == "b" * 32
     assert settings.stripe_secret_key.startswith("sk_test_")
     assert settings.stripe_webhook_secret.startswith("whsec_")
     assert settings.stripe_publishable_key.startswith("pk_test_")

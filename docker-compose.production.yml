@@ -13,9 +13,20 @@ x-app: &app
   cap_drop:
     - ALL
   secrets:
-    - breero_geoapify_api_key
+    - breero_database_url
+    - breero_redis_url
+    - breero_jwt_access_secret
+    - breero_jwt_refresh_secret
   networks:
     - breero_private
+  pids_limit: 256
+  mem_limit: 1g
+  cpus: 1.0
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
 
 services:
   migrate:
@@ -23,6 +34,8 @@ services:
     restart: "no"
     command: ["alembic", "upgrade", "head"]
     profiles: ["migration"]
+    mem_limit: 512m
+    cpus: 0.5
 
   api:
     <<: *app
@@ -30,6 +43,12 @@ services:
     networks:
       - breero_private
       - caddy_shared
+    secrets:
+      - breero_database_url
+      - breero_redis_url
+      - breero_jwt_access_secret
+      - breero_jwt_refresh_secret
+      - breero_geoapify_api_key
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
       interval: 15s
@@ -45,6 +64,7 @@ services:
   worker:
     <<: *app
     command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=info"]
+    mem_limit: 768m
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,6 +74,8 @@ services:
   scheduler:
     <<: *app
     command: ["celery", "-A", "app.workers.celery_app:celery_app", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
+    mem_limit: 512m
+    cpus: 0.5
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,10 +85,27 @@ services:
   postgres:
     image: postgis/postgis:17-3.5@sha256:0a23a2b5e4fbd9b4c6980d20ee80dd6b63dec52669379c75a506db58a4116708
     restart: unless-stopped
+    user: "999:999"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,uid=999,gid=999
+      - /var/run/postgresql:rw,noexec,nosuid,size=16m,uid=999,gid=999
     env_file: ${BREERO_ENV_FILE:-.env.production}
+    secrets:
+      - breero_postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks: [breero_private]
+    pids_limit: 256
+    mem_limit: 2g
+    cpus: 1.5
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
@@ -76,12 +115,28 @@ services:
   redis:
     image: redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"]
+    user: "999:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m,uid=999,gid=1000
+    command: ["redis-server", "--appendonly", "yes", "--aclfile", "/run/secrets/breero_redis_acl"]
+    secrets:
+      - breero_redis_acl
     volumes:
       - redis_data:/data
     networks: [breero_private]
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 0.5
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep PONG"]
+      test: ["CMD-SHELL", "redis-cli ping 2>&1 | grep -q 'NOAUTH Authentication required'"]
       interval: 10s
       timeout: 3s
       retries: 10
@@ -98,5 +153,17 @@ volumes:
   redis_data:
 
 secrets:
+  breero_database_url:
+    file: ${DATABASE_URL_REFERENCE:?Set DATABASE_URL_REFERENCE}
+  breero_redis_url:
+    file: ${REDIS_URL_REFERENCE:?Set REDIS_URL_REFERENCE}
+  breero_jwt_access_secret:
+    file: ${JWT_SECRET_REFERENCE:?Set JWT_SECRET_REFERENCE}
+  breero_jwt_refresh_secret:
+    file: ${JWT_REFRESH_SECRET_REFERENCE:?Set JWT_REFRESH_SECRET_REFERENCE}
   breero_geoapify_api_key:
     file: ${GEOAPIFY_API_KEY_REFERENCE:?Set GEOAPIFY_API_KEY_REFERENCE}
+  breero_postgres_password:
+    file: ${POSTGRES_PASSWORD_REFERENCE:?Set POSTGRES_PASSWORD_REFERENCE}
+  breero_redis_acl:
+    file: ${REDIS_ACL_FILE_REFERENCE:?Set REDIS_ACL_FILE_REFERENCE}

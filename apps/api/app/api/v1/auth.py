@@ -1,8 +1,9 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.domains.auth.dependencies import current_user
@@ -35,6 +36,11 @@ async def register(
     session: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[None, Depends(rate_limit("register", 5, 60))],
 ) -> TokenResponse:
+    if settings.keycloak_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Public account registration is disabled",
+        )
     return await AuthService(session).register(data, *client(request))
 
 

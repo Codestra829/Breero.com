@@ -12,9 +12,13 @@ class Settings(BaseSettings):
     app_name: str = "BREERO API"
     api_v1_prefix: str = "/api/v1"
     database_url: str = "postgresql+psycopg://breero:breero@postgres:5432/breero"
+    database_url_file: str = ""
     redis_url: str = "redis://redis:6379/0"
+    redis_url_file: str = ""
     jwt_secret: str = "development-only-change-me"
+    jwt_secret_file: str = ""
     jwt_refresh_secret: str = "development-only-change-me-too"
+    jwt_refresh_secret_file: str = ""
     jwt_algorithm: str = "HS256"
     keycloak_enabled: bool = False
     keycloak_issuer: str = ""
@@ -78,6 +82,10 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production(self) -> "Settings":
         secret_bindings = (
+            ("database_url", "database_url_file"),
+            ("redis_url", "redis_url_file"),
+            ("jwt_secret", "jwt_secret_file"),
+            ("jwt_refresh_secret", "jwt_refresh_secret_file"),
             ("stripe_secret_key", "stripe_secret_key_file"),
             ("stripe_webhook_secret", "stripe_webhook_secret_file"),
             ("stripe_publishable_key", "stripe_publishable_key_file"),
@@ -86,7 +94,7 @@ class Settings(BaseSettings):
         for value_name, file_name in secret_bindings:
             value = getattr(self, value_name)
             path = getattr(self, file_name)
-            if value and path:
+            if value and path and value_name in self.model_fields_set:
                 raise ValueError(f"configure only one of {value_name.upper()} or {file_name.upper()}")
             if path:
                 try:
@@ -133,6 +141,18 @@ class Settings(BaseSettings):
                 "request-service release requires disabled flags: "
                 + ", ".join(enabled_release_flags)
             )
+
+        if self.app_env.lower() == "production":
+            missing_file_bindings = [
+                name
+                for name in ("database_url", "redis_url", "jwt_secret", "jwt_refresh_secret")
+                if not getattr(self, f"{name}_file")
+            ]
+            if missing_file_bindings:
+                raise ValueError(
+                    "production credentials require secret-file bindings: "
+                    + ", ".join(name.upper() for name in missing_file_bindings)
+                )
 
         if self.app_env.lower() not in {"production", "staging"}:
             return self

@@ -2,7 +2,6 @@ import base64
 import hashlib
 import hmac
 import json
-import os
 import secrets
 import time
 import uuid
@@ -54,7 +53,7 @@ def _unb64(data: str) -> bytes:
 
 
 def _secret() -> bytes:
-    value = os.getenv("JWT_SECRET")
+    value = settings.jwt_secret
     if not value:
         raise RuntimeError("JWT_SECRET must be configured")
     return value.encode()
