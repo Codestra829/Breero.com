@@ -75,19 +75,21 @@ async def dispatcher_queue(
         manual_state = payload.get("manual_dispatch_state")
         provider_assigned = payload.get("provider_assigned") is True
         contact_attempts = payload.get("contact_attempts") or []
+        required_follow_up_value = payload.get("required_follow_up")
+        required_follow_up = (
+            required_follow_up_value
+            if isinstance(required_follow_up_value, bool)
+            else submission.submission_type.value != "SERVICE_REQUEST"
+            or manual_state == "PENDING_MANUAL_DISPATCH"
+            or not provider_assigned
+        )
         result.append(
             DispatcherQueueItem(
                 request_id=submission.id,
                 submission_type=submission.submission_type.value,
                 created_at=created_at,
                 request_age_seconds=max(0, int((now - created_at).total_seconds())),
-                required_follow_up=(
-                    payload.get("required_follow_up")
-                    if isinstance(payload.get("required_follow_up"), bool)
-                    else submission.submission_type.value != "SERVICE_REQUEST"
-                    or manual_state == "PENDING_MANUAL_DISPATCH"
-                    or not provider_assigned
-                ),
+                required_follow_up=required_follow_up,
                 customer_timezone=payload.get("customer_timezone"),
                 address_verification_state=payload.get("geoapify_verification_state"),
                 manual_dispatch_state=manual_state,
