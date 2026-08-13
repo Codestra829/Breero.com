@@ -50,7 +50,9 @@ def test_staging_requires_credentials_for_enabled_provider():
         )
 
 
-def test_secret_file_bindings_are_resolved_without_environment_values(tmp_path):
+def test_secret_file_bindings_are_resolved_without_environment_values(tmp_path, monkeypatch):
+    for variable in ("DATABASE_URL", "REDIS_URL", "JWT_SECRET", "JWT_REFRESH_SECRET"):
+        monkeypatch.delenv(variable, raising=False)
     database_url = tmp_path / "database-url"
     redis_url = tmp_path / "redis-url"
     jwt_secret = tmp_path / "jwt-secret"
