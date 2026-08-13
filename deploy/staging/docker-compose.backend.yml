@@ -34,28 +34,6 @@ services:
     <<: *app
     container_name: breero-staging-worker
     command: [celery, -A, app.workers.celery_app:celery_app, worker, --loglevel=info]
-    networks: [private, middleware_egress]
-    volumes:
-      - type: bind
-        source: ${BREERO_STAGING_MIDDLEWARE_CA_FILE:-/srv/breero-staging/secrets/codestra_private_ca.pem}
-        target: /run/secrets/codestra_private_ca.pem
-        read_only: true
-        bind: {create_host_path: false}
-      - type: bind
-        source: ${BREERO_STAGING_MIDDLEWARE_HMAC_FILE:-/srv/breero-staging/secrets/breero_middleware_hmac}
-        target: /run/secrets/breero_middleware_hmac
-        read_only: true
-        bind: {create_host_path: false}
-      - type: bind
-        source: ${BREERO_STAGING_MIDDLEWARE_CLIENT_CERT_FILE:-/srv/breero-staging/secrets/breero_middleware_client.pem}
-        target: /run/secrets/breero_middleware_client.pem
-        read_only: true
-        bind: {create_host_path: false}
-      - type: bind
-        source: ${BREERO_STAGING_MIDDLEWARE_CLIENT_KEY_FILE:-/srv/breero-staging/secrets/breero_middleware_client.key}
-        target: /run/secrets/breero_middleware_client.key
-        read_only: true
-        bind: {create_host_path: false}
     healthcheck: {disable: true}
     depends_on:
       postgres: {condition: service_healthy}
@@ -95,9 +73,6 @@ networks:
   private:
     name: breero_staging_private
     internal: true
-  middleware_egress:
-    name: breero_middleware_egress
-    external: true
 
 volumes:
   postgres_data: {name: breero_staging_postgres_data}
