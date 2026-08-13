@@ -37,6 +37,26 @@ services first, run the one-shot migration, then start API and worker. Always us
 tag. Verify `/health/live`, `/health/ready`, `/openapi.json`, container port bindings, and network
 membership after every update.
 
+Middleware delivery is an explicit opt-in. A disabled deployment uses only
+`docker-compose.backend.yml` and requires no middleware secret files. After private-route, CA,
+mTLS and HMAC enrollment has passed, create the dedicated egress network once with an explicitly
+non-conflicting subnet:
+
+```sh
+docker network create --driver bridge --subnet 10.251.12.0/24 \
+  --label com.breero.purpose=private-middleware-egress breero_middleware_egress
+```
+
+Set the four `BREERO_STAGING_MIDDLEWARE_*_FILE` variables to root-owned files, change
+`MIDDLEWARE_ENABLED=true`, and apply both Compose files in order:
+
+```sh
+docker compose -f docker-compose.backend.yml -f docker-compose.middleware.yml config --quiet
+docker compose -f docker-compose.backend.yml -f docker-compose.middleware.yml up -d worker
+```
+
+Never apply the middleware overlay before its files and external network exist.
+
 ## Providers
 
 Stripe, email, SMS, geocoding, Odoo, and payout are explicitly disabled because staging credentials

@@ -18,3 +18,10 @@ Required sequence:
 
 Rollback is a single Caddy upstream reversal to maintenance or the previous healthy API. Do not
 point production at staging and do not roll the database back during immediate application rollback.
+
+Middleware delivery remains disabled during the production stack's normal startup. After staging
+certification and production activation approval, ensure `breero_middleware_egress` exists using the
+same explicit `10.251.12.0/24` creation command documented for staging. Set the four
+`BREERO_PROD_MIDDLEWARE_*_FILE` variables to distinct production, root-owned files and apply
+`docker-compose.middleware.yml` as a second Compose file. Validate the combined render before
+recreating only `breero-prod-worker`. Do not copy staging HMAC or mTLS credentials into production.

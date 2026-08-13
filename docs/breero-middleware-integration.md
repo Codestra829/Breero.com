@@ -9,14 +9,15 @@ Allowed events are `breero.service_request.created`, `breero.contact_request.cre
 `breero.provider_interest.created`, and `breero.lead_dispute.created`.
 
 Required protected runtime configuration is documented in the staging and production environment
-examples. The HMAC secret and Codestra private CA must be read-only mounted files. Private routing
+examples. The HMAC secret, client certificate/key, and Codestra private CA must be read-only
+mounted files. The private listener requires mTLS in addition to HMAC-V2. Private routing
 must reach the middleware's private listener; a public-IP hosts-file override is not sufficient.
 Keep `ODOO_ENABLED=false` permanently. Set `MIDDLEWARE_ENABLED=true` first in staging only after
 private routing, CA verification and identity enrollment are complete.
 
 Middleware must register identity `breero-staging` or `breero-production`, audience
-`codestra-middleware-breero-crm`, tenant `breero`, source IP restrictions and only scope
-`breero.crm-events.write`. It must persist an audit receipt and its own outbox transactionally,
+`codestra-middleware-breero`, tenant `breero`, source IP restrictions and only scope
+`breero.crm.events.submit`. It must persist an audit receipt and its own outbox transactionally,
 deduplicate by event ID and idempotency key, reject changed-payload replay, retry transient Odoo
 failures, and expose status/reconciliation without returning unrestricted Odoo access.
 
