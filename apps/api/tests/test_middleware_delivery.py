@@ -81,3 +81,9 @@ async def test_disabled_delivery_fails_closed():
             await MiddlewareAdapter().deliver(event())
     finally:
         settings.middleware_enabled = previous
+
+
+def test_private_middleware_hostname_is_pinned_in_delivery_overlays():
+    for environment in ("staging", "production"):
+        compose = Path(f"deploy/{environment}/docker-compose.middleware.yml").read_text()
+        assert 'middleware.internal.codestra.agency:10.40.0.1' in compose
