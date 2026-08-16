@@ -47,12 +47,23 @@ class BreeroSyncEvent(models.Model):
     def integration_health(self):
         if not self.env.user.has_group("breero_crm.group_breero_integration"):
             raise AccessError("Integration service group required")
-        return {"status": "ok", "module_version": "19.0.1.0.0", "company": self.env.company.name}
+        company, unit = self._service_scope()
+        return {"status": "ok", "module_version": "19.0.1.0.0", "company": company.name,
+                "business_unit": unit.code}
+
+    @api.model
+    def _service_scope(self):
+        companies = self.env.user.company_ids
+        units = self.env.user.call_center_business_unit_ids
+        if len(companies) != 1 or len(units) != 1 or units.company_id != companies:
+            raise AccessError("BREERO integration identity must have exactly one matching company and business unit")
+        return companies, units
 
     @api.model
     def process_breero_event(self, envelope):
         if not self.env.user.has_group("breero_crm.group_breero_integration"):
             raise AccessError("Integration service group required")
+        self._service_scope()
         required = {"event_id", "event_type", "schema_version", "aggregate_id", "aggregate_version",
                     "occurred_at", "idempotency_key", "source", "payload"}
         if not isinstance(envelope, dict) or required - set(envelope):
@@ -146,12 +157,14 @@ class BreeroSyncEvent(models.Model):
             if case: case.write(values)
             return case._name, case.id
         provider = event_type.startswith("breero.provider_interest")
+        company, unit = self._service_scope()
         team = self._team("breero_crm.team_provider_recruitment" if provider else "breero_crm.team_customer_requests")
         lead = self.env["crm.lead"].search([("x_breero_request_id", "=", external)], limit=1)
         partner = self._partner(payload, provider)
         record_type = "provider_interest" if provider else "service_request"
         values = {"name": f"[BREERO] {payload.get('service_name') or payload.get('service_slug') or record_type.replace('_', ' ').title()} — {payload.get('contact_name') or payload.get('name') or partner.name} — {payload.get('city') or ''}",
             "type": "lead", "team_id": team.id, "partner_id": partner.id, "contact_name": payload.get("contact_name") or payload.get("name"),
+            "company_id": company.id, "business_unit_id": unit.id, "user_id": self.env.user.id,
             "partner_name": payload.get("business_name"), "email_from": payload.get("email"), "phone": payload.get("phone"),
             "street": payload.get("address_line1"), "city": payload.get("city"), "zip": payload.get("postal_code"),
             "x_breero_request_id": external, "x_breero_external_reference": external, "x_breero_event_id": envelope["event_id"],

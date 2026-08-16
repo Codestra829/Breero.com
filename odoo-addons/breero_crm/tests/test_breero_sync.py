@@ -7,7 +7,13 @@ class TestBreeroSync(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        cls.unit = cls.env["call.center.business.unit"].create({
+            "name": "BREERO Integration Test", "code": "BREEROTEST",
+            "company_id": cls.env.company.id,
+        })
         cls.user = cls.env["res.users"].create({"name": "BREERO Integration Test", "login": f"breero-{uuid.uuid4()}@example.test",
+            "company_id": cls.env.company.id, "company_ids": [(6, 0, cls.env.company.ids)],
+            "call_center_business_unit_ids": [(6, 0, cls.unit.ids)],
             "group_ids": [(6, 0, [cls.env.ref("breero_crm.group_breero_integration").id])]})
         cls.sync = cls.env["breero.sync.event"].with_user(cls.user)
 

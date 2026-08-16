@@ -5,7 +5,7 @@
     "author": "Codestra LLC DBA Breero.com",
     "website": "https://breero.com",
     "license": "LGPL-3",
-    "depends": ["crm", "utm", "mail"],
+    "depends": ["crm", "utm", "mail", "call_center_core"],
     "data": [
         "data/crm_teams.xml", "data/crm_stages.xml",
         "security/security.xml", "security/ir.model.access.csv", "data/activity_types.xml",
