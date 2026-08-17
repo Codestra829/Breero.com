@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 
 type FormKind = "service" | "contact" | "provider";
 type Service = { id: string; slug: string; name: string; is_active?: boolean };
+type AddressValidation = { serviceable: boolean; formatted_address: string };
 
 function value(data: FormData, key: string) {
   return String(data.get(key) ?? "").trim();
@@ -12,7 +13,7 @@ function value(data: FormData, key: string) {
 export function PublicIntakeForm({ kind }: { kind: FormKind }) {
   const [services, setServices] = useState<Service[]>([]);
   const [catalogError, setCatalogError] = useState(false);
-  const [state, setState] = useState<"idle" | "sending" | "accepted" | "error">("idle");
+  const [state, setState] = useState<"idle" | "sending" | "accepted" | "unserviceable" | "error">("idle");
 
   useEffect(() => {
     if (kind !== "service") return;
@@ -104,6 +105,29 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
     const endpoint =
       kind === "service" ? "service-requests" : kind === "contact" ? "contact" : "provider-interest";
     try {
+      if (kind === "service") {
+        const address = [
+          value(data, "address_line1"),
+          value(data, "city"),
+          value(data, "state"),
+          value(data, "postal_code"),
+          "US",
+        ].join(", ");
+        const validation = await fetch("/api/addresses/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address }),
+        }).catch(() => null);
+        // Geocoding may be disabled or temporarily unavailable during the request-only release.
+        // In that case the operator performs the authoritative address review after intake.
+        if (validation?.ok) {
+          const result = await validation.json() as AddressValidation;
+          if (!result.serviceable) {
+            setState("unserviceable");
+            return;
+          }
+        }
+      }
       const response = await fetch(`/api/public-submissions/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
@@ -170,7 +194,7 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
       </fieldset>
       <p className="mk-intake__disclosure">BREERO coordinates requests with independent service providers. Providers remain responsible for final estimates, scope, pricing, licensing, permits, insurance, workmanship and service performance.</p>
       <button className="mk-button mk-button--primary" type="submit" disabled={state === "sending" || (kind === "service" && !services.length)}>{state === "sending" ? "Sending…" : kind === "provider" ? "Submit interest" : "Send request"}</button>
-      <div aria-live="polite">{state === "accepted" && <p className="mk-intake__success">Your request was accepted. This does not yet confirm availability or provider assignment.</p>}{state === "error" && <p role="alert">We could not accept the request. Please retry or email support@breero.com.</p>}</div>
+      <div aria-live="polite">{state === "accepted" && <p className="mk-intake__success">Your request was accepted. This does not yet confirm availability or provider assignment.</p>}{state === "unserviceable" && <p role="alert">We could not confirm service coverage for that address. Check the address and ZIP code, or contact support@breero.com.</p>}{state === "error" && <p role="alert">We could not accept the request. Please retry or email support@breero.com.</p>}</div>
     </form>
   );
 }

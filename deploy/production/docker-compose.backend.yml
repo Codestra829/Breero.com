@@ -10,6 +10,12 @@ x-app: &app
   security_opt: [no-new-privileges:true]
   cap_drop: [ALL]
   networks: [private]
+  secrets:
+    - breero_database_url
+    - breero_redis_url
+    - breero_jwt_access_secret
+    - breero_jwt_refresh_secret
+    - breero_geoapify_api_key
 
 services:
   migrate:
@@ -75,3 +81,15 @@ networks:
 volumes:
   postgres_data: {name: breero_prod_postgres_data}
   redis_data: {name: breero_prod_redis_data}
+
+secrets:
+  breero_database_url:
+    file: ${DATABASE_URL_REFERENCE:?Set DATABASE_URL_REFERENCE}
+  breero_redis_url:
+    file: ${REDIS_URL_REFERENCE:?Set REDIS_URL_REFERENCE}
+  breero_jwt_access_secret:
+    file: ${JWT_SECRET_REFERENCE:?Set JWT_SECRET_REFERENCE}
+  breero_jwt_refresh_secret:
+    file: ${JWT_REFRESH_SECRET_REFERENCE:?Set JWT_REFRESH_SECRET_REFERENCE}
+  breero_geoapify_api_key:
+    file: ${GEOAPIFY_API_KEY_REFERENCE:?Set GEOAPIFY_API_KEY_REFERENCE}

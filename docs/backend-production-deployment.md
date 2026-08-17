@@ -19,6 +19,15 @@ Required sequence:
 Rollback is a single Caddy upstream reversal to maintenance or the previous healthy API. Do not
 point production at staging and do not roll the database back during immediate application rollback.
 
+For Geoapify certification, store the production API key in a root-owned file with mode `0600`, set
+`GEOAPIFY_API_KEY_REFERENCE` to that absolute path, and keep
+`GEOCODING_API_KEY_FILE=/run/secrets/breero_geoapify_api_key`. Set `GEOCODING_ENABLED=true` only
+after the rendered Compose configuration shows the secret mounted in the API and worker. Recreate
+those two services, confirm `/api/v1/addresses/validate` appears in OpenAPI, and canary a known U.S.
+address without logging the key or the full customer address. A rejected credential, ambiguous
+result, missing time zone, or provider outage must fail to manual review rather than establish
+service coverage.
+
 Middleware delivery remains disabled during the production stack's normal startup. After staging
 certification and production activation approval, ensure `breero_middleware_egress` exists using the
 same explicit `10.251.12.0/24` creation command documented for staging. Set the four

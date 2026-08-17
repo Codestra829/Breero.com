@@ -32,6 +32,21 @@ for (const width of [375, 430, 768, 1024, 1280, 1440])
 test("request-service submission remains pending manual dispatch", async ({ page }) => {
   await mockCatalog(page);
   let submitted: Record<string, unknown> | undefined;
+  let validated: Record<string, unknown> | undefined;
+  await page.route("**/api/addresses/validate", async (route) => {
+    validated = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        serviceable: true,
+        formatted_address: "1600 Pennsylvania Avenue NW, Washington, DC 20500, US",
+        address_id: "address-canary",
+        service_area_id: "area-canary",
+        legal_entity_code: "BREERO-US",
+      }),
+    });
+  });
   await page.route("**/api/public-submissions/service-requests", async (route) => {
     submitted = route.request().postDataJSON() as Record<string, unknown>;
     await route.fulfill({
@@ -71,6 +86,7 @@ test("request-service submission remains pending manual dispatch", async ({ page
   expect(submitted).not.toHaveProperty("paid");
   expect(submitted).not.toHaveProperty("provider_id");
   expect(submitted).not.toHaveProperty("appointment_status");
+  expect(validated).toEqual({ address: "1600 Pennsylvania Avenue NW, Washington, DC, 20500, US" });
 });
 
 test("catalog failure keeps manual request recovery visible", async ({ page }) => {
