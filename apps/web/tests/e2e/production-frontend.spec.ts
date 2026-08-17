@@ -23,7 +23,7 @@ test("book enters the request-only manual-dispatch journey", async ({ page }) =>
 test("policy and contact surfaces expose the approved operator identity", async ({ page }) => {
   for (const route of ["/contact", "/terms", "/privacy", "/refund-policy", "/cancellation-policy", "/service-fulfillment-policy", "/professional-lead-policy"]) {
     await page.goto(route);
-    await expect(page.getByText("Codestra LLC DBA Breero.com", { exact: false }).first()).toBeVisible();
+    await expect(page.getByText("BREERO, operated by Codestra LLC", { exact: false }).first()).toBeVisible();
     await expect(page.getByText("support@breero.com", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("20633 Longenbaugh Rd", { exact: false }).first()).toBeVisible();
   }

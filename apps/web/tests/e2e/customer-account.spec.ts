@@ -20,13 +20,13 @@ test("booking detail exposes only customer-safe backend fields", async ({ page }
   await expect(page.getByText(/Provider secrets, internal pricing/)).toBeVisible();
 });
 
-test("customer can approve a quote and prepare additional payment", async ({ page }) => {
+test("customer can approve a quote without an online payment", async ({ page }) => {
   await page.goto("/account/quotes/QT-1048");
   await expect(page.getByText("Replace the worn mixer tap cartridge and test the seals.")).toBeVisible();
   await page.getByRole("button", { name: "Approve quote" }).click();
-  await expect(page.getByText("Quote approved")).toBeVisible();
-  await page.getByRole("button", { name: "Continue to payment" }).click();
-  await expect(page.getByText("Payment authorization ready")).toBeVisible();
+  await expect(page.getByText("Quote response saved")).toBeVisible();
+  await expect(page.getByText(/does not collect online payment/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /payment/i })).toHaveCount(0);
 });
 
 test("session expiry gives a clear recovery path", async ({ page }) => {

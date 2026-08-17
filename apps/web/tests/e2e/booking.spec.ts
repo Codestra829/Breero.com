@@ -9,7 +9,7 @@ const service = {
 };
 
 async function mockCatalog(page: import("@playwright/test").Page) {
-  await page.route("**/api/v1/services", (route) =>
+  await page.route("**/api/services", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([service]) }),
   );
 }
@@ -32,7 +32,7 @@ for (const width of [375, 430, 768, 1024, 1280, 1440])
 test("request-service submission remains pending manual dispatch", async ({ page }) => {
   await mockCatalog(page);
   let submitted: Record<string, unknown> | undefined;
-  await page.route("**/api/v1/service-requests", async (route) => {
+  await page.route("**/api/public-submissions/service-requests", async (route) => {
     submitted = route.request().postDataJSON() as Record<string, unknown>;
     await route.fulfill({
       status: 202,
@@ -43,15 +43,16 @@ test("request-service submission remains pending manual dispatch", async ({ page
 
   await page.goto("/request-service?utm_source=canary&utm_campaign=request-only");
   await page.getByLabel("Name").fill("Owner Controlled Canary");
-  await page.getByLabel("Email").fill("owner-canary@example.test");
-  await page.getByLabel("Phone").fill("+12025550123");
+  await page.getByRole("textbox", { name: "Email", exact: true }).fill("owner-canary@example.test");
+  await page.getByRole("textbox", { name: "Phone", exact: true }).fill("+12025550123");
   await page.getByLabel("Street address").fill("1600 Pennsylvania Avenue NW");
   await page.getByLabel("City").fill("Washington");
   await page.getByLabel("State or district").selectOption("DC");
   await page.getByLabel("ZIP code").fill("20500");
-  await page.getByLabel("Preferred timing").fill("Weekday morning");
+  await page.getByLabel("Preferred date").fill("2026-09-01");
+  await page.getByLabel("Preferred local time").fill("09:00");
   await page.getByLabel("What do you need help with?").fill("Owner-controlled request test");
-  await page.getByRole("checkbox").check();
+  await page.getByLabel(/may contact me about this request/i).check();
   await page.getByRole("button", { name: "Send request" }).click();
 
   await expect(page.getByText(/does not yet confirm availability or provider assignment/i)).toBeVisible();
@@ -73,8 +74,8 @@ test("request-service submission remains pending manual dispatch", async ({ page
 });
 
 test("catalog failure keeps manual request recovery visible", async ({ page }) => {
-  await page.route("**/api/v1/services", (route) => route.fulfill({ status: 503 }));
+  await page.route("**/api/services", (route) => route.fulfill({ status: 503 }));
   await page.goto("/request-service");
-  await expect(page.getByRole("alert")).toContainText("Live services are unavailable");
+  await expect(page.getByText("Live services are unavailable right now. Please try again shortly.")).toBeVisible();
   await expect(page.getByText(/not a confirmed booking, provider assignment, price or appointment/i)).toBeVisible();
 });
