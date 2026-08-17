@@ -5,8 +5,6 @@ import { FormEvent, useEffect, useState } from "react";
 type FormKind = "service" | "contact" | "provider";
 type Service = { id: string; slug: string; name: string; is_active?: boolean };
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://api.breero.com/api/v1";
-
 function value(data: FormData, key: string) {
   return String(data.get(key) ?? "").trim();
 }
@@ -19,7 +17,7 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
   useEffect(() => {
     if (kind !== "service") return;
     const controller = new AbortController();
-    fetch(`${apiBase}/services`, { signal: controller.signal })
+    fetch("/api/services", { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error("catalog unavailable");
         return response.json() as Promise<Service[]>;
@@ -106,7 +104,7 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
     const endpoint =
       kind === "service" ? "service-requests" : kind === "contact" ? "contact" : "provider-interest";
     try {
-      const response = await fetch(`${apiBase}/${endpoint}`, {
+      const response = await fetch(`/api/public-submissions/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
         body: JSON.stringify(payload),

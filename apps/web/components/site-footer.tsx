@@ -7,7 +7,7 @@ const groups = [
   { title: "Services", links: [["All services", "/services"], ["Plumbing", "/services/plumbing"], ["Electrical", "/services/electrical"], ["Cleaning", "/services/cleaning"]] },
   { title: "Company", links: [["About", "/about"], ["How it works", "/how-it-works"], ["Careers", "/careers"], ["Press", "/press"]] },
   { title: "Support", links: [["Request service", "/request-service"], ["Help centre", "/help"], ["Contact", "/contact"], ["Refund, rescheduling & cancellation", "/refund-cancellation"], ["Service fulfillment", "/service-fulfillment"]] },
-  { title: "Privacy & communications", links: [["Privacy choices", "/privacy-choices"], ["Cookie notice", "/cookies"], ["Communication preferences", "/communications-preferences"], ["SMS terms", "/sms-terms"]] },
+  { title: "Privacy & communications", links: [["Privacy choices", "/privacy-choices"], ["Cookie notice", "/cookies"], ["Cookie preferences", "/cookie-preferences"], ["Communication preferences", "/communications-preferences"], ["SMS terms", "/sms-terms"]] },
   { title: "Professionals", links: [["Partner information", "/partners"], ["Provider terms", "/provider-terms"], ["Lead terms", "/lead-terms"], ["Partner interest", "/partners#interest"]] },
 ];
 

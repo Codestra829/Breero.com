@@ -1,3 +1,5 @@
+import { analyticsConsentGranted } from "./consent";
+
 export type FunnelEvent =
   | { name: "homepage_viewed" }
   | { name: "service_viewed"; serviceId: string }
@@ -19,4 +21,4 @@ export function configureAnalytics(next: AnalyticsAdapter): () => void {
   adapter = next;
   return () => { adapter = noop; };
 }
-export function track(event: FunnelEvent): void { void adapter.track(event); }
+export function track(event: FunnelEvent): void { if (analyticsConsentGranted()) void adapter.track(event); }

@@ -10,11 +10,11 @@ import { useApiResource } from "@/lib/customer/use-api-resource";
 type DashboardData = { profile: CustomerProfile; bookings: Booking[]; quotes: Quote[]; payments: CustomerPayment[] };
 export default function AccountDashboard() {
   const load = useCallback(async (signal: AbortSignal): Promise<DashboardData> => {
-    const [profile, bookings, quotes, payments] = await Promise.all([
+    const [profile, bookings, quotes] = await Promise.all([
       customerApi.customer.profile(signal), customerApi.bookings.mine(undefined, signal),
-      customerApi.quotes.list(undefined, signal), customerApi.customer.payments(undefined, signal),
+      customerApi.quotes.list(undefined, signal),
     ]);
-    return { profile, bookings: bookings.items, quotes: quotes.items, payments: payments.items };
+    return { profile, bookings: bookings.items, quotes: quotes.items, payments: [] };
   }, []);
   const { value, error, retry } = useApiResource(load);
   if (error) return <ErrorState title="We couldn’t load your account" description={error.message} onRetry={retry}/>;

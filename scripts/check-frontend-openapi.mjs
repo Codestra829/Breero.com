@@ -16,6 +16,8 @@ const required = {
   "/api/v1/service-requests": ["post"],
   "/api/v1/contact": ["post"],
   "/api/v1/provider-interest": ["post"],
+  "/api/v1/privacy-requests": ["post"],
+  "/api/v1/communications/preferences": ["post"],
   "/api/v1/customer/profile": ["get", "patch"],
   "/api/v1/customer/addresses": ["get", "post"],
   "/api/v1/customer/addresses/{address_id}": ["patch", "delete"],
@@ -25,8 +27,6 @@ const required = {
   "/api/v1/customer/quotes": ["get"],
   "/api/v1/customer/quotes/{quote_id}": ["get"],
   "/api/v1/customer/quotes/{quote_id}/decision": ["post"],
-  "/api/v1/customer/payments": ["get"],
-  "/api/v1/customer/payments/{payment_id}": ["get"],
 };
 
 const forbidden = {
@@ -56,19 +56,9 @@ if (exposed.length) {
   process.exit(1);
 }
 
-const purposes = document.components?.schemas?.PaymentPurpose?.enum ?? [];
-for (const purpose of ["BOOKING_DIAGNOSTIC", "QUOTE_ADDITIONAL_WORK"]) {
-  if (!purposes.includes(purpose)) {
-    console.error(`Frontend API contract is missing payment purpose ${purpose}`);
-    process.exit(1);
-  }
-}
-
 const enumExpectations = {
   QuestionType: ["text", "textarea", "number", "boolean", "single_choice", "multi_choice"],
   UserRole: ["customer", "vendor_admin", "technician", "operations", "finance", "admin"],
-  PaymentStatus: ["created", "requires_action", "authorized", "captured", "failed", "canceled", "refunded", "partially_refunded"],
-  PaymentPurpose: ["BOOKING_DIAGNOSTIC", "QUOTE_ADDITIONAL_WORK"],
   BookingStatus: ["PENDING_PAYMENT", "CONFIRMED", "CANCELLED", "EXPIRED"],
   WorkRequestStatus: ["DRAFT", "SUBMITTED", "PENDING_CUSTOMER", "APPROVED_PENDING_PAYMENT", "APPROVED", "DECLINED", "PAID", "CANCELLED", "EXPIRED"],
 };
