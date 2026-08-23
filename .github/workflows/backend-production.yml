@@ -43,7 +43,7 @@ jobs:
       - run: python -m pip install --upgrade 'pip>=26.1.2'
       - run: pip install -e '.[dev]' pip-audit
       - name: Validate production Compose contract
-        working-directory: ../..
+        working-directory: .
         env:
           BREERO_PROD_API_IMAGE: ghcr.io/example/breero-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           BREERO_PROD_API_ENV: deploy/production/api.env.example
