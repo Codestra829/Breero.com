@@ -5,6 +5,7 @@ on:
     paths:
       - "apps/api/**"
       - "deploy/production/**"
+      - "deploy/staging/**"
       - "docker-compose.production.yml"
       - ".github/workflows/backend-production.yml"
   push:
@@ -42,7 +43,7 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade 'pip>=26.1.2'
       - run: pip install -e '.[dev]' pip-audit
-      - name: Validate production Compose contract
+      - name: Validate production and staging Compose secret contracts
         working-directory: .
         env:
           BREERO_PROD_API_IMAGE: ghcr.io/example/breero-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
@@ -56,6 +57,16 @@ jobs:
           GEOAPIFY_API_KEY_REFERENCE: /tmp/breero-geoapify
           POSTGRES_PASSWORD_REFERENCE: /tmp/breero-postgres-password
           REDIS_PASSWORD_REFERENCE: /tmp/breero-redis-password
+          BREERO_STAGING_API_IMAGE: ghcr.io/example/breero-api@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+          BREERO_STAGING_API_ENV: api.env.example
+          BREERO_STAGING_POSTGRES_ENV: postgres.env.example
+          BREERO_STAGING_REDIS_ENV: redis.env.example
+          STAGING_DATABASE_URL_REFERENCE: /tmp/breero-staging-database-url
+          STAGING_REDIS_URL_REFERENCE: /tmp/breero-staging-redis-url
+          STAGING_JWT_SECRET_REFERENCE: /tmp/breero-staging-jwt-access
+          STAGING_JWT_REFRESH_SECRET_REFERENCE: /tmp/breero-staging-jwt-refresh
+          STAGING_POSTGRES_PASSWORD_REFERENCE: /tmp/breero-staging-postgres-password
+          STAGING_REDIS_PASSWORD_REFERENCE: /tmp/breero-staging-redis-password
         run: |
           touch /tmp/breero-database-url \
                 /tmp/breero-redis-url \
@@ -63,14 +74,31 @@ jobs:
                 /tmp/breero-jwt-refresh \
                 /tmp/breero-geoapify \
                 /tmp/breero-postgres-password \
-                /tmp/breero-redis-password
+                /tmp/breero-redis-password \
+                /tmp/breero-staging-database-url \
+                /tmp/breero-staging-redis-url \
+                /tmp/breero-staging-jwt-access \
+                /tmp/breero-staging-jwt-refresh \
+                /tmp/breero-staging-postgres-password \
+                /tmp/breero-staging-redis-password
           docker compose -f deploy/production/docker-compose.backend.yml config --quiet
+          docker compose -f deploy/staging/docker-compose.backend.yml config --quiet
       - run: ruff check .
       - run: mypy app
       - run: alembic upgrade head
       - run: alembic check
       - run: python scripts/check_schema_drift.py
       - run: pytest -q
+      - name: PR 34 P1/P2 repair acceptance
+        run: >-
+          pytest -q
+          tests/integration/test_release_safety_postgres.py
+          tests/integration/test_booking_expiry_worker.py
+      - name: Capability and disabled-feature guard
+        run: >-
+          pytest -q
+          tests/test_marketplace_release_safety.py
+          tests/test_production_config.py
       - name: Canonical, negative, and PostgreSQL concurrency acceptance
         run: >-
           pytest -q
@@ -92,10 +120,19 @@ jobs:
           DATABASE_URL=postgresql+psycopg://breero:test-only@localhost:5432/breero_finance alembic upgrade head
       - run: python scripts/generate_openapi.py
       - run: test -s openapi.json
-      - run: pip-audit
+      - name: Dependency audit
+        run: pip-audit
+      - name: Secret scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret
+          exit-code: "1"
       - run: docker build -t breero-api:${{ github.sha }} .
         working-directory: apps/api
-      - uses: aquasecurity/trivy-action@v0.36.0
+      - name: Container HIGH/CRITICAL scan
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: breero-api:${{ github.sha }}
           trivyignores: .trivyignore
