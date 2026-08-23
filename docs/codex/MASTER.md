@@ -23,6 +23,7 @@ The following documents are authoritative for new marketplace work:
 - MARKETPLACE_V2_P0_PRODUCTION_FOUNDATION.md
 - MARKETPLACE_V2_FRONTEND_BACKEND_PR_TRACKS.md
 - MARKETPLACE_V2_BACKEND_IMPLEMENTATION_AUTHORITY.md
+- MARKETPLACE_V2_INTEGRATION_DEPLOYMENT_READINESS.md
 - MARKETPLACE_V2_ACCEPTANCE_TESTS.md
 
 ProjectRequest is the canonical demand aggregate. Booking is downstream from an accepted marketplace outcome. Job is field execution. Verified Review requires a completed BREERO job.
