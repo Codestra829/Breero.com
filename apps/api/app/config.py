@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     scheduling_enabled: bool = True
     automatic_provider_assignment_enabled: bool = False
     automatic_confirmed_bookings: bool = False
+    provider_self_service_enabled: bool = False
+    marketplace_matching_enabled: bool = False
+    marketplace_messaging_enabled: bool = False
+    marketplace_reviews_enabled: bool = False
     transactional_email_mode: str = "controlled_canary"
     transactional_sms_mode: str = "controlled_canary"
     marketing_email_enabled: bool = False
@@ -142,6 +146,10 @@ class Settings(BaseSettings):
             "AUTOMATIC_BOOKING_ENABLED": self.automatic_booking_enabled,
             "AUTOMATIC_PROVIDER_ASSIGNMENT_ENABLED": self.automatic_provider_assignment_enabled,
             "AUTOMATIC_CONFIRMED_BOOKINGS": self.automatic_confirmed_bookings,
+            "PROVIDER_SELF_SERVICE_ENABLED": self.provider_self_service_enabled,
+            "MARKETPLACE_MATCHING_ENABLED": self.marketplace_matching_enabled,
+            "MARKETPLACE_MESSAGING_ENABLED": self.marketplace_messaging_enabled,
+            "MARKETPLACE_REVIEWS_ENABLED": self.marketplace_reviews_enabled,
             "MARKETING_EMAIL_ENABLED": self.marketing_email_enabled,
             "MARKETING_SMS_ENABLED": self.marketing_sms_enabled,
         }

@@ -53,7 +53,7 @@ class FakeLeadStripeProvider:
 
 @pytest.mark.asyncio
 async def test_public_forms_are_atomic_idempotent_and_pending_configuration(monkeypatch) -> None:
-    monkeypatch.setattr(settings, "odoo_enabled", False)
+    monkeypatch.setattr(settings, "middleware_enabled", False)
     marker = uuid.uuid4().hex
     async with SessionLocal() as session:
         service = Service(

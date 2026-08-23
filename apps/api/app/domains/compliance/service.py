@@ -60,6 +60,18 @@ class ComplianceService:
                 )
             )
 
+    async def reactivate(self, destination_hash: str, channel: str, purpose: str) -> None:
+        item = await self.session.scalar(
+            select(Suppression).where(
+                Suppression.destination_hash == destination_hash,
+                Suppression.channel == channel,
+                Suppression.purpose == purpose,
+                Suppression.active.is_(True),
+            )
+        )
+        if item:
+            item.active = False
+
     async def privacy_request(
         self, data: PrivacyRequestCreate, source_ip: str, user_agent: str | None
     ):
@@ -113,9 +125,11 @@ class ComplianceService:
             "MARKETING_EMAIL": data.marketingEmail,
             "MARKETING_SMS": data.marketingSms,
         }
+        applicable_grants: list[bool] = []
         for purpose, granted in values.items():
             if ("EMAIL" in purpose) != ("@" in data.destination):
                 continue
+            applicable_grants.append(granted)
             self.session.add(
                 ConsentEvent(
                     destination_hash=hashed,
@@ -139,5 +153,11 @@ class ComplianceService:
                     "PREFERENCE_WITHDRAWN",
                     "PREFERENCE_CENTER",
                 )
+            else:
+                await self.reactivate(
+                    hashed,
+                    "EMAIL" if "EMAIL" in purpose else "SMS",
+                    purpose,
+                )
         await self.session.commit()
-        return not all(values.values())
+        return not all(applicable_grants)

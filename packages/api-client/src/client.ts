@@ -3,7 +3,7 @@ import type {
   AvailabilitySlot, Booking, BookingConfirmation, BookingCreateRequest, BookingCreateResponse, ChangePasswordRequest, CustomerAddress,
   CustomerAddressInput, CustomerBookingList, CustomerPayment, CustomerProfile,
   CustomerProfilePatch, ForgotPasswordRequest, LoginRequest, MessageResponse, Page,
-  Payment, PaymentIntentRequest, Quote, RefreshRequest, RegisterRequest,
+  Payment, PaymentIntentRequest, PublicCapabilities, Quote, RefreshRequest, RegisterRequest,
   ResetPasswordRequest, ServiceDetail, ServiceQuestion, ServiceSummary, TokenRequest,
   User, UUID,
 } from "@breero/types";
@@ -11,6 +11,7 @@ import { ApiTransport, type Transport, type TransportOptions } from "./transport
 
 export interface PageParams { page?: number; pageSize?: number }
 export interface BreeroApi {
+  public: { capabilities(signal?: AbortSignal): Promise<PublicCapabilities> };
   auth: {
     login(input: LoginRequest): Promise<AuthSession>; register(input: RegisterRequest): Promise<AuthSession>;
     refresh(input: RefreshRequest): Promise<AuthSession>; logout(input: RefreshRequest): Promise<void>;
@@ -47,6 +48,7 @@ export function createBreeroApi(options: TransportOptions): BreeroApi { return c
 
 export function createApiClient(http: Transport): BreeroApi {
   return {
+    public: { capabilities: (signal) => http.request("/public/capabilities", { signal }) },
     auth: {
       login: (body) => http.request("/auth/login", { method: "POST", body, retry: false }),
       register: (body) => http.request("/auth/register", { method: "POST", body, retry: false }),

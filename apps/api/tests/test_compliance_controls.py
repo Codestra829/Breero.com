@@ -63,6 +63,38 @@ async def test_withdrawal_writes_hashed_consent_and_suppression() -> None:
     session.commit.assert_awaited_once()
 
 
+@pytest.mark.asyncio
+async def test_explicit_reopt_in_deactivates_applicable_suppression() -> None:
+    suppression = Suppression(
+        destination_hash=digest("customer@example.com"),
+        channel="EMAIL",
+        purpose="MARKETING_EMAIL",
+        reason="PREFERENCE_WITHDRAWN",
+        source="PREFERENCE_CENTER",
+        active=True,
+    )
+    session = SimpleNamespace(
+        scalar=AsyncMock(side_effect=[None, suppression]),
+        add=lambda _: None,
+        commit=AsyncMock(),
+    )
+    preference = CommunicationPreferenceCreate(
+        destination="customer@example.com",
+        transactionalEmail=True,
+        marketingEmail=True,
+        source_url="https://breero.com/communications-preferences",
+        disclosure_text="I explicitly opt in to these email purposes.",
+        policy_versions={"privacy": "2026.08.23"},
+    )
+
+    suppression_active = await ComplianceService(session).preferences(
+        preference, "192.0.2.5", "test-agent"
+    )
+
+    assert suppression.active is False
+    assert suppression_active is False
+
+
 def test_no_payment_route_is_mounted_while_scheduling_routes_are_mounted() -> None:
     from app.main import app
 

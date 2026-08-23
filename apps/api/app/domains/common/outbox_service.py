@@ -16,8 +16,11 @@ DEFAULT_LEASE_SECONDS = 300
 class OutboxService:
     def __init__(self, session: AsyncSession): self.session = session
 
-    async def activate_pending_configuration(self, event_prefix: str = "breero.") -> int:
+    async def activate_pending_configuration(
+        self, event_prefix: str = "breero.", aggregate_type: str = "public_submission"
+    ) -> int:
         events = list((await self.session.scalars(select(IntegrationEvent).where(
+            IntegrationEvent.aggregate_type == aggregate_type,
             IntegrationEvent.status == EventStatus.PENDING_CONFIGURATION,
             IntegrationEvent.event_type.like(f"{event_prefix}%"),
         ).with_for_update(skip_locked=True))).all())
@@ -25,6 +28,37 @@ class OutboxService:
         for event in events:
             event.status = EventStatus.PENDING
             event.next_attempt_at = now
+        await self.session.commit()
+        return len(events)
+
+    async def park_unconfigured(
+        self, event_prefix: str = "breero.", aggregate_type: str = "public_submission"
+    ) -> int:
+        events = list(
+            (
+                await self.session.scalars(
+                    select(IntegrationEvent)
+                    .where(
+                        IntegrationEvent.aggregate_type == aggregate_type,
+                        IntegrationEvent.event_type.like(f"{event_prefix}%"),
+                        IntegrationEvent.status.in_(
+                            [
+                                EventStatus.PENDING,
+                                EventStatus.RETRYING,
+                                EventStatus.FAILED_RETRYABLE,
+                                EventStatus.PROCESSING,
+                            ]
+                        ),
+                    )
+                    .with_for_update(skip_locked=True)
+                )
+            ).all()
+        )
+        for event in events:
+            event.status = EventStatus.PENDING_CONFIGURATION
+            event.claimed_at = None
+            event.lease_expires_at = None
+            event.claim_token = None
         await self.session.commit()
         return len(events)
 

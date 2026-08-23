@@ -1,9 +1,10 @@
 import type { BreeroApi } from "./client";
-import type { AddressValidation, AuthSession, AvailabilitySlot, Booking, BookingCreateResponse, CustomerProfile, Payment, Quote, ServiceDetail, ServiceSummary, User } from "@breero/types";
+import type { AddressValidation, AuthSession, AvailabilitySlot, Booking, BookingCreateResponse, CustomerProfile, Payment, PublicCapabilities, Quote, ServiceDetail, ServiceSummary, User } from "@breero/types";
 
 export interface MockScenario {
   services?: ServiceDetail[]; address?: AddressValidation; slots?: AvailabilitySlot[];
   session?: AuthSession; bookings?: Booking[]; bookingCreateResponse?: BookingCreateResponse; payments?: Payment[]; quotes?: Quote[]; profile?: CustomerProfile;
+  capabilities?: PublicCapabilities;
   latencyMs?: number; fail?: Partial<Record<keyof BreeroApi, Error>>;
 }
 const wait = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
@@ -21,6 +22,11 @@ export function createMockBreeroApi(scenario: MockScenario = {}): BreeroApi {
     return value();
   };
   return {
+    public: { capabilities: (s) => run("public", () => scenario.capabilities ?? {
+      request_intake: true, instant_booking: false, online_payments: false,
+      automatic_assignment: false, provider_self_service: false,
+      marketplace_matching: false, messaging: false, reviews: false,
+    }, s) },
     auth: {
       login: () => run("auth", () => scenario.session ?? missing("session")),
       register: () => run("auth", () => scenario.session ?? missing("session")),

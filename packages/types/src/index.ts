@@ -3,6 +3,17 @@ export type ISODate = string;
 export type ISODateTime = string;
 export type MoneyAmount = string;
 
+export interface PublicCapabilities {
+  request_intake: boolean;
+  instant_booking: boolean;
+  online_payments: boolean;
+  automatic_assignment: boolean;
+  provider_self_service: boolean;
+  marketplace_matching: boolean;
+  messaging: boolean;
+  reviews: boolean;
+}
+
 export type QuestionType =
   | "text" | "textarea" | "number" | "boolean"
   | "single_choice" | "multi_choice";

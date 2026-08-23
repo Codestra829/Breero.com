@@ -130,6 +130,34 @@ async def test_odoo_failure_dead_letters_then_authorized_retry_delivers() -> Non
         assert event.status == EventStatus.DELIVERED and delivered == [event.id]
 
 
+@pytest.mark.asyncio
+async def test_failed_terminal_is_present_in_admin_failure_surface() -> None:
+    from app.api.internal_odoo import failures
+
+    event = IntegrationEvent(
+        aggregate_type="public_submission",
+        aggregate_id=uuid.uuid4(),
+        event_type="breero.service_request.created",
+        aggregate_version=1,
+        schema_version=1,
+        idempotency_key=f"terminal-surface:{uuid.uuid4()}",
+        payload={},
+        status=EventStatus.FAILED_TERMINAL,
+        next_attempt_at=datetime.now(UTC),
+        last_error_code="TEST_TERMINAL",
+        last_error="Safe terminal failure",
+    )
+    result = MagicMock()
+    result.all.return_value = [event]
+    session = AsyncMock()
+    session.scalars.return_value = result
+
+    rows = await failures(session=session, _=MagicMock())
+
+    assert rows[0]["status"] == EventStatus.FAILED_TERMINAL
+    assert rows[0]["error_code"] == "TEST_TERMINAL"
+
+
 @postgres_only
 @pytest.mark.asyncio
 async def test_stale_outbox_processing_lease_is_recovered() -> None:

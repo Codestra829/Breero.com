@@ -35,6 +35,12 @@ class BookingStatus(str, enum.Enum):
     EXPIRED = "EXPIRED"
 
 
+CAPACITY_HOLDING_STATUSES = frozenset(
+    {BookingStatus.TENTATIVE_HOLD, BookingStatus.PENDING_PROVIDER_CONFIRMATION}
+)
+EXPIRING_BOOKING_STATUSES = CAPACITY_HOLDING_STATUSES | {BookingStatus.PENDING_PAYMENT}
+
+
 class LegalEntity(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "legal_entities"
     code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
