@@ -2,7 +2,11 @@ name: Backend production gates
 
 on:
   pull_request:
-    paths: ["apps/api/**", "docker-compose.production.yml", ".github/workflows/backend-production.yml"]
+    paths:
+      - "apps/api/**"
+      - "deploy/production/**"
+      - "docker-compose.production.yml"
+      - ".github/workflows/backend-production.yml"
   push:
     branches: ["codex/backend-master-final"]
 
@@ -38,6 +42,29 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade 'pip>=26.1.2'
       - run: pip install -e '.[dev]' pip-audit
+      - name: Validate production Compose contract
+        working-directory: ../..
+        env:
+          BREERO_PROD_API_IMAGE: ghcr.io/example/breero-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          BREERO_PROD_API_ENV: deploy/production/api.env.example
+          BREERO_PROD_POSTGRES_ENV: deploy/production/postgres.env.example
+          BREERO_PROD_REDIS_ENV: deploy/production/redis.env.example
+          DATABASE_URL_REFERENCE: /tmp/breero-database-url
+          REDIS_URL_REFERENCE: /tmp/breero-redis-url
+          JWT_SECRET_REFERENCE: /tmp/breero-jwt-access
+          JWT_REFRESH_SECRET_REFERENCE: /tmp/breero-jwt-refresh
+          GEOAPIFY_API_KEY_REFERENCE: /tmp/breero-geoapify
+          POSTGRES_PASSWORD_REFERENCE: /tmp/breero-postgres-password
+          REDIS_PASSWORD_REFERENCE: /tmp/breero-redis-password
+        run: |
+          touch /tmp/breero-database-url \
+                /tmp/breero-redis-url \
+                /tmp/breero-jwt-access \
+                /tmp/breero-jwt-refresh \
+                /tmp/breero-geoapify \
+                /tmp/breero-postgres-password \
+                /tmp/breero-redis-password
+          docker compose -f deploy/production/docker-compose.backend.yml config --quiet
       - run: ruff check .
       - run: mypy app
       - run: alembic upgrade head
