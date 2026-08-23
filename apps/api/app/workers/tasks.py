@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.db.session import SessionLocal
-from app.domains.booking.models import Booking, BookingStatus
+from app.domains.booking.models import EXPIRING_BOOKING_STATUSES, Booking, BookingStatus
 from app.domains.common.outbox_service import OutboxService
 from app.domains.finance.service import FinanceService
 from app.domains.public_submissions.models import DownstreamStatus, PublicSubmission
@@ -23,7 +23,7 @@ def expire_bookings() -> int:
                     await session.scalars(
                         select(Booking)
                         .where(
-                            Booking.status == BookingStatus.PENDING_PAYMENT,
+                            Booking.status.in_(EXPIRING_BOOKING_STATUSES),
                             Booking.expires_at < datetime.now(UTC),
                         )
                         .with_for_update(skip_locked=True)
@@ -61,10 +61,6 @@ def publish_outbox() -> int:
                 if event.event_type in notification_events:
                     await email.send(event.event_type, event.payload)
                     return
-                if event.aggregate_type == "public_submission" and not settings.middleware_enabled:
-                    # BREERO has durably accepted the form. Delivery remains pending
-                    # configuration without turning a missing optional CRM into data loss.
-                    return
                 if event.event_type.startswith("breero."):
                     result = await adapter.deliver(event)
                     if event.aggregate_type == "public_submission":
@@ -78,6 +74,8 @@ def publish_outbox() -> int:
             outbox = OutboxService(session)
             if settings.middleware_enabled:
                 await outbox.activate_pending_configuration()
+            else:
+                await outbox.park_unconfigured()
             return await outbox.process(deliver)
 
     return asyncio.run(run())

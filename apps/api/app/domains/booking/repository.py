@@ -1,14 +1,16 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from geoalchemy2.functions import ST_Covers
 from sqlalchemy import Select, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.booking.models import (
+    CAPACITY_HOLDING_STATUSES,
     Address,
     AvailabilityRule,
     Booking,
+    BookingStatus,
     Customer,
     LegalEntity,
     ProviderServiceCoverage,
@@ -72,11 +74,18 @@ class BookingRepository:
         return list((await self.session.scalars(stmt)).all())
 
     async def booking_count(self, service_id: uuid.UUID, start: datetime, end: datetime) -> int:
+        now = datetime.now(UTC)
         stmt = select(func.count(Booking.id)).where(
             Booking.service_id == service_id,
             Booking.window_start == start,
             Booking.window_end == end,
-            Booking.status.in_(["TENTATIVE_HOLD", "PENDING_PROVIDER_CONFIRMATION", "CONFIRMED"]),
+            (
+                Booking.status == BookingStatus.CONFIRMED
+            )
+            | (
+                Booking.status.in_(CAPACITY_HOLDING_STATUSES)
+                & (Booking.expires_at > now)
+            ),
         )
         return int(await self.session.scalar(stmt) or 0)
 
@@ -103,13 +112,18 @@ class BookingRepository:
     async def provider_booking_count(
         self, worker_id: uuid.UUID, start: datetime, end: datetime
     ) -> int:
+        now = datetime.now(UTC)
         stmt = select(func.count(Booking.id)).where(
             Booking.provider_worker_id == worker_id,
             Booking.window_start < end,
             Booking.window_end > start,
-            Booking.status.in_([
-                "TENTATIVE_HOLD", "PENDING_PROVIDER_CONFIRMATION", "CONFIRMED"
-            ]),
+            (
+                Booking.status == BookingStatus.CONFIRMED
+            )
+            | (
+                Booking.status.in_(CAPACITY_HOLDING_STATUSES)
+                & (Booking.expires_at > now)
+            ),
         )
         return int(await self.session.scalar(stmt) or 0)
 

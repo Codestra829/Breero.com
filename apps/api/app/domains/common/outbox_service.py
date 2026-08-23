@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Awaitable, Callable
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .outbox import AuditLog, EventStatus, IntegrationEvent
@@ -16,8 +16,33 @@ DEFAULT_LEASE_SECONDS = 300
 class OutboxService:
     def __init__(self, session: AsyncSession): self.session = session
 
-    async def activate_pending_configuration(self, event_prefix: str = "breero.") -> int:
+    async def _sync_public_submission_status(
+        self,
+        events: list[IntegrationEvent],
+        downstream_status: str,
+    ) -> None:
+        submission_ids = [
+            event.aggregate_id
+            for event in events
+            if event.aggregate_type == "public_submission"
+        ]
+        if not submission_ids:
+            return
+
+        # Local import avoids coupling common outbox models to a domain model at import time.
+        from app.domains.public_submissions.models import DownstreamStatus, PublicSubmission
+
+        await self.session.execute(
+            update(PublicSubmission)
+            .where(PublicSubmission.id.in_(submission_ids))
+            .values(downstream_status=DownstreamStatus(downstream_status))
+        )
+
+    async def activate_pending_configuration(
+        self, event_prefix: str = "breero.", aggregate_type: str = "public_submission"
+    ) -> int:
         events = list((await self.session.scalars(select(IntegrationEvent).where(
+            IntegrationEvent.aggregate_type == aggregate_type,
             IntegrationEvent.status == EventStatus.PENDING_CONFIGURATION,
             IntegrationEvent.event_type.like(f"{event_prefix}%"),
         ).with_for_update(skip_locked=True))).all())
@@ -25,6 +50,39 @@ class OutboxService:
         for event in events:
             event.status = EventStatus.PENDING
             event.next_attempt_at = now
+        await self._sync_public_submission_status(events, "PENDING")
+        await self.session.commit()
+        return len(events)
+
+    async def park_unconfigured(
+        self, event_prefix: str = "breero.", aggregate_type: str = "public_submission"
+    ) -> int:
+        events = list(
+            (
+                await self.session.scalars(
+                    select(IntegrationEvent)
+                    .where(
+                        IntegrationEvent.aggregate_type == aggregate_type,
+                        IntegrationEvent.event_type.like(f"{event_prefix}%"),
+                        IntegrationEvent.status.in_(
+                            [
+                                EventStatus.PENDING,
+                                EventStatus.RETRYING,
+                                EventStatus.FAILED_RETRYABLE,
+                                EventStatus.PROCESSING,
+                            ]
+                        ),
+                    )
+                    .with_for_update(skip_locked=True)
+                )
+            ).all()
+        )
+        for event in events:
+            event.status = EventStatus.PENDING_CONFIGURATION
+            event.claimed_at = None
+            event.lease_expires_at = None
+            event.claim_token = None
+        await self._sync_public_submission_status(events, "PENDING_CONFIGURATION")
         await self.session.commit()
         return len(events)
 

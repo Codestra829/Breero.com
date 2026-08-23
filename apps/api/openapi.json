@@ -1754,6 +1754,54 @@
         "title": "ProviderInterestCreate",
         "type": "object"
       },
+      "PublicCapabilities": {
+        "properties": {
+          "automatic_assignment": {
+            "title": "Automatic Assignment",
+            "type": "boolean"
+          },
+          "instant_booking": {
+            "title": "Instant Booking",
+            "type": "boolean"
+          },
+          "marketplace_matching": {
+            "title": "Marketplace Matching",
+            "type": "boolean"
+          },
+          "messaging": {
+            "title": "Messaging",
+            "type": "boolean"
+          },
+          "online_payments": {
+            "title": "Online Payments",
+            "type": "boolean"
+          },
+          "provider_self_service": {
+            "title": "Provider Self Service",
+            "type": "boolean"
+          },
+          "request_intake": {
+            "title": "Request Intake",
+            "type": "boolean"
+          },
+          "reviews": {
+            "title": "Reviews",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "request_intake",
+          "instant_booking",
+          "online_payments",
+          "automatic_assignment",
+          "provider_self_service",
+          "marketplace_matching",
+          "messaging",
+          "reviews"
+        ],
+        "title": "PublicCapabilities",
+        "type": "object"
+      },
       "QuestionRead": {
         "properties": {
           "help_text": {
@@ -5617,6 +5665,27 @@
         "summary": "Provider Interest",
         "tags": [
           "public-forms"
+        ]
+      }
+    },
+    "/api/v1/public/capabilities": {
+      "get": {
+        "operationId": "capabilities_api_v1_public_capabilities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicCapabilities"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Capabilities",
+        "tags": [
+          "public-capabilities"
         ]
       }
     },

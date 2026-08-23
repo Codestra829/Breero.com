@@ -144,6 +144,13 @@ class BookingService:
             return existing
         if payload.window.start >= payload.window.end or payload.window.start <= datetime.now(UTC):
             raise DomainError("INVALID_BOOKING_WINDOW", "Booking window must be in the future", 422)
+        service = await CatalogRepository(self.session).active_detail(str(payload.service_id))
+        if service and not service.is_bookable:
+            raise DomainError(
+                "SERVICE_NOT_BOOKABLE",
+                "This service currently supports requests only and cannot be booked",
+                409,
+            )
         address = await self.repository.address(payload.address_id)
         if not address or not address.service_area_id:
             raise DomainError(
@@ -178,7 +185,6 @@ class BookingService:
         entity = await self.repository.legal_entity_for_area(address.service_area_id)
         if not entity:
             raise DomainError("LEGAL_ENTITY_NOT_FOUND", "No legal entity serves this address", 422)
-        service = await CatalogRepository(self.session).active_detail(str(payload.service_id))
         if not service:
             raise DomainError("SERVICE_NOT_FOUND", "Service is not available", 404)
         supplied = {answer.question_id for answer in payload.answers}

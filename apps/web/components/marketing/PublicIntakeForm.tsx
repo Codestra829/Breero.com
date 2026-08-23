@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import type { PublicCapabilities } from "@breero/types";
 
 type FormKind = "service" | "contact" | "provider";
 type Service = { id: string; slug: string; name: string; is_active?: boolean };
@@ -13,11 +14,21 @@ function value(data: FormData, key: string) {
 export function PublicIntakeForm({ kind }: { kind: FormKind }) {
   const [services, setServices] = useState<Service[]>([]);
   const [catalogError, setCatalogError] = useState(false);
+  const [capabilities, setCapabilities] = useState<PublicCapabilities | null>(null);
   const [state, setState] = useState<"idle" | "sending" | "accepted" | "unserviceable" | "error">("idle");
 
   useEffect(() => {
-    if (kind !== "service") return;
     const controller = new AbortController();
+    fetch("/api/capabilities", { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error("capabilities unavailable");
+        return response.json() as Promise<PublicCapabilities>;
+      })
+      .then(setCapabilities)
+      .catch((error: unknown) => {
+        if ((error as { name?: string }).name !== "AbortError") setCatalogError(true);
+      });
+    if (kind !== "service") return () => controller.abort();
     fetch("/api/services", { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error("catalog unavailable");
@@ -32,6 +43,10 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (kind === "service" && !capabilities?.request_intake) {
+      setState("error");
+      return;
+    }
     const form = event.currentTarget;
     setState("sending");
     const data = new FormData(form);
@@ -162,8 +177,8 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
           <label>City<input name="city" required autoComplete="address-level2" /></label>
           <label>State or district<select name="state" required autoComplete="address-level1"><option value="">Select state</option>{["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
           <label>ZIP code<input name="postal_code" required pattern="[0-9]{5}(-[0-9]{4})?" autoComplete="postal-code" /></label>
-          <label>Preferred date<input name="requested_date" type="date" required /></label>
-          <label>Preferred local time<input name="requested_time" type="time" min="07:00" max="19:00" required /></label>
+          <label>Preferred date (request only)<input name="requested_date" type="date" required /></label>
+          <label>Preferred local time (request only)<input name="requested_time" type="time" min="07:00" max="19:00" required /></label>
           <label>Contact preference<select name="contact_preference"><option value="email">Email</option><option value="phone">Phone</option><option value="text">Text</option></select></label>
         </>
       )}
@@ -193,7 +208,7 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
         <label><input name="marketing_sms_consent" type="checkbox" /> I agree to receive recurring automated promotional and marketing text messages from BREERO at the number provided. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help. Consent is not a condition of purchase. Marketing SMS is currently disabled. See <a href="/sms-terms">SMS Terms</a> and <a href="/privacy">Privacy Policy</a>.</label>
       </fieldset>
       <p className="mk-intake__disclosure">BREERO coordinates requests with independent service providers. Providers remain responsible for final estimates, scope, pricing, licensing, permits, insurance, workmanship and service performance.</p>
-      <button className="mk-button mk-button--primary" type="submit" disabled={state === "sending" || (kind === "service" && !services.length)}>{state === "sending" ? "Sending…" : kind === "provider" ? "Submit interest" : "Send request"}</button>
+      <button className="mk-button mk-button--primary" type="submit" disabled={state === "sending" || (kind === "service" && (!capabilities || !services.length || !capabilities.request_intake))}>{state === "sending" ? "Sending…" : kind === "provider" ? "Submit interest" : "Send request"}</button>
       <div aria-live="polite">{state === "accepted" && <p className="mk-intake__success">Your request was accepted. This does not yet confirm availability or provider assignment.</p>}{state === "unserviceable" && <p role="alert">We could not confirm service coverage for that address. Check the address and ZIP code, or contact support@breero.com.</p>}{state === "error" && <p role="alert">We could not accept the request. Please retry or email support@breero.com.</p>}</div>
     </form>
   );

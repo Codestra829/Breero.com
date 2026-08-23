@@ -81,7 +81,9 @@ class PublicSubmissionService:
         email = str(payload["email"]).strip().lower()
         phone = re.sub(r"[^0-9+]", "", str(payload.get("phone") or "")) or None
         downstream = (
-            DownstreamStatus.PENDING if settings.odoo_enabled else DownstreamStatus.PENDING_CONFIGURATION
+            DownstreamStatus.PENDING
+            if settings.middleware_enabled
+            else DownstreamStatus.PENDING_CONFIGURATION
         )
         submission = PublicSubmission(
             submission_type=submission_type,
@@ -114,7 +116,7 @@ class PublicSubmissionService:
                 },
                 status=(
                     EventStatus.PENDING
-                    if settings.odoo_enabled
+                    if settings.middleware_enabled
                     else EventStatus.PENDING_CONFIGURATION
                 ),
                 next_attempt_at=datetime.now(UTC),
