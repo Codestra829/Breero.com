@@ -6,22 +6,20 @@ Base: codex/breero-production-without-payments at c48e5deb2880657396ce5a9eac51a3
 
 The current release remains request-only and manual-dispatch-first. Payments, paid leads, payouts, automatic assignment, automatic confirmation, and marketing stay disabled until their later phases are independently implemented, tested, approved, and activated.
 
-Roadmap authority: the detailed branch list and merge order in section 37 supersede any abbreviated numbering in section 1. The executable sequence is PR-00 through PR-17.
+Roadmap authority: the executable sequence is PR-00 through PR-17. The final branch list and merge order are canonical.
 
-The existing PR-0 work already covers `is_bookable`, expired holds, middleware parking, consent re-opt-in, `FAILED_TERMINAL`, runtime capabilities, TypeScript contracts, public intake behavior, and tests, but according to the execution log it still needed final database-backed validation and publication. 
+The existing PR-00 work already covers `is_bookable`, expired holds, middleware parking, consent re-opt-in, `FAILED_TERMINAL`, runtime capabilities, TypeScript contracts, public intake behavior, and tests, but according to the execution log it still needed final database-backed validation and publication. 
 
 ## Complete Git implementation plan
 
 ## Target repository
 
 ```
-```
 appolon1908-hue/Breero.com
 ```
 
 Current implementation base:
 
-```
 ```
 codex/breero-production-without-payments
 ```
@@ -30,7 +28,7 @@ Do not build the new marketplace from the older `main` snapshot until the produc
 
 ---
 
-# 1. Git strategy
+## 1. Git strategy
 
 Use small sequential PRs.
 
@@ -38,30 +36,17 @@ Do not create one permanent giant feature branch.
 
 The flow should be:
 
-```
-```
+```text
 codex/breero-production-without-payments
         │
         ├── PR-00 release safety
-        │
-        ├── PLAN architecture authority
-        │
-        └── after PR-00 merges
+        └── PLAN architecture authority
                  │
-                 ├── PR-01 ProjectRequest
-                 ├── PR-02 Provider platform
-                 ├── PR-03 Matching
-                 ├── PR-04 Opportunities
-                 ├── PR-05 Quotes
-                 ├── PR-06 Messaging
-                 ├── PR-07 Customer marketplace
-                 ├── PR-08 Provider SaaS
-                 ├── PR-09 Operations
-                 ├── PR-10 Reviews / trust
-                 ├── PR-11 Analytics
-                 ├── PR-12 Integration reliability
-                 ├── PR-13 Payments
-                 └── PR-14 Azure modernization
+                 └── after PR-00 merges
+                          ├── PR-01 through PR-14 marketplace MVP
+                          ├── PR-15 transactions
+                          ├── PR-16 provider subscriptions
+                          └── PR-17 Azure modernization
 ```
 
 After each PR merges, the next branch should be created from the latest merged target.
@@ -70,18 +55,16 @@ Do not maintain a 14-level branch chain if avoidable.
 
 ---
 
-# 2. Architecture planning branch
+## 2. Architecture planning branch
 
 Branch:
 
-```
 ```
 planning/breero-marketplace-v2-unified-architecture
 ```
 
 Base:
 
-```
 ```
 codex/breero-production-without-payments
 ```
@@ -90,7 +73,6 @@ This branch is documentation only.
 
 Add:
 
-```
 ```
 docs/architecture/
 ├── MARKETPLACE_V2.md
@@ -117,7 +99,6 @@ docs/codex/
 Update:
 
 ```
-```
 docs/codex/MASTER.md
 docs/architecture/system.md
 README.md
@@ -126,24 +107,21 @@ README.md
 Commit:
 
 ```
-```
 docs: define unified marketplace v2 architecture
 ```
 
 Draft PR:
 
 ```
-```
 [PLAN] BREERO Marketplace V2 — unified UX, API, data and sync architecture
 ```
 
 ---
 
-# 3. Canonical architecture
+## 3. Canonical architecture
 
 The planning branch must establish this lifecycle as authoritative:
 
-```
 ```
 Customer Intent
       ↓
@@ -170,7 +148,6 @@ Verified Review
 
 Definitions:
 
-```
 ```
 ProjectRequest
 = customer demand
@@ -201,11 +178,10 @@ This distinction should drive the API, database, portals, events, and reporting.
 
 ---
 
-# 4. PR-00 — Release safety
+## 4. PR-00 — Release safety
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-release-safety
 ```
@@ -214,7 +190,6 @@ This branch already has substantial implementation work.
 
 Finish:
 
-```
 ```
 Service.is_bookable enforcement
 Expired hold capacity behavior
@@ -233,7 +208,6 @@ Regression tests
 Also require:
 
 ```
-```
 PostgreSQL/PostGIS integration tests
 Alembic migration validation
 Outbox activation lifecycle test
@@ -244,7 +218,6 @@ Email/SMS consent isolation tests
 Draft PR:
 
 ```
-```
 [V2-00] Harden request-only release and add runtime capability authority
 ```
 
@@ -252,11 +225,10 @@ Do not introduce Marketplace V2 schema here.
 
 ---
 
-# 5. PR-01 — ProjectRequest core
+## 5. PR-01 — ProjectRequest core
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-project-requests
 ```
@@ -268,7 +240,6 @@ This is the first new marketplace domain.
 Add:
 
 ```
-```
 project_requests
 project_request_answers
 project_request_attachments
@@ -277,7 +248,6 @@ project_request_status_history
 
 Recommended `project_requests`:
 
-```
 ```
 id UUID PK
 reference VARCHAR UNIQUE
@@ -313,7 +283,6 @@ updated_at
 Statuses:
 
 ```
-```
 DRAFT
 SUBMITTED
 QUALIFYING
@@ -329,7 +298,6 @@ UNSERVICEABLE
 Fulfillment:
 
 ```
-```
 INSTANT_BOOK
 QUOTE_REQUIRED
 MANUAL_DISPATCH
@@ -340,7 +308,6 @@ UNSERVICEABLE
 
 Add:
 
-```
 ```
 apps/api/app/domains/project_requests/
 ├── models.py
@@ -354,7 +321,6 @@ apps/api/app/domains/project_requests/
 
 ## API
 
-```
 ```
 POST   /api/v2/project-requests
 GET    /api/v2/project-requests/{id}
@@ -370,7 +336,6 @@ POST   /api/v2/project-requests/{id}/cancel
 ## Events
 
 ```
-```
 project_request.created.v1
 project_request.submitted.v1
 project_request.cancelled.v1
@@ -379,7 +344,6 @@ project_request.qualified.v1
 
 ## Done when
 
-```
 ```
 customer can create draft
 save answers
@@ -394,18 +358,16 @@ authorization is enforced
 
 ---
 
-# 6. PR-02 — Provider marketplace foundation
+## 6. PR-02 — Provider marketplace foundation
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-provider-profiles
 ```
 
 Add/extend:
 
-```
 ```
 provider_organizations
 provider_profiles
@@ -427,7 +389,6 @@ provider_documents
 Support:
 
 ```
-```
 display name
 slug
 description
@@ -444,7 +405,6 @@ trust badges
 Public:
 
 ```
-```
 GET /api/v2/providers
 GET /api/v2/providers/{slug}
 GET /api/v2/providers/{slug}/services
@@ -454,19 +414,17 @@ GET /api/v2/providers/{slug}/availability
 Public page:
 
 ```
-```
 /pros/{slug}
 ```
 
 ---
 
-# 7. PR-03 — Availability and credentials
+## 7. PR-03 — Availability and credentials
 
 This may be kept with PR-02 if small, but if the diff gets large, split it.
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-provider-trust-availability
 ```
@@ -474,14 +432,12 @@ codex/marketplace-v2-provider-trust-availability
 Availability:
 
 ```
-```
 provider_availability_rules
 provider_availability_exceptions
 ```
 
 Support:
 
-```
 ```
 timezone
 weekday
@@ -497,7 +453,6 @@ variable capacity
 Credentials:
 
 ```
-```
 PENDING
 VERIFIED
 REJECTED
@@ -507,7 +462,6 @@ REVOKED
 
 Credential requirements depend on:
 
-```
 ```
 service
 jurisdiction
@@ -519,18 +473,16 @@ Expired required credential must make provider ineligible.
 
 ---
 
-# 8. PR-04 — Matching engine
+## 8. PR-04 — Matching engine
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-matching
 ```
 
 Database:
 
-```
 ```
 matching_runs
 match_candidates
@@ -539,7 +491,6 @@ match_reasons
 
 Hard gates:
 
-```
 ```
 provider active
 service supported
@@ -555,8 +506,8 @@ legal entity constraints
 
 Ranking:
 
-| SignalWeight                   |    |
-| ------------------------------ | -- |
+| Signal | Weight |
+|---|---:|
 | Availability                   | 20 |
 | Distance/service area          | 20 |
 | Verified rating                | 15 |
@@ -570,7 +521,6 @@ Ranking:
 Store:
 
 ```
-```
 algorithm_version
 configuration_snapshot
 eligibility
@@ -583,7 +533,6 @@ final score
 API:
 
 ```
-```
 POST /api/v2/ops/project-requests/{id}/match
 GET  /api/v2/ops/matching-runs/{id}
 GET  /api/v2/project-requests/{id}/matches
@@ -592,18 +541,16 @@ GET  /api/v2/project-requests/{id}/matches
 Events:
 
 ```
-```
 matching.started.v1
 matching.completed.v1
 ```
 
 ---
 
-# 9. PR-05 — Opportunities and LeadConnection
+## 9. PR-05 — Opportunities and LeadConnection
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-opportunities
 ```
@@ -611,14 +558,12 @@ codex/marketplace-v2-opportunities
 Database:
 
 ```
-```
 opportunities
 lead_connections
 ```
 
 Opportunity states:
 
-```
 ```
 SENT
 VIEWED
@@ -631,7 +576,6 @@ WITHDRAWN
 Rules:
 
 ```
-```
 do not reveal full customer PII to every match
 send approximately top 3 providers initially
 record offer history
@@ -640,7 +584,6 @@ do not overwrite prior assignment/offer history
 
 Partner API:
 
-```
 ```
 GET  /api/v2/partner/opportunities
 GET  /api/v2/partner/opportunities/{id}
@@ -654,7 +597,6 @@ GET /api/v2/partner/leads
 Events:
 
 ```
-```
 opportunity.sent.v1
 opportunity.viewed.v1
 opportunity.accepted.v1
@@ -666,18 +608,16 @@ lead.connected.v1
 
 ---
 
-# 10. PR-06 — Quotes
+## 10. PR-06 — Quotes
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-quotes
 ```
 
 Database:
 
-```
 ```
 quotes
 quote_versions
@@ -686,7 +626,6 @@ quote_line_items
 
 States:
 
-```
 ```
 DRAFT
 SENT
@@ -700,7 +639,6 @@ WITHDRAWN
 Rules:
 
 ```
-```
 sent quotes immutable
 revision creates new version
 customer acceptance idempotent
@@ -710,7 +648,6 @@ accepted quote does not imply confirmed appointment unless runtime policy permit
 Partner:
 
 ```
-```
 POST /api/v2/partner/project-requests/{id}/quotes
 POST /api/v2/partner/quotes/{id}/send
 POST /api/v2/partner/quotes/{id}/revise
@@ -718,7 +655,6 @@ POST /api/v2/partner/quotes/{id}/revise
 
 Customer:
 
-```
 ```
 GET  /api/v2/project-requests/{id}/quotes
 GET  /api/v2/quotes/{id}
@@ -729,7 +665,6 @@ POST /api/v2/quotes/{id}/decline
 Events:
 
 ```
-```
 quote.sent.v1
 quote.revised.v1
 quote.accepted.v1
@@ -738,18 +673,16 @@ quote.declined.v1
 
 ---
 
-# 11. PR-07 — Messaging
+## 11. PR-07 — Messaging
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-messaging
 ```
 
 Database:
 
-```
 ```
 conversations
 conversation_participants
@@ -761,7 +694,6 @@ message_delivery_status
 Message types:
 
 ```
-```
 TEXT
 IMAGE
 DOCUMENT
@@ -772,7 +704,6 @@ SYSTEM
 
 API:
 
-```
 ```
 GET  /api/v2/conversations
 GET  /api/v2/conversations/{id}
@@ -787,7 +718,6 @@ POST /api/v2/conversations/{id}/read
 Security:
 
 ```
-```
 participant membership required
 provider tenant boundary
 attachment authorization
@@ -798,17 +728,15 @@ content size/type validation
 Critical negative test:
 
 ```
-```
 Provider A cannot read Provider B conversation
 ```
 
 ---
 
-# 12. PR-08 — Booking and Job bridge
+## 12. PR-08 — Booking and Job bridge
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-booking-job-bridge
 ```
@@ -817,7 +745,6 @@ Connect V2 to the existing fulfillment system.
 
 Booking should gain:
 
-```
 ```
 project_request_id
 accepted_quote_id
@@ -829,7 +756,6 @@ Do not rewrite historical bookings.
 
 Job states:
 
-```
 ```
 CREATED
 ASSIGNED
@@ -845,7 +771,6 @@ CANCELLED
 Maintain:
 
 ```
-```
 job_status_history
 job_assignments
 job_notes
@@ -855,7 +780,6 @@ job_additional_work
 
 API:
 
-```
 ```
 GET  /api/v2/bookings/{id}
 POST /api/v2/bookings/{id}/reschedule-request
@@ -872,11 +796,10 @@ POST /api/v2/jobs/{id}/complete
 
 ---
 
-# 13. PR-09 — Customer marketplace UI
+## 13. PR-09 — Customer marketplace UI
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-customer-experience
 ```
@@ -887,7 +810,6 @@ Redesign `apps/web`.
 
 Primary hero:
 
-```
 ```
 What do you need help with?
 
@@ -901,7 +823,6 @@ Categories below.
 ## Request wizard
 
 ```
-```
 1 Service/need
 2 Dynamic questions
 3 Description
@@ -914,7 +835,6 @@ Categories below.
 
 ## Customer account
 
-```
 ```
 Requests
 Matches
@@ -932,7 +852,6 @@ Profile
 Show:
 
 ```
-```
 provider
 rating
 verified jobs
@@ -945,11 +864,10 @@ availability
 
 ---
 
-# 14. PR-10 — Provider SaaS
+## 14. PR-10 — Provider SaaS
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-provider-saas
 ```
@@ -958,7 +876,6 @@ Redesign `apps/partner`.
 
 Navigation:
 
-```
 ```
 Overview
 Opportunities
@@ -982,7 +899,6 @@ Settings
 Dashboard:
 
 ```
-```
 new opportunities
 open quotes
 jobs today
@@ -997,7 +913,6 @@ Eventually provider-created CRM customers may exist outside Breero marketplace a
 Keep attribution:
 
 ```
-```
 BREERO_MARKETPLACE
 PROVIDER_DIRECT
 REFERRAL
@@ -1006,11 +921,10 @@ OTHER
 
 ---
 
-# 15. PR-11 — Operations command center
+## 15. PR-11 — Operations command center
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-ops-command-center
 ```
@@ -1019,7 +933,6 @@ Redesign `apps/ops`.
 
 Main areas:
 
-```
 ```
 Requests
 Matching
@@ -1031,7 +944,6 @@ Map
 
 Queues:
 
-```
 ```
 unmatched
 awaiting provider
@@ -1048,7 +960,6 @@ integration failure
 Matching inspector shows:
 
 ```
-```
 candidate
 eligible?
 reason
@@ -1064,18 +975,16 @@ Manual actions must produce audit events.
 
 ---
 
-# 16. PR-12 — Reviews and trust
+## 16. PR-12 — Reviews and trust
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-reviews-trust
 ```
 
 Database:
 
-```
 ```
 reviews
 review_dimensions
@@ -1086,7 +995,6 @@ review_moderation
 Only:
 
 ```
-```
 COMPLETED BREERO JOB
 ```
 
@@ -1094,7 +1002,6 @@ may create a verified marketplace review.
 
 Dimensions:
 
-```
 ```
 overall
 quality
@@ -1106,7 +1013,6 @@ value
 Public badge:
 
 ```
-```
 Verified Breero Job
 ```
 
@@ -1114,18 +1020,16 @@ Do not let unverified reviews influence matching score.
 
 ---
 
-# 17. PR-13 — Analytics
+## 17. PR-13 — Analytics
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-analytics
 ```
 
 Track:
 
-```
 ```
 visitor
 request_started
@@ -1144,7 +1048,6 @@ repeat_request
 
 Metrics:
 
-```
 ```
 request conversion
 serviceability
@@ -1166,11 +1069,10 @@ take rate when enabled
 
 ---
 
-# 18. PR-14 — Integration reliability
+## 18. PR-14 — Integration reliability
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-integration-reliability
 ```
@@ -1182,7 +1084,6 @@ This is important before serious production automation.
 Canonical statuses:
 
 ```
-```
 PENDING_CONFIGURATION
 PENDING
 PROCESSING
@@ -1193,7 +1094,6 @@ FAILED_TERMINAL
 
 Recommended fields:
 
-```
 ```
 id
 event_type
@@ -1222,7 +1122,6 @@ delivered_at
 Claim with:
 
 ```
-```
 FOR UPDATE SKIP LOCKED
 ```
 
@@ -1231,13 +1130,11 @@ FOR UPDATE SKIP LOCKED
 Add:
 
 ```
-```
 integration_inbox
 ```
 
 Fields:
 
-```
 ```
 provider
 external_event_id
@@ -1253,13 +1150,11 @@ processed_at
 Unique:
 
 ```
-```
 (provider, external_event_id)
 ```
 
 Use for:
 
-```
 ```
 Codestra callbacks
 Klyrow
@@ -1270,11 +1165,10 @@ other webhook providers
 
 ---
 
-# 19. Event catalog
+## 19. Event catalog
 
 Create versioned contracts.
 
-```
 ```
 project_request.created.v1
 project_request.submitted.v1
@@ -1321,7 +1215,6 @@ payment.refunded.v1
 Every event should define:
 
 ```
-```
 event ID
 event name
 schema version
@@ -1336,11 +1229,10 @@ payload
 
 ---
 
-# 20. Codestra integration
+## 20. Codestra integration
 
 Breero should remain source of truth.
 
-```
 ```
 BREERO
 Marketplace system of record
@@ -1364,7 +1256,6 @@ payment authority only after activation
 Recommended path:
 
 ```
-```
 Breero transaction
        ↓
 Breero DB + Outbox
@@ -1381,11 +1272,10 @@ Preserve the production controls from the Codestra mission: explicit auth, tenan
 
 ---
 
-# 21. API V2 organization
+## 21. API V2 organization
 
 Add:
 
-```
 ```
 apps/api/app/api/v2/
 ├── router.py
@@ -1412,13 +1302,12 @@ Do not destructively rewrite V1.
 
 ---
 
-# 22. Runtime capability registry
+## 22. Runtime capability registry
 
 Expand the existing capability authority.
 
 Eventually:
 
-```
 ```
 {
   "request_intake": true,
@@ -1444,11 +1333,10 @@ The UI must not claim capabilities that are false.
 
 ---
 
-# 23. RBAC
+## 23. RBAC
 
 Roles:
 
-```
 ```
 CUSTOMER
 
@@ -1467,7 +1355,6 @@ SUPER_ADMIN
 
 Permissions:
 
-```
 ```
 project_request.read
 project_request.manage
@@ -1503,11 +1390,10 @@ Do not rely on hidden buttons.
 
 ---
 
-# 24. Shared UI package
+## 24. Shared UI package
 
 Add to `packages/ui`:
 
-```
 ```
 ProviderCard
 ProviderRating
@@ -1542,7 +1428,7 @@ ServiceAreaMap
 
 ---
 
-# 25. Search and geography
+## 25. Search and geography
 
 PostGIS remains authoritative.
 
@@ -1550,7 +1436,6 @@ Provider areas should use geographic geometry/geography.
 
 Use:
 
-```
 ```
 GiST index
 ST_Covers
@@ -1560,7 +1445,6 @@ distance sorting
 
 Later:
 
-```
 ```
 PostgreSQL
     ↓
@@ -1573,11 +1457,10 @@ Search is not source of truth.
 
 ---
 
-# 26. Redis rules
+## 26. Redis rules
 
 Redis may store:
 
-```
 ```
 rate limits
 cache
@@ -1590,7 +1473,6 @@ Celery state/queues
 Redis must not be authoritative for:
 
 ```
-```
 ProjectRequest
 Quote
 Job
@@ -1601,11 +1483,10 @@ Payment
 
 ---
 
-# 27. PR-15 — Payments
+## 27. PR-15 — Payments
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-transactions
 ```
@@ -1614,7 +1495,6 @@ Do not begin until the quote → booking → job lifecycle is stable.
 
 Add:
 
-```
 ```
 payment_intents
 payments
@@ -1627,7 +1507,6 @@ payouts
 
 Rules:
 
-```
 ```
 Stripe webhook authoritative
 browser redirect not authoritative
@@ -1643,7 +1522,6 @@ full audit
 Support future monetization:
 
 ```
-```
 transaction fee
 subscription
 paid lead
@@ -1654,18 +1532,16 @@ Do not hard-code the entire marketplace to one revenue model.
 
 ---
 
-# 28. PR-16 — Provider subscriptions
+## 28. PR-16 — Provider subscriptions
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-provider-subscriptions
 ```
 
 Possible future plans:
 
-```
 ```
 FREE
 PRO
@@ -1674,7 +1550,6 @@ BUSINESS
 
 Capabilities may include:
 
-```
 ```
 CRM
 quotes
@@ -1690,11 +1565,10 @@ Keep feature entitlement separate from RBAC.
 
 ---
 
-# 29. PR-17 — Azure modernization
+## 29. PR-17 — Azure modernization
 
 Branch:
 
-```
 ```
 codex/marketplace-v2-azure-modernization
 ```
@@ -1703,7 +1577,6 @@ Do this after application stabilization.
 
 Target:
 
-```
 ```
 Azure Front Door
        ↓
@@ -1731,13 +1604,12 @@ Do not introduce AKS unless there is a documented requirement.
 
 ---
 
-# 30. Database migration policy
+## 30. Database migration policy
 
 Every schema PR gets an Alembic migration.
 
 Rules:
 
-```
 ```
 additive first
 no destructive history rewrite
@@ -1755,11 +1627,10 @@ Use the actual current Alembic head.
 
 ---
 
-# 31. Required testing for every PR
+## 31. Required testing for every PR
 
 Backend:
 
-```
 ```
 unit tests
 domain transition tests
@@ -1775,7 +1646,6 @@ concurrency tests where applicable
 Frontend:
 
 ```
-```
 typecheck
 lint
 component tests
@@ -1786,7 +1656,6 @@ accessibility tests
 
 Integration:
 
-```
 ```
 outbox behavior
 inbox idempotency
@@ -1799,11 +1668,10 @@ feature disabled
 
 ---
 
-# 32. Critical security acceptance tests
+## 32. Critical security acceptance tests
 
 These should exist before production marketplace activation:
 
-```
 ```
 Provider A cannot access Provider B opportunity
 
@@ -1832,9 +1700,8 @@ Unmatched provider cannot receive customer contact data
 
 ---
 
-# 33. Critical reliability acceptance tests
+## 33. Critical reliability acceptance tests
 
-```
 ```
 duplicate ProjectRequest submit
 → no duplicate downstream aggregate
@@ -1873,11 +1740,10 @@ expired hold
 
 ---
 
-# 34. First complete marketplace E2E
+## 34. First complete marketplace E2E
 
 Do not call Marketplace V2 MVP finished until this works:
 
-```
 ```
 Customer enters problem
        ↓
@@ -1927,7 +1793,6 @@ verified review
 And prove:
 
 ```
-```
 zero provider case
 expired credential case
 provider tenant isolation
@@ -1940,10 +1805,10 @@ payment disabled
 
 ---
 
-# 35. Feature completion matrix
+## 35. Feature completion matrix
 
-| AreaCurrentRequired end state |                    |                               |
-| ----------------------------- | ------------------ | ----------------------------- |
+| Area | Current | Required end state |
+|---|---|---|
 | Release safety                | In progress        | Complete                      |
 | Runtime capabilities          | Started            | Complete authority            |
 | ProjectRequest                | Missing            | Core aggregate                |
@@ -1972,11 +1837,10 @@ payment disabled
 
 ---
 
-# 36. Definition of technical completion
+## 36. Definition of technical completion
 
 The system is complete when all of these are true:
 
-```
 ```
 ProjectRequest is authoritative demand model
 
@@ -2033,9 +1897,8 @@ All quality gates pass
 
 ---
 
-# 37. Final branch list to hand to the write-enabled developer
+## 37. Final branch list to hand to the write-enabled developer
 
-```
 ```
 planning/breero-marketplace-v2-unified-architecture
 
@@ -2078,7 +1941,6 @@ codex/marketplace-v2-azure-modernization
 
 ## Recommended merge order
 
-```
 ```
 00 Release safety
         ↓
