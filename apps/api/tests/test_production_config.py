@@ -94,14 +94,14 @@ def test_secret_file_bindings_are_resolved_without_environment_values(tmp_path, 
 def test_secret_file_binding_rejects_missing_file(tmp_path):
     missing = tmp_path / "missing-secret"
     with pytest.raises(ValidationError, match="cannot read configured secret file"):
-        Settings(database_url_file=str(missing))
+        Settings(database_url="", database_url_file=str(missing))
 
 
 def test_secret_file_binding_rejects_empty_file(tmp_path):
     empty = tmp_path / "empty-secret"
     empty.write_text("", encoding="ascii")
     with pytest.raises(ValidationError, match="configured secret file.*is empty"):
-        Settings(redis_url_file=str(empty))
+        Settings(redis_url="", redis_url_file=str(empty))
 
 
 def test_secret_file_binding_rejects_inline_secret_too(tmp_path):
