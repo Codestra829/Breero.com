@@ -5,6 +5,7 @@
 This is documentation-only implementation authority for the BREERO repository. It must not be deployed. Complete and human-merge PR-00 release safety and the Marketplace V2 architecture authority before creating implementation branches from the latest merged target.
 
 The current request-only/manual-dispatch behavior remains authoritative. Payments, payouts, paid leads, provider self-service, marketplace matching, messaging, reviews, instant booking, automatic assignment, automatic confirmation, marketing, unrestricted email/SMS and external automation remain disabled until separately implemented, tested and authorized.
+
 ## 1. Purpose
 
 This document is the backend implementation authority for BREERO Marketplace V2.
