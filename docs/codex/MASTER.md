@@ -20,6 +20,7 @@ The following documents are authoritative for new marketplace work:
 - ../architecture/AZURE_TARGET_V2.md
 - MARKETPLACE_V2_MASTER_MISSION.md
 - MARKETPLACE_V2_IMPLEMENTATION_RULES.md
+- MARKETPLACE_V2_BACKEND_IMPLEMENTATION_AUTHORITY.md
 - MARKETPLACE_V2_ACCEPTANCE_TESTS.md
 
 ProjectRequest is the canonical demand aggregate. Booking is downstream from an accepted marketplace outcome. Job is field execution. Verified Review requires a completed BREERO job.
