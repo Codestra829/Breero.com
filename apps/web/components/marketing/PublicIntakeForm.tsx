@@ -177,8 +177,8 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
           <label>City<input name="city" required autoComplete="address-level2" /></label>
           <label>State or district<select name="state" required autoComplete="address-level1"><option value="">Select state</option>{["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
           <label>ZIP code<input name="postal_code" required pattern="[0-9]{5}(-[0-9]{4})?" autoComplete="postal-code" /></label>
-          <label>{capabilities?.instant_booking ? "Appointment date" : "Preferred date (request only)"}<input name="requested_date" type="date" required /></label>
-          <label>{capabilities?.instant_booking ? "Appointment time" : "Preferred local time (request only)"}<input name="requested_time" type="time" min="07:00" max="19:00" required /></label>
+          <label>Preferred date (request only)<input name="requested_date" type="date" required /></label>
+          <label>Preferred local time (request only)<input name="requested_time" type="time" min="07:00" max="19:00" required /></label>
           <label>Contact preference<select name="contact_preference"><option value="email">Email</option><option value="phone">Phone</option><option value="text">Text</option></select></label>
         </>
       )}
