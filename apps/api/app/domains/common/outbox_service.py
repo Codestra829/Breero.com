@@ -11,6 +11,7 @@ from .outbox import AuditLog, EventStatus, IntegrationEvent
 
 MAX_ATTEMPTS = 5
 DEFAULT_LEASE_SECONDS = 300
+INTEGRATION_DISABLED_ERROR_CODE = "INTEGRATION_DISABLED"
 
 
 class OutboxService:
@@ -50,6 +51,10 @@ class OutboxService:
         for event in events:
             event.status = EventStatus.PENDING
             event.next_attempt_at = now
+            if event.last_error_code == INTEGRATION_DISABLED_ERROR_CODE:
+                event.last_error = None
+                event.last_error_code = None
+                event.last_error_at = None
         await self._sync_public_submission_status(events, "PENDING")
         await self.session.commit()
         return len(events)
@@ -77,11 +82,15 @@ class OutboxService:
                 )
             ).all()
         )
+        now = datetime.now(UTC)
         for event in events:
             event.status = EventStatus.PENDING_CONFIGURATION
             event.claimed_at = None
             event.lease_expires_at = None
             event.claim_token = None
+            event.last_error = "Integration disabled or unconfigured"
+            event.last_error_code = INTEGRATION_DISABLED_ERROR_CODE
+            event.last_error_at = now
         await self._sync_public_submission_status(events, "PENDING_CONFIGURATION")
         await self.session.commit()
         return len(events)
