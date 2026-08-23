@@ -1,5 +1,39 @@
 # BREERO Marketplace V2 — Separate Backend and Frontend PR Tracks
 
+## System scope and ownership
+
+This implementation plan applies exclusively to the **BREERO Marketplace V2 system** in `appolon1908-hue/Breero.com`. BREERO is the authoritative two-sided home-services marketplace and provider SaaS platform.
+
+It covers:
+
+- the customer marketplace and account;
+- provider onboarding and the provider SaaS portal;
+- the operations and dispatch command center;
+- the administrative, trust, RBAC, audit and feature-control surfaces;
+- the FastAPI domain layer, PostgreSQL/PostGIS data model, workers, APIs and integration contracts.
+
+BREERO owns customers, providers, project requests, matching, opportunities, lead connections, conversations, quotes, bookings, jobs and verified reviews.
+
+Supporting-system ownership remains separate:
+
+- **Codestra/Kong** — protected integration and control plane;
+- **Odoo** — downstream CRM projection;
+- **Klyrow** — email delivery;
+- **Telnexa** — SMS delivery;
+- **n8n** — explicitly approved orchestration only;
+- **Stripe** — payment processing later, only after independent activation.
+
+Supporting systems must not become authoritative for BREERO marketplace state.
+
+```text
+BREERO PostgreSQL (source of truth)
+        ↓
+Transactional Outbox
+        ↓
+Codestra / Kong
+        ↓
+Odoo · Klyrow · Telnexa · approved n8n workflows
+```
 For the implementation, I would now make one important organizational change: **separate backend and frontend PRs completely**. Backend PRs own database, domain logic, endpoints, OpenAPI, events, middleware/outbox and security. Frontend PRs own pages, forms, state, UI, typed client consumption and E2E. That will make review much cleaner.
 
 ## Target architecture
