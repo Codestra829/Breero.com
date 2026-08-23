@@ -4,6 +4,14 @@ Home services. One booking.
 
 BREERO is a multi-surface home-services marketplace and field-service orchestration platform.
 
+## Marketplace V2 planning authority
+
+The current production candidate remains request-only, manual-dispatch-first and payment-free. The V2 plan makes ProjectRequest the canonical demand model, with Matching, Opportunity, LeadConnection, Conversation, Quote, Booking, Job and Verified Review as distinct downstream stages.
+
+Start with [the unified architecture](docs/architecture/MARKETPLACE_V2.md), [the system boundary](docs/architecture/system.md) and [the Codex master mission](docs/codex/MARKETPLACE_V2_MASTER_MISSION.md). Implementation must follow small sequential PRs from the current payment-free branch; this planning branch is not deployable.
+
+Canonical identity issuer: https://auth.codestra.co/realms/codestra.
+
 ## Repository layout
 
 - `apps/api` — FastAPI backend (PostgreSQL/PostGIS, SQLAlchemy async, Psycopg 3, Alembic, Redis)

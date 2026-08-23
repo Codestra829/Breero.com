@@ -1,5 +1,73 @@
 # BREERO Codex Master Brief
 
+## Marketplace V2 authority
+
+The following documents are authoritative for new marketplace work:
+
+- ../architecture/MARKETPLACE_V2.md
+- ../architecture/DOMAIN_MODEL_V2.md
+- ../architecture/DATA_MODEL_V2.md
+- ../architecture/API_V2.md
+- ../architecture/EVENT_CATALOG_V2.md
+- ../architecture/MATCHING_ENGINE_V2.md
+- ../architecture/SYNC_INTEGRATIONS_V2.md
+- ../architecture/SECURITY_RBAC_V2.md
+- ../architecture/UX_DESIGN_V2.md
+- ../architecture/PROVIDER_SAAS_V2.md
+- ../architecture/OPS_COMMAND_CENTER_V2.md
+- ../architecture/MIGRATION_PLAN_V2.md
+- ../architecture/OBSERVABILITY_V2.md
+- ../architecture/AZURE_TARGET_V2.md
+- MARKETPLACE_V2_MASTER_MISSION.md
+- MARKETPLACE_V2_IMPLEMENTATION_RULES.md
+- MARKETPLACE_V2_ACCEPTANCE_TESTS.md
+
+ProjectRequest is the canonical demand aggregate. Booking is downstream from an accepted marketplace outcome. Job is field execution. Verified Review requires a completed BREERO job.
+
+## Current release boundary
+
+The inspected base is codex/breero-production-without-payments at c48e5deb2880657396ce5a9eac51a35ff7ecfdde. Preserve request-only manual dispatch. Keep payments, paid leads, payouts, automatic assignment, automatic confirmation, marketing, unrestricted email/SMS and external automation disabled.
+
+PR-00 release safety must complete before new Marketplace V2 schema. The planning branch is documentation-only and must never be deployed.
+
+## Shared engineering rules
+
+1. Inspect current architecture, migrations, OpenAPI and shared types before coding.
+2. Use router → service → repository/query → async SQLAlchemy → PostgreSQL/PostGIS.
+3. Use explicit domain commands and state transitions, never arbitrary status mutation.
+4. State, history, audit and outbox commit in one transaction.
+5. Keep persistence models separate from API schemas.
+6. Use the actual Alembic head and additive migrations.
+7. Require server-side permission, tenant scope and negative authorization tests.
+8. Use auth.codestra.co only for the canonical issuer.
+9. Preserve /api/v1 while /api/v2 is introduced.
+10. Regenerate OpenAPI and typed clients together.
+11. Redis, search, Odoo and n8n are not sources of marketplace truth.
+12. No secret, production credential or customer document enters source or logs.
+13. Run lint, typecheck, unit, PostgreSQL/PostGIS integration, migration, idempotency, concurrency and E2E tests relevant to the PR.
+14. Keep PRs small and sequential; do not create a permanent V2 mega-branch.
+15. Document exact baseline/final SHA, migration head, tests, risks and rollback.
+
+## First complete vertical slice
+
+ProjectRequest → qualification → matching → Opportunity → LeadConnection → Conversation → Quote → Booking → Job → Verified Review.
+
+Prove zero-provider, expired-credential, cross-tenant, duplicate-command, expired-hold, integration-failure and payment-disabled cases.
+
+## Delivery order
+
+Follow ../architecture/MIGRATION_PLAN_V2.md. Payments, provider subscriptions and Azure modernization are phases 15–17, after the payment-free marketplace lifecycle is stable.
+
+## Definition of done
+
+Marketplace V2 is not complete because tables, routes or shells exist. It is complete only when MARKETPLACE_V2_ACCEPTANCE_TESTS.md passes from the current production-compatible schema, runtime capabilities accurately control backend and UI, integrations reconcile, and no disabled feature is advertised or executed.
+
+## Previous brief
+
+The pre-V2 brief below is retained as historical context only. Where it conflicts with the V2 authority above, V2 wins.
+
+# BREERO Codex Master Brief
+
 ## Mission
 
 Build BREERO as a production-quality home-services marketplace and field-service orchestration platform. Keep frontend, backend, operations, partner and finance concerns explicit and independently maintainable.
