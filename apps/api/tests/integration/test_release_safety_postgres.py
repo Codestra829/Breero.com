@@ -23,6 +23,11 @@ from app.domains.common.outbox_service import OutboxService
 from app.domains.compliance.models import ConsentEvent, Suppression
 from app.domains.compliance.schemas import CommunicationPreferenceCreate
 from app.domains.compliance.service import ComplianceService, digest
+from app.domains.public_submissions.models import (
+    DownstreamStatus,
+    PublicSubmission,
+    SubmissionType,
+)
 from app.domains.workforce.models import Vendor, VendorStatus, Worker, WorkerStatus
 
 
@@ -326,3 +331,49 @@ async def test_reopt_in_is_limited_to_matching_channel_and_purpose() -> None:
         await session.refresh(unrelated_email)
         assert sms_marketing.active is False
         assert unrelated_email.active is True
+
+
+@pytest.mark.asyncio
+async def test_parking_and_activation_synchronize_public_submission_status() -> None:
+    marker = uuid.uuid4().hex
+    event_type = f"breero.release_safety_status.{marker}"
+
+    async with SessionLocal() as session:
+        submission = PublicSubmission(
+            submission_type=SubmissionType.SERVICE_REQUEST,
+            idempotency_key=f"release-safety-status-{marker}",
+            request_hash=marker.ljust(64, "0"),
+            normalized_email=f"release-safety-status-{marker}@example.com",
+            normalized_phone=None,
+            payload={"release_safety_test": True},
+            downstream_status=DownstreamStatus.PENDING,
+            source_ip_hash=marker.ljust(64, "1"),
+        )
+        session.add(submission)
+        await session.flush()
+
+        event = IntegrationEvent(
+            aggregate_type="public_submission",
+            aggregate_id=submission.id,
+            event_type=event_type,
+            idempotency_key=f"release-safety-status-event-{marker}",
+            payload={"submission_id": str(submission.id)},
+            status=EventStatus.PENDING,
+            next_attempt_at=datetime.now(UTC),
+        )
+        session.add(event)
+        await session.commit()
+
+        outbox = OutboxService(session)
+        assert await outbox.park_unconfigured(event_prefix=event_type) == 1
+        await session.refresh(submission)
+        await session.refresh(event)
+        assert event.status == EventStatus.PENDING_CONFIGURATION
+        assert submission.downstream_status == DownstreamStatus.PENDING_CONFIGURATION
+
+        assert await outbox.activate_pending_configuration(event_prefix=event_type) == 1
+        await session.refresh(submission)
+        await session.refresh(event)
+        assert event.status == EventStatus.PENDING
+        assert submission.downstream_status == DownstreamStatus.PENDING
+
