@@ -22,7 +22,7 @@ from app.domains.booking.schemas import (
 from app.domains.booking.service import BookingService
 from app.domains.capabilities.service import public_capabilities
 from app.domains.common.outbox import EventStatus, IntegrationEvent
-from app.domains.common.outbox_service import OutboxService
+from app.domains.common.outbox_service import INTEGRATION_DISABLED_ERROR_CODE, OutboxService
 from app.main import app
 
 
@@ -134,7 +134,17 @@ async def test_disabled_middleware_parks_public_submission_events() -> None:
     session = AsyncMock()
     session.scalars.return_value = scalars
 
-    assert await OutboxService(session).park_unconfigured() == 1
+    outbox = OutboxService(session)
+    assert await outbox.park_unconfigured() == 1
     assert event.status == EventStatus.PENDING_CONFIGURATION
     assert event.processed_at is None
-    session.commit.assert_awaited_once()
+    assert event.last_error_code == INTEGRATION_DISABLED_ERROR_CODE
+    assert event.last_error == "Integration disabled or unconfigured"
+    assert event.last_error_at is not None
+
+    assert await outbox.activate_pending_configuration() == 1
+    assert event.status == EventStatus.PENDING
+    assert event.last_error_code is None
+    assert event.last_error is None
+    assert event.last_error_at is None
+    assert session.commit.await_count == 2
