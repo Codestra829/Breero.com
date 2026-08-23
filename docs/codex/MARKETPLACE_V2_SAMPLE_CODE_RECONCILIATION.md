@@ -47,6 +47,55 @@ The implementation may retain these concepts after adapting them to the existing
 
 Concept approval does not approve the sample implementation.
 
+
+## 2.1 Mandatory production-correction checklist
+
+Before any implementation derived from the sample may be described as production-ready, it must:
+
+1. replace deterministic JWT `uuid5()` identity generation with the `external_identities` database mapping;
+2. cache OIDC discovery and JWKS safely while supporting signing-key rotation;
+3. use one coherent browser/API authentication flow instead of the sample frontend/backend bearer-token mismatch;
+4. move business logic out of route files and into domain/application services;
+5. return explicit response DTOs instead of ORM entities;
+6. enforce participant and tenant authorization on message creation;
+7. derive quote provider identity from the authenticated provider membership rather than accepting an arbitrary `provider_id`;
+8. add immutable quote versions and quote line items;
+9. add immutable job status and assignment history;
+10. make idempotency acquisition and replay safe under concurrent requests;
+11. make outbox leases reclaimable and fence stale workers;
+12. add persisted `delivered_at`, normalized `last_error`, and delivery-attempt evidence to the outbox schema;
+13. cryptographically verify every webhook before accepting it as trusted;
+14. process verified inbox records asynchronously instead of running third-party business work inline;
+15. implement PostGIS eligibility and distance matching with reproducible reasons;
+16. add database uniqueness constraints for marketplace relationships and treat them as final duplicate protection;
+17. use timezone-aware UTC timestamps everywhere and preserve required local timezone context;
+18. wrap every state transition, history entry, audit record, outbox event, and idempotency result in one transaction;
+19. generate the shared TypeScript API client from canonical OpenAPI for the existing Next.js applications;
+20. complete additive migrations plus concurrency, integration, authorization, security, browser, and accessibility tests.
+
+These requirements align with the unfinished work already recorded by the V2 architecture and are mandatory implementation gates, not optional cleanup.
+
+## 2.2 Core production rule
+
+```text
+FRONTEND
+= display + interaction
+
+BACKEND
+= identity + permissions + business rules + state
+
+DATABASE
+= authoritative state
+
+WORKERS
+= asynchronous and retryable work
+
+OUTBOX / INBOX
+= reliable integration boundary
+```
+
+No frontend, provider, workflow engine, cache, or third-party callback may bypass this boundary.
+
 ## 3. Canonical landing map
 
 | Sample location | BREERO implementation location |
