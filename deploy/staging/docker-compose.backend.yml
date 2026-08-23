@@ -11,6 +11,11 @@ x-app: &app
   security_opt: [no-new-privileges:true]
   cap_drop: [ALL]
   networks: [private]
+  secrets:
+    - breero_staging_database_url
+    - breero_staging_redis_url
+    - breero_staging_jwt_access_secret
+    - breero_staging_jwt_refresh_secret
 
 services:
   migrate:
@@ -44,6 +49,8 @@ services:
     container_name: breero-staging-postgres
     env_file: ${BREERO_STAGING_POSTGRES_ENV:?Set BREERO_STAGING_POSTGRES_ENV}
     restart: unless-stopped
+    secrets:
+      - breero_staging_postgres_password
     volumes: [postgres_data:/var/lib/postgresql/data]
     networks: [private]
     healthcheck:
@@ -56,12 +63,21 @@ services:
     image: redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
     container_name: breero-staging-redis
     env_file: ${BREERO_STAGING_REDIS_ENV:?Set BREERO_STAGING_REDIS_ENV}
-    command: [sh, -c, 'exec redis-server --appendonly yes --requirepass "$${REDIS_PASSWORD}"']
+    command:
+      - sh
+      - -ec
+      - |
+        REDIS_PASSWORD="$$(cat "$${REDIS_PASSWORD_FILE}")"
+        exec redis-server --appendonly yes --requirepass "$${REDIS_PASSWORD}"
     restart: unless-stopped
+    secrets:
+      - breero_staging_redis_password
     volumes: [redis_data:/data]
     networks: [private]
     healthcheck:
-      test: [CMD-SHELL, 'redis-cli -a "$${REDIS_PASSWORD}" ping | grep PONG']
+      test:
+        - CMD-SHELL
+        - 'redis-cli -a "$$(cat "$${REDIS_PASSWORD_FILE}")" ping 2>/dev/null | grep PONG'
       interval: 10s
       timeout: 3s
       retries: 10
@@ -77,3 +93,17 @@ networks:
 volumes:
   postgres_data: {name: breero_staging_postgres_data}
   redis_data: {name: breero_staging_redis_data}
+
+secrets:
+  breero_staging_database_url:
+    file: ${STAGING_DATABASE_URL_REFERENCE:?Set STAGING_DATABASE_URL_REFERENCE}
+  breero_staging_redis_url:
+    file: ${STAGING_REDIS_URL_REFERENCE:?Set STAGING_REDIS_URL_REFERENCE}
+  breero_staging_jwt_access_secret:
+    file: ${STAGING_JWT_SECRET_REFERENCE:?Set STAGING_JWT_SECRET_REFERENCE}
+  breero_staging_jwt_refresh_secret:
+    file: ${STAGING_JWT_REFRESH_SECRET_REFERENCE:?Set STAGING_JWT_REFRESH_SECRET_REFERENCE}
+  breero_staging_postgres_password:
+    file: ${STAGING_POSTGRES_PASSWORD_REFERENCE:?Set STAGING_POSTGRES_PASSWORD_REFERENCE}
+  breero_staging_redis_password:
+    file: ${STAGING_REDIS_PASSWORD_REFERENCE:?Set STAGING_REDIS_PASSWORD_REFERENCE}
