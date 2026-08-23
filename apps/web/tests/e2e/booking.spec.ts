@@ -8,6 +8,34 @@ const service = {
   is_bookable: false,
 };
 
+const requestOnlyCapabilities = {
+  request_intake: true,
+  instant_booking: false,
+  automatic_assignment: false,
+  online_payments: false,
+  payments: false,
+  payouts: false,
+  paid_leads: false,
+  provider_self_service: false,
+  marketplace_matching: false,
+  messaging: false,
+  reviews: false,
+  marketing: false,
+};
+
+async function mockCapabilities(
+  page: import("@playwright/test").Page,
+  capabilities = requestOnlyCapabilities,
+) {
+  await page.route("**/api/capabilities", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(capabilities),
+    }),
+  );
+}
+
 async function mockCatalog(page: import("@playwright/test").Page) {
   await page.route("**/api/services", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([service]) }),
@@ -16,6 +44,7 @@ async function mockCatalog(page: import("@playwright/test").Page) {
 
 for (const width of [375, 430, 768, 1024, 1280, 1440])
   test(`homepage and request-service entry fit ${width}px`, async ({ page }) => {
+    await mockCapabilities(page);
     await mockCatalog(page);
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
@@ -30,6 +59,7 @@ for (const width of [375, 430, 768, 1024, 1280, 1440])
   });
 
 test("request-service submission remains pending manual dispatch", async ({ page }) => {
+  await mockCapabilities(page);
   await mockCatalog(page);
   let submitted: Record<string, unknown> | undefined;
   let validated: Record<string, unknown> | undefined;
@@ -90,8 +120,29 @@ test("request-service submission remains pending manual dispatch", async ({ page
 });
 
 test("catalog failure keeps manual request recovery visible", async ({ page }) => {
+  await mockCapabilities(page);
   await page.route("**/api/services", (route) => route.fulfill({ status: 503 }));
   await page.goto("/request-service");
   await expect(page.getByText("Live services are unavailable right now. Please try again shortly.")).toBeVisible();
   await expect(page.getByText(/not a confirmed booking, provider assignment, price or appointment/i)).toBeVisible();
+});
+
+test("disabled request-intake capability keeps submission fail-closed", async ({ page }) => {
+  await mockCapabilities(page, { ...requestOnlyCapabilities, request_intake: false });
+  await mockCatalog(page);
+
+  await page.goto("/request-service");
+
+  await expect(page.getByLabel("Preferred date (request only)")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send request" })).toBeDisabled();
+});
+
+test("unavailable capability authority keeps submission fail-closed", async ({ page }) => {
+  await page.route("**/api/capabilities", (route) => route.fulfill({ status: 503 }));
+  await mockCatalog(page);
+
+  await page.goto("/request-service");
+
+  await expect(page.getByLabel("Preferred date (request only)")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send request" })).toBeDisabled();
 });
