@@ -36,4 +36,20 @@ describe("marketing system", () => {
     await waitFor(() => expect(screen.getByLabelText("Preferred date (request only)")).toBeEnabled());
     expect(screen.getByRole("button", { name: "Send request" })).toBeEnabled();
   });
+
+  it("keeps timing request-only when instant booking is enabled", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(
+      url.includes("capabilities")
+        ? { request_intake: true, instant_booking: true, online_payments: false, automatic_assignment: false, provider_self_service: false, marketplace_matching: false, messaging: false, reviews: false }
+        : [{ id: "service-1", slug: "plumbing", name: "Plumbing", is_active: true }],
+    ), { status: 200 }))));
+
+    render(<PublicIntakeForm kind="service" />);
+
+    await waitFor(() => expect(screen.getByLabelText("Preferred date (request only)")).toBeEnabled());
+    expect(screen.getByLabelText("Preferred local time (request only)")).toBeEnabled();
+    expect(screen.queryByLabelText("Appointment date")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Appointment time")).not.toBeInTheDocument();
+  });
+
 });
