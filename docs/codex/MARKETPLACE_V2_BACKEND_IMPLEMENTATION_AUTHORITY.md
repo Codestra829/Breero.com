@@ -7,6 +7,7 @@ This document replaces the earlier backend-authority draft and is documentation-
 The current request-only/manual-dispatch behavior remains authoritative. Payments, payouts, paid leads, provider self-service, marketplace matching, messaging, reviews, instant booking, automatic assignment, automatic confirmation, marketing, unrestricted email/SMS and external automation remain disabled until separately implemented, tested and authorized.
 
 The canonical Keycloak issuer is `https://auth.codestra.co/realms/codestra`. `auth.codestra.agency` is deprecated and must not be used in new configuration.
+
 ## 1. Scope
 
 This document is the implementation authority for the BREERO backend.
@@ -3749,6 +3750,7 @@ ProjectRequest
 works with payments disabled.
 
 Production activation requires all relevant CI, migrations, authorization, idempotency, integration and observability gates to pass.
+
 ---
 
 # 101. Shared command and transaction contract
