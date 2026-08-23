@@ -1,133 +1,67 @@
-# BREERO Marketplace V2 — Complete Backend Implementation Authority
+# BREERO Marketplace V2 — Backend, Database, API and Middleware Production Specification
 
 ## Status and safety boundary
 
-This is documentation-only implementation authority for the BREERO repository. It must not be deployed. Complete and human-merge PR-00 release safety and the Marketplace V2 architecture authority before creating implementation branches from the latest merged target.
+This document replaces the earlier backend-authority draft and is documentation-only implementation authority for `appolon1908-hue/Breero.com`. It must not be deployed. Complete and human-merge PR-00 release safety and the Marketplace V2 planning authority before creating implementation branches from the latest merged target.
 
 The current request-only/manual-dispatch behavior remains authoritative. Payments, payouts, paid leads, provider self-service, marketplace matching, messaging, reviews, instant booking, automatic assignment, automatic confirmation, marketing, unrestricted email/SMS and external automation remain disabled until separately implemented, tested and authorized.
 
-## 1. Purpose
+The canonical Keycloak issuer is `https://auth.codestra.co/realms/codestra`. `auth.codestra.agency` is deprecated and must not be used in new configuration.
+## 1. Scope
 
-This document is the backend implementation authority for BREERO Marketplace V2.
+This document is the implementation authority for the BREERO backend.
 
 Backend owns:
 
-- PostgreSQL/PostGIS schema
-- Alembic migrations
-- FastAPI routers
-- domain services
-- repositories/queries
-- commands
-- state machines
+- FastAPI
+- PostgreSQL
+- PostGIS
+- Alembic
+- SQLAlchemy
+- authentication integration
 - authorization
-- tenant/provider boundaries
-- idempotency
+- RBAC
+- customer data
+- provider data
+- service catalog
+- ProjectRequest
 - matching
-- scheduling
-- credentials
+- opportunities
+- leads
 - quotes
 - messaging persistence
-- booking/job orchestration
+- availability
+- scheduling
+- bookings
+- jobs
 - reviews
-- operations APIs
-- admin APIs
+- credentials
+- trust and safety
+- operations
+- administration
+- payments when activated
+- provider payouts when activated
+- subscriptions when activated
+- audit
+- analytics events
 - transactional outbox
 - integration inbox
-- Codestra/Kong connectivity
-- middleware delivery
+- Codestra middleware integration
+- Odoo projection
+- Klyrow email events
+- Telnexa SMS events
+- n8n approved workflow events
 - observability
-- backend tests
 - OpenAPI
+- backend testing
 
-Backend does **not** own React/Next.js page implementation.
-
----
-
-# 2. Mandatory architecture
-
-Use:
-
-```text
-Router
-  ↓
-Domain Service / Command
-  ↓
-Repository / Query
-  ↓
-Async SQLAlchemy
-  ↓
-PostgreSQL/PostGIS
-
-```
-
-PostgreSQL/PostGIS is authoritative.
-
-Redis is disposable only:
-
-```text
-cache
-rate limits
-short-lived locks
-Celery/worker state
-availability cache
-matching cache
-
-```
-
-Do not store authoritative marketplace state in Redis.
+Frontend code must not be implemented in backend PRs.
 
 ---
 
-# 3. Marketplace lifecycle
+# 2. Backend Git branches
 
-Canonical lifecycle:
-
-```text
-Customer Intent
-      ↓
-ProjectRequest
-      ↓
-Qualification
-      ↓
-Fulfillment Decision
-      ↓
-Matching
-      ↓
-Opportunity
-      ↓
-LeadConnection
-      ↓
-Conversation + Quote
-      ↓
-Booking / Scheduling
-      ↓
-Job
-      ↓
-Verified Review
-
-```
-
-Definitions:
-
-```text
-ProjectRequest = customer demand
-Matching       = eligibility + ranking
-Opportunity    = controlled invitation
-LeadConnection = authorized customer/provider relationship
-Quote          = commercial proposal
-Booking        = scheduling outcome
-Job            = field execution
-Review         = completed-job trust signal
-
-```
-
-Never move qualification, provider search, quoting or communication into Booking.
-
----
-
-# 4. Backend branch plan
-
-After release-safety and architecture authority are human merged, use separate backend PRs.
+Implement sequentially.
 
 ```text
 be/marketplace-v2-project-requests
@@ -147,282 +81,526 @@ be/marketplace-v2-operations
 be/marketplace-v2-admin-rbac
 be/marketplace-v2-integrations
 be/marketplace-v2-analytics
-be/marketplace-v2-transactions
+be/marketplace-v2-payments
 be/marketplace-v2-subscriptions
 
 ```
 
-One Draft PR per branch.
+One PR per branch.
 
-Do not build one mega-PR.
-
----
-
-# 5. Backend repository structure
-
-Target:
-
-```text
-apps/api/app/
-
-├── api/
-│   ├── v1/
-│   └── v2/
-│       ├── router.py
-│       ├── public.py
-│       ├── catalog.py
-│       ├── project_requests.py
-│       ├── providers.py
-│       ├── customer.py
-│       ├── partner.py
-│       ├── workers.py
-│       ├── matching.py
-│       ├── opportunities.py
-│       ├── quotes.py
-│       ├── conversations.py
-│       ├── bookings.py
-│       ├── jobs.py
-│       ├── reviews.py
-│       ├── operations.py
-│       ├── admin.py
-│       ├── analytics.py
-│       └── integrations.py
-│
-├── domains/
-│   ├── project_requests/
-│   ├── catalog/
-│   ├── providers/
-│   ├── provider_onboarding/
-│   ├── credentials/
-│   ├── availability/
-│   ├── matching/
-│   ├── opportunities/
-│   ├── quotes/
-│   ├── conversations/
-│   ├── booking/
-│   ├── jobs/
-│   ├── reviews/
-│   ├── operations/
-│   ├── analytics/
-│   ├── payments/
-│   ├── subscriptions/
-│   ├── compliance/
-│   ├── integrations/
-│   ├── audit/
-│   └── common/
-│
-├── workers/
-├── core/
-└── config.py
-
-```
-
-Each domain normally owns:
-
-```text
-models.py
-schemas.py
-repository.py
-service.py
-commands.py
-policies.py
-events.py
-queries.py
-
-```
-
-Reuse existing conventions instead of mechanically creating unused files.
+Do not create another mega-PR.
 
 ---
 
-# 6. Shared command requirements
+# 3. Core architecture
 
-Every externally retryable state-changing command requires:
+Use the existing BREERO application architecture:
 
 ```text
-Authenticated actor
-Tenant/legal-entity context
-Permission
-Ownership validation
-Idempotency-Key
-Request hash
-Correlation ID
-Expected/current aggregate version
-Explicit state transition
-Audit entry
-Outbox event
-Atomic commit
+FastAPI Router
+      ↓
+Domain Service / Command
+      ↓
+Repository / Query
+      ↓
+Async SQLAlchemy
+      ↓
+PostgreSQL/PostGIS
 
 ```
 
-Suggested common context:
+PostgreSQL is authoritative.
 
-```python
-from dataclasses import dataclass
-from uuid import UUID
+Redis is not authoritative.
 
-@dataclass(frozen=True)
-class CommandContext:
-    actor_id: UUID
-    tenant_id: UUID | None
-    legal_entity_id: UUID | None
-    idempotency_key: str
-    request_hash: str
-    correlation_id: str
+Redis may contain:
+
+```text
+rate limits
+cache
+availability cache
+matching cache
+short-lived distributed locks
+background queue state
+
+```
+
+Redis must never be the only storage for:
+
+```text
+ProjectRequest
+Opportunity
+LeadConnection
+Quote
+Conversation
+Booking
+Job
+Credential
+Review
+Payment
+Payout
 
 ```
 
 ---
 
-# 7. API V2 router
+# 4. Canonical marketplace lifecycle
 
-Keep V1 compatible.
-
-Add:
-
-```python
-from fastapi import APIRouter
-
-from . import (
-    admin,
-    analytics,
-    bookings,
-    catalog,
-    conversations,
-    customer,
-    integrations,
-    jobs,
-    matching,
-    opportunities,
-    operations,
-    partner,
-    project_requests,
-    providers,
-    public,
-    quotes,
-    reviews,
-    workers,
-)
-
-api_v2 = APIRouter()
-
-api_v2.include_router(public.router, prefix="/public")
-api_v2.include_router(catalog.router, prefix="/catalog")
-api_v2.include_router(project_requests.router, prefix="/project-requests")
-api_v2.include_router(providers.router, prefix="/providers")
-api_v2.include_router(customer.router, prefix="/customer")
-api_v2.include_router(partner.router, prefix="/partner")
-api_v2.include_router(workers.router, prefix="/worker")
-api_v2.include_router(matching.router, prefix="/matching")
-api_v2.include_router(opportunities.router, prefix="/opportunities")
-api_v2.include_router(quotes.router, prefix="/quotes")
-api_v2.include_router(conversations.router, prefix="/conversations")
-api_v2.include_router(bookings.router, prefix="/bookings")
-api_v2.include_router(jobs.router, prefix="/jobs")
-api_v2.include_router(reviews.router, prefix="/reviews")
-api_v2.include_router(operations.router, prefix="/ops")
-api_v2.include_router(admin.router, prefix="/admin")
-api_v2.include_router(analytics.router, prefix="/analytics")
-api_v2.include_router(integrations.router, prefix="/integrations")
+```text
+Customer Intent
+      ↓
+ProjectRequest
+      ↓
+Qualification
+      ↓
+Fulfillment Decision
+      ↓
+Matching
+      ↓
+Opportunity
+      ↓
+LeadConnection
+      ↓
+Conversation + Quote
+      ↓
+Booking
+      ↓
+Job
+      ↓
+Verified Review
 
 ```
 
-Mount at:
+Definitions:
+
+```text
+ProjectRequest = demand
+Matching       = eligibility and ranking
+Opportunity    = provider invitation
+LeadConnection = authorized provider/customer connection
+Quote          = provider commercial offer
+Booking        = scheduling result
+Job            = execution
+Review         = completed-job trust signal
+
+```
+
+Booking must not own:
+
+- demand qualification
+- provider search
+- provider ranking
+- lead generation
+- quoting
+- messaging
+
+---
+
+# 5. API versioning
+
+Keep `/api/v1` operational while V2 is introduced.
+
+New marketplace contract:
 
 ```text
 /api/v2
 
 ```
 
+Do not remove V1 routes until consumers have migrated.
+
+Mount:
+
+```text
+/api/v2/public
+/api/v2/catalog
+/api/v2/project-requests
+/api/v2/providers
+/api/v2/customer
+/api/v2/partner
+/api/v2/worker
+/api/v2/quotes
+/api/v2/conversations
+/api/v2/bookings
+/api/v2/jobs
+/api/v2/reviews
+/api/v2/ops
+/api/v2/admin
+/api/v2/integrations
+
+```
+
 ---
 
-# 8. Database — identity/customer foundation
+# 6. Production database standards
 
-Reuse existing user/auth schema where possible.
+All primary identifiers:
 
-Add or normalize:
+```text
+UUID
+
+```
+
+All timestamps:
+
+```text
+TIMESTAMPTZ
+
+```
+
+Money:
+
+```text
+BIGINT minor units
+
+```
+
+Example:
+
+```text
+$12.50 = 1250
+
+```
+
+Never store currency values as float.
+
+Currency:
+
+```text
+CHAR(3)
+
+```
+
+Examples:
+
+```text
+USD
+CAD
+EUR
+
+```
+
+Use:
+
+```text
+created_at
+updated_at
+
+```
+
+on mutable entities.
+
+Important aggregates also use:
+
+```text
+version INTEGER NOT NULL
+
+```
+
+for optimistic concurrency.
+
+Prefer CHECK constraints or application-owned status validation over hard-to-migrate PostgreSQL ENUMs unless the repository has already standardized on database ENUMs.
+
+---
+
+# 7. Customer schema
 
 ## customer\_profiles
 
 ```text
 id UUID PK
-user_id UUID UNIQUE
-first_name
-last_name
-display_name
-primary_phone
-primary_email
-timezone
-created_at
-updated_at
+user_id UUID UNIQUE NOT NULL
+
+first_name VARCHAR
+last_name VARCHAR
+display_name VARCHAR NULL
+
+primary_email VARCHAR
+primary_phone VARCHAR NULL
+
+timezone VARCHAR
+
+created_at TIMESTAMPTZ
+updated_at TIMESTAMPTZ
 
 ```
+
+Indexes:
+
+```text
+UNIQUE(user_id)
+INDEX(primary_email)
+
+```
+
+---
+
+# 8. Customer properties
 
 ## customer\_properties
 
 ```text
 id UUID PK
-customer_id UUID FK
-name
-property_type
-year_built nullable
-square_feet nullable
-bedrooms nullable
-bathrooms nullable
-active
+customer_id UUID FK NOT NULL
+
+name VARCHAR
+property_type VARCHAR
+
+year_built INTEGER NULL
+square_feet INTEGER NULL
+bedrooms NUMERIC NULL
+bathrooms NUMERIC NULL
+
+active BOOLEAN
+
 created_at
 updated_at
 
 ```
 
-## addresses
+Index:
 
-Preserve existing address model.
+```text
+(customer_id, active)
+
+```
+
+---
+
+# 9. Addresses
+
+Preserve and extend existing address model.
 
 Required:
 
 ```text
-id
-customer_id nullable
-property_id nullable
+id UUID PK
+
+customer_id UUID NULL
+property_id UUID NULL
+
 line1
-line2
+line2 NULL
 city
 region
 postal_code
 country_code
-latitude
-longitude
+
+latitude DOUBLE PRECISION
+longitude DOUBLE PRECISION
+
+location GEOGRAPHY(Point,4326)
+
 timezone_name
 geocode_status
+
 created_at
 updated_at
 
 ```
 
-PostGIS point/geography should be available for distance calculations.
+PostGIS:
+
+```sql
+CREATE INDEX addresses_location_gist
+ON addresses
+USING GIST(location);
+
+```
 
 ---
 
-# 9. ProjectRequest schema
+# 10. Service catalog schema
+
+## service\_categories
+
+```text
+id UUID PK
+slug VARCHAR UNIQUE
+name VARCHAR
+description TEXT
+sort_order INTEGER
+active BOOLEAN
+
+```
+
+## services
+
+Extend existing services.
+
+```text
+id UUID PK
+category_id UUID FK
+
+slug VARCHAR UNIQUE
+name VARCHAR
+description TEXT
+
+active BOOLEAN
+is_bookable BOOLEAN
+
+default_fulfillment_mode VARCHAR
+requires_provider_quote BOOLEAN
+
+minimum_notice_minutes INTEGER
+
+created_at
+updated_at
+
+```
+
+Fulfillment modes:
+
+```text
+INSTANT_BOOK
+QUOTE_REQUIRED
+MANUAL_DISPATCH
+UNSERVICEABLE
+
+```
+
+---
+
+# 11. Dynamic service questionnaire
+
+## service\_questions
+
+```text
+id UUID PK
+service_id UUID FK
+
+key VARCHAR
+label VARCHAR
+help_text TEXT NULL
+
+question_type VARCHAR
+required BOOLEAN
+
+sort_order INTEGER
+active BOOLEAN
+
+validation_json JSONB
+
+created_at
+updated_at
+
+```
+
+Question types:
+
+```text
+TEXT
+TEXTAREA
+BOOLEAN
+NUMBER
+SINGLE_SELECT
+MULTI_SELECT
+DATE
+TIME
+PHOTO
+
+```
+
+Unique:
+
+```text
+(service_id, key)
+
+```
+
+## service\_question\_options
+
+```text
+id UUID PK
+question_id UUID FK
+
+value VARCHAR
+label VARCHAR
+
+sort_order INTEGER
+active BOOLEAN
+
+```
+
+## service\_question\_rules
+
+```text
+id UUID PK
+
+service_id UUID
+source_question_id UUID
+operator VARCHAR
+expected_value_json JSONB
+
+target_question_id UUID
+action VARCHAR
+
+```
+
+Actions:
+
+```text
+SHOW
+HIDE
+REQUIRE
+OPTIONAL
+
+```
+
+---
+
+# 12. Catalog APIs
+
+Public:
+
+```http
+GET /api/v2/catalog/categories
+GET /api/v2/catalog/categories/{slug}
+
+GET /api/v2/catalog/services
+GET /api/v2/catalog/services/{slug}
+GET /api/v2/catalog/services/{id}/questions
+
+```
+
+Admin:
+
+```http
+POST  /api/v2/admin/catalog/categories
+PATCH /api/v2/admin/catalog/categories/{id}
+
+POST  /api/v2/admin/catalog/services
+PATCH /api/v2/admin/catalog/services/{id}
+
+POST   /api/v2/admin/catalog/services/{id}/questions
+PATCH  /api/v2/admin/catalog/questions/{id}
+DELETE /api/v2/admin/catalog/questions/{id}
+
+```
+
+---
+
+# 13. ProjectRequest schema
 
 ## project\_requests
 
 ```text
 id UUID PK
+
 reference VARCHAR UNIQUE
 
 customer_id UUID NULL
 property_id UUID NULL
-service_id UUID FK
-address_id UUID FK
+service_id UUID NOT NULL
+address_id UUID NOT NULL
 legal_entity_id UUID NULL
 
-status VARCHAR
+status VARCHAR NOT NULL
 fulfillment_mode VARCHAR NULL
 
 title VARCHAR NULL
-description TEXT
+description TEXT NOT NULL
+
 urgency VARCHAR
 
 budget_min_minor BIGINT NULL
@@ -462,23 +640,29 @@ UNSERVICEABLE
 
 ```
 
-Fulfillment:
+Indexes:
 
 ```text
-INSTANT_BOOK
-QUOTE_REQUIRED
-MANUAL_DISPATCH
-UNSERVICEABLE
+(customer_id, created_at DESC)
+(status, created_at)
+(service_id, status)
+(address_id)
 
 ```
+
+---
+
+# 14. Project answers
 
 ## project\_request\_answers
 
 ```text
-id
-project_request_id
-question_id
+id UUID PK
+project_request_id UUID FK
+question_id UUID FK
+
 answer_json JSONB
+
 created_at
 updated_at
 
@@ -491,41 +675,70 @@ Unique:
 
 ```
 
+---
+
+# 15. Project attachments
+
 ## project\_request\_attachments
 
 ```text
-id
-project_request_id
-storage_key
-original_filename
-content_type
-size_bytes
-checksum_sha256
-scan_status
-created_by
+id UUID PK
+project_request_id UUID FK
+
+storage_key VARCHAR
+original_filename VARCHAR
+content_type VARCHAR
+size_bytes BIGINT
+checksum_sha256 VARCHAR
+
+scan_status VARCHAR
+
+created_by UUID NULL
 created_at
 
 ```
+
+Scan states:
+
+```text
+PENDING
+CLEAN
+REJECTED
+FAILED
+
+```
+
+Never store uploaded binary content directly in PostgreSQL.
+
+---
+
+# 16. Project request history
 
 ## project\_request\_status\_history
 
 ```text
-id
-project_request_id
-from_status
-to_status
-reason_code
-actor_id
-metadata_json
+id UUID PK
+project_request_id UUID FK
+
+from_status VARCHAR NULL
+to_status VARCHAR
+
+reason_code VARCHAR NULL
+actor_id UUID NULL
+
+metadata_json JSONB
+
 created_at
 
 ```
 
+History is append-only.
+
 ---
 
-# 10. ProjectRequest API
+# 17. ProjectRequest APIs
 
-Public/customer:
+Customer:
 
 ```http
 POST   /api/v2/project-requests
@@ -538,193 +751,61 @@ DELETE /api/v2/project-requests/{id}/answers/{questionId}
 POST   /api/v2/project-requests/{id}/attachments
 DELETE /api/v2/project-requests/{id}/attachments/{attachmentId}
 
-POST   /api/v2/project-requests/{id}/submit
-POST   /api/v2/project-requests/{id}/cancel
+POST /api/v2/project-requests/{id}/submit
+POST /api/v2/project-requests/{id}/cancel
 
-GET    /api/v2/customer/project-requests
+GET /api/v2/project-requests/{id}/matches
+GET /api/v2/project-requests/{id}/quotes
+
+```
+
+Customer portal:
+
+```http
+GET /api/v2/customer/project-requests
 
 ```
 
 Operations:
 
 ```http
-GET  /api/v2/ops/project-requests
-GET  /api/v2/ops/project-requests/{id}
+GET /api/v2/ops/project-requests
+GET /api/v2/ops/project-requests/{id}
+
 POST /api/v2/ops/project-requests/{id}/qualify
 POST /api/v2/ops/project-requests/{id}/mark-unserviceable
 
 ```
 
-Example create router:
-
-```python
-@router.post("", response_model=ProjectRequestView, status_code=201)
-async def create_project_request(
-    payload: ProjectRequestCreate,
-    request: Request,
-    user: UserContext = Depends(require_customer_or_guest),
-    session: AsyncSession = Depends(get_session),
-):
-    context = command_context(request, user)
-    return await ProjectRequestService(session).create(payload, context)
-
-```
-
 ---
 
-# 11. Catalog/questionnaire schema
-
-## service\_categories
-
-```text
-id
-slug
-name
-description
-sort_order
-active
-
-```
-
-## services
-
-Preserve existing table and extend only when needed.
-
-Recommended fields:
-
-```text
-id
-category_id
-slug
-name
-description
-active
-is_bookable
-default_fulfillment_mode
-requires_provider_quote
-minimum_notice_minutes
-
-```
-
-## service\_questions
-
-```text
-id
-service_id
-key
-label
-help_text
-question_type
-required
-sort_order
-active
-validation_json
-
-```
-
-Question types:
-
-```text
-TEXT
-TEXTAREA
-BOOLEAN
-NUMBER
-SINGLE_SELECT
-MULTI_SELECT
-DATE
-TIME
-PHOTO
-
-```
-
-## service\_question\_options
-
-```text
-id
-question_id
-value
-label
-sort_order
-active
-
-```
-
-## service\_question\_rules
-
-```text
-id
-service_id
-source_question_id
-operator
-expected_value_json
-target_question_id
-action
-
-```
-
-Actions:
-
-```text
-SHOW
-HIDE
-REQUIRE
-OPTIONAL
-
-```
-
----
-
-# 12. Catalog APIs
-
-```http
-GET /api/v2/catalog/categories
-GET /api/v2/catalog/categories/{slug}
-
-GET /api/v2/catalog/services
-GET /api/v2/catalog/services/{slug}
-GET /api/v2/catalog/services/{id}/questions
-
-```
-
-Admin:
-
-```http
-POST   /api/v2/admin/catalog/categories
-PATCH  /api/v2/admin/catalog/categories/{id}
-
-POST   /api/v2/admin/catalog/services
-PATCH  /api/v2/admin/catalog/services/{id}
-
-POST   /api/v2/admin/catalog/services/{id}/questions
-PATCH  /api/v2/admin/catalog/questions/{id}
-DELETE /api/v2/admin/catalog/questions/{id}
-
-```
-
----
-
-# 13. Provider schema
+# 18. Provider organization schema
 
 ## provider\_organizations
 
 ```text
-id
-legal_name
-display_name
-slug UNIQUE
-entity_type
-tax_country
-status
-website
-primary_email
-primary_phone
-timezone
+id UUID PK
+
+legal_name VARCHAR
+display_name VARCHAR
+slug VARCHAR UNIQUE
+
+entity_type VARCHAR
+
+status VARCHAR
+
+website VARCHAR NULL
+primary_email VARCHAR
+primary_phone VARCHAR
+
+timezone VARCHAR
+
 created_at
 updated_at
 
 ```
 
-Provider states:
+Statuses:
 
 ```text
 DRAFT
@@ -736,61 +817,51 @@ CLOSED
 
 ```
 
+---
+
+# 19. Provider profile
+
 ## provider\_profiles
 
 ```text
-provider_id PK/FK
-headline
-description
-years_in_business
-logo_storage_key
-cover_storage_key
-response_time_minutes nullable
-verified_jobs_count
-rating_average
-rating_count
-public_profile_enabled
+provider_id UUID PK/FK
+
+headline VARCHAR NULL
+description TEXT
+
+years_in_business INTEGER NULL
+
+logo_storage_key VARCHAR NULL
+cover_storage_key VARCHAR NULL
+
+response_time_minutes INTEGER NULL
+
+verified_jobs_count INTEGER DEFAULT 0
+
+rating_average NUMERIC(3,2)
+rating_count INTEGER
+
+public_profile_enabled BOOLEAN
+
+created_at
 updated_at
 
 ```
+
+---
+
+# 20. Provider members
 
 ## provider\_members
 
 ```text
-id
-provider_id
-user_id
-role
-status
-created_at
+id UUID PK
+provider_id UUID FK
+user_id UUID FK
 
-```
+role VARCHAR
+status VARCHAR
 
-## provider\_workers
-
-```text
-id
-provider_id
-user_id nullable
-first_name
-last_name
-phone
-email
-status
-hire_date nullable
-created_at
-updated_at
-
-```
-
-## provider\_services
-
-```text
-provider_id
-service_id
-active
-starting_price_minor nullable
-currency
 created_at
 updated_at
 
@@ -799,32 +870,149 @@ updated_at
 Unique:
 
 ```text
+(provider_id, user_id)
+
+```
+
+---
+
+# 21. Provider workers
+
+## provider\_workers
+
+```text
+id UUID PK
+
+provider_id UUID FK
+user_id UUID NULL
+
+first_name
+last_name
+
+email
+phone
+
+status VARCHAR
+
+hire_date DATE NULL
+
+created_at
+updated_at
+
+```
+
+States:
+
+```text
+INVITED
+ACTIVE
+INACTIVE
+SUSPENDED
+
+```
+
+---
+
+# 22. Provider services
+
+## provider\_services
+
+```text
+provider_id UUID FK
+service_id UUID FK
+
+active BOOLEAN
+
+starting_price_minor BIGINT NULL
+currency CHAR(3)
+
+created_at
+updated_at
+
+```
+
+PK/unique:
+
+```text
 (provider_id, service_id)
 
 ```
 
+---
+
+# 23. Provider service areas
+
 ## provider\_service\_areas
 
 ```text
-id
-provider_id
-service_id nullable
-area_type
-geometry/geography
-radius_meters nullable
+id UUID PK
+
+provider_id UUID FK
+service_id UUID NULL
+
+area_type VARCHAR
+
+area GEOGRAPHY NULL
+
+center GEOGRAPHY(Point,4326) NULL
+radius_meters INTEGER NULL
+
+active BOOLEAN
+
+created_at
+updated_at
+
+```
+
+Types:
+
+```text
+POLYGON
+RADIUS
+
+```
+
+Indexes:
+
+```sql
+CREATE INDEX provider_service_areas_area_gist
+ON provider_service_areas
+USING GIST(area);
+
+CREATE INDEX provider_service_areas_center_gist
+ON provider_service_areas
+USING GIST(center);
+
+```
+
+---
+
+# 24. Provider gallery
+
+## provider\_gallery
+
+```text
+id UUID PK
+provider_id UUID FK
+
+storage_key
+caption NULL
+sort_order
 active
+
 created_at
 
 ```
 
-Use GiST indexes.
-
 ---
 
-# 14. Public provider APIs
+# 25. Provider APIs
+
+Public:
 
 ```http
 GET /api/v2/providers
+
 GET /api/v2/providers/{slug}
 
 GET /api/v2/providers/{slug}/services
@@ -834,85 +1022,61 @@ GET /api/v2/providers/{slug}/availability-summary
 
 ```
 
-Filters:
-
-```text
-service
-postal_code
-latitude/longitude
-rating
-verified
-availability
-distance
-
-```
-
-Never expose private provider/member/credential-document data.
-
----
-
-# 15. Provider portal APIs
-
-Profile:
+Partner:
 
 ```http
 GET   /api/v2/partner/profile
 PATCH /api/v2/partner/profile
 
-```
-
-Services:
-
-```http
 GET /api/v2/partner/services
 PUT /api/v2/partner/services
 
-```
-
-Service areas:
-
-```http
 GET    /api/v2/partner/service-areas
 POST   /api/v2/partner/service-areas
 PATCH  /api/v2/partner/service-areas/{id}
 DELETE /api/v2/partner/service-areas/{id}
 
-```
-
-Workers:
-
-```http
 GET    /api/v2/partner/workers
 POST   /api/v2/partner/workers
 GET    /api/v2/partner/workers/{id}
 PATCH  /api/v2/partner/workers/{id}
-POST   /api/v2/partner/workers/{id}/activate
-POST   /api/v2/partner/workers/{id}/deactivate
+
+POST /api/v2/partner/workers/{id}/activate
+POST /api/v2/partner/workers/{id}/deactivate
 
 ```
 
 ---
 
-# 16. Provider onboarding schema
+# 26. Provider application schema
 
 ## provider\_applications
 
 ```text
-id
-user_id nullable
+id UUID PK
+
+user_id UUID NULL
+
 legal_name
 display_name
+
 contact_first_name
 contact_last_name
+
 email
 phone
-website nullable
-status
-submission_json
-submitted_at nullable
-reviewed_at nullable
-reviewed_by nullable
-version
+website NULL
+
+status VARCHAR
+
+submission_json JSONB
+
+submitted_at NULL
+reviewed_at NULL
+reviewed_by NULL
+
+version INTEGER
+
 created_at
 updated_at
 
@@ -933,19 +1097,22 @@ REJECTED
 ## provider\_application\_status\_history
 
 ```text
-id
-application_id
+id UUID PK
+application_id UUID FK
+
 from_status
 to_status
-reason
-actor_id nullable
+
+reason TEXT NULL
+actor_id UUID NULL
+
 created_at
 
 ```
 
 ---
 
-# 17. Provider onboarding APIs
+# 27. Provider onboarding APIs
 
 Public:
 
@@ -954,7 +1121,7 @@ POST /api/v2/public/provider-applications
 
 ```
 
-Applicant:
+Provider:
 
 ```http
 GET   /api/v2/partner/onboarding
@@ -966,8 +1133,8 @@ POST  /api/v2/partner/onboarding/submit
 Admin:
 
 ```http
-GET  /api/v2/admin/provider-applications
-GET  /api/v2/admin/provider-applications/{id}
+GET /api/v2/admin/provider-applications
+GET /api/v2/admin/provider-applications/{id}
 
 POST /api/v2/admin/provider-applications/{id}/request-information
 POST /api/v2/admin/provider-applications/{id}/approve
@@ -975,31 +1142,28 @@ POST /api/v2/admin/provider-applications/{id}/reject
 
 ```
 
-Every submitted application emits:
-
-```text
-provider_application.submitted.v1
-
-```
-
-to the outbox.
-
 ---
 
-# 18. Credentials/trust schema
+# 28. Credential requirement schema
 
 ## credential\_requirements
 
 ```text
-id
-service_id nullable
-jurisdiction
-credential_type
-subject_type
-required
-verification_mode
-active
+id UUID PK
+
+service_id UUID NULL
+
+jurisdiction VARCHAR
+credential_type VARCHAR
+subject_type VARCHAR
+
+required BOOLEAN
+verification_mode VARCHAR
+
+active BOOLEAN
+
 created_at
+updated_at
 
 ```
 
@@ -1011,27 +1175,39 @@ WORKER
 
 ```
 
+---
+
+# 29. Provider credentials
+
 ## provider\_credentials
 
 ```text
-id
-provider_id
-worker_id nullable
-credential_type
-credential_number_ciphertext
-credential_number_last4
-issuing_authority
-jurisdiction
-effective_at nullable
-expires_at nullable
-status
-document_id nullable
+id UUID PK
+
+provider_id UUID FK
+worker_id UUID NULL
+
+credential_type VARCHAR
+
+credential_number_ciphertext BYTEA NULL
+credential_number_last4 VARCHAR NULL
+
+issuing_authority VARCHAR
+jurisdiction VARCHAR
+
+effective_at DATE NULL
+expires_at DATE NULL
+
+status VARCHAR
+
+document_id UUID NULL
+
 created_at
 updated_at
 
 ```
 
-States:
+Statuses:
 
 ```text
 PENDING
@@ -1042,47 +1218,69 @@ REVOKED
 
 ```
 
+Sensitive credential numbers must be encrypted.
+
+---
+
+# 30. Credential verification
+
 ## credential\_verifications
 
 ```text
-id
-credential_id
-status
-verification_source
-reviewer_id nullable
-reason_code nullable
-metadata_json
-verified_at
+id UUID PK
 
-```
+credential_id UUID FK
 
-## provider\_documents
+status VARCHAR
 
-```text
-id
-provider_id
-worker_id nullable
-document_type
-storage_key
-content_type
-checksum
-scan_status
+verification_source VARCHAR
+reviewer_id UUID NULL
+
+reason_code VARCHAR NULL
+metadata_json JSONB
+
+verified_at TIMESTAMPTZ
+
 created_at
 
 ```
 
 ---
 
-# 19. Credential APIs
+# 31. Provider documents
+
+## provider\_documents
+
+```text
+id UUID PK
+
+provider_id UUID FK
+worker_id UUID NULL
+
+document_type VARCHAR
+
+storage_key VARCHAR
+content_type VARCHAR
+checksum_sha256 VARCHAR
+
+scan_status VARCHAR
+
+created_at
+
+```
+
+---
+
+# 32. Credential APIs
 
 Provider:
 
 ```http
-GET    /api/v2/partner/credentials
-POST   /api/v2/partner/credentials
+GET  /api/v2/partner/credentials
+POST /api/v2/partner/credentials
 
-GET    /api/v2/partner/credentials/{id}
-PATCH  /api/v2/partner/credentials/{id}
+GET   /api/v2/partner/credentials/{id}
+PATCH /api/v2/partner/credentials/{id}
 
 POST   /api/v2/partner/credentials/{id}/documents
 DELETE /api/v2/partner/credentials/{id}/documents/{documentId}
@@ -1092,8 +1290,8 @@ DELETE /api/v2/partner/credentials/{id}/documents/{documentId}
 Admin/trust:
 
 ```http
-GET  /api/v2/admin/credentials
-GET  /api/v2/admin/credentials/{id}
+GET /api/v2/admin/credentials
+GET /api/v2/admin/credentials/{id}
 
 POST /api/v2/admin/credentials/{id}/verify
 POST /api/v2/admin/credentials/{id}/reject
@@ -1101,49 +1299,76 @@ POST /api/v2/admin/credentials/{id}/revoke
 
 ```
 
-Matching fails closed for required credentials.
-
 ---
 
-# 20. Availability schema
+# 33. Availability schema
 
 ## provider\_availability\_rules
 
 ```text
-id
-provider_id
-worker_id nullable
-weekday
-start_time
-end_time
-capacity
-timezone
-effective_from
-effective_until nullable
-active
+id UUID PK
+
+provider_id UUID FK
+worker_id UUID NULL
+
+weekday SMALLINT
+
+start_time TIME
+end_time TIME
+
+capacity INTEGER
+
+timezone VARCHAR
+
+effective_from DATE
+effective_until DATE NULL
+
+active BOOLEAN
+
+created_at
+updated_at
 
 ```
+
+Constraint:
+
+```text
+weekday 0–6
+end_time > start_time
+capacity >= 0
+
+```
+
+---
+
+# 34. Availability exceptions
 
 ## provider\_availability\_exceptions
 
 ```text
-id
-provider_id
-worker_id nullable
-date
-start_time nullable
-end_time nullable
-capacity_override nullable
-unavailable boolean
-reason
+id UUID PK
+
+provider_id UUID FK
+worker_id UUID NULL
+
+date DATE
+
+start_time TIME NULL
+end_time TIME NULL
+
+capacity_override INTEGER NULL
+unavailable BOOLEAN
+
+reason VARCHAR NULL
+
+created_at
+updated_at
 
 ```
 
-No universal 07:00–19:00 assumption.
-
 ---
 
-# 21. Availability APIs
+# 35. Availability APIs
 
 Provider:
 
@@ -1165,7 +1390,7 @@ PUT /api/v2/worker/availability
 
 ```
 
-Marketplace:
+Public/customer:
 
 ```http
 GET /api/v2/providers/{slug}/availability-summary
@@ -1175,99 +1400,144 @@ GET /api/v2/project-requests/{id}/availability
 
 ---
 
-# 22. Matching schema
+# 36. Matching run schema
 
 ## matching\_runs
 
 ```text
-id
-project_request_id
-algorithm
-algorithm_version
-configuration_json
-status
+id UUID PK
+
+project_request_id UUID FK
+
+algorithm VARCHAR
+algorithm_version VARCHAR
+
+configuration_json JSONB
+
+status VARCHAR
+
 started_at
-completed_at
-created_by nullable
+completed_at NULL
 
-```
+created_by UUID NULL
 
-## match\_candidates
-
-```text
-id
-matching_run_id
-provider_id
-eligible
-rank nullable
-score nullable
-distance_meters nullable
-availability_score nullable
-distance_score nullable
-rating_score nullable
-completion_score nullable
-acceptance_score nullable
-response_score nullable
-price_score nullable
-relationship_score nullable
-quality_score nullable
 created_at
-
-```
-
-## match\_reasons
-
-```text
-id
-candidate_id
-reason_type
-reason_code
-passed
-score_delta nullable
-detail_json
 
 ```
 
 ---
 
-# 23. Matching policy
+# 37. Matching candidates
 
-Hard filters:
+## match\_candidates
 
 ```text
-provider active
-service supported
-geography supported
-credentials valid
-required insurance valid
+id UUID PK
+
+matching_run_id UUID FK
+provider_id UUID FK
+
+eligible BOOLEAN
+
+rank INTEGER NULL
+score NUMERIC NULL
+
+distance_meters INTEGER NULL
+
+availability_score NUMERIC NULL
+distance_score NUMERIC NULL
+rating_score NUMERIC NULL
+completion_score NUMERIC NULL
+acceptance_score NUMERIC NULL
+response_score NUMERIC NULL
+price_score NUMERIC NULL
+relationship_score NUMERIC NULL
+quality_score NUMERIC NULL
+
+created_at
+
+```
+
+Unique:
+
+```text
+(matching_run_id, provider_id)
+
+```
+
+---
+
+# 38. Matching reasons
+
+## match\_reasons
+
+```text
+id UUID PK
+
+candidate_id UUID FK
+
+reason_type VARCHAR
+reason_code VARCHAR
+
+passed BOOLEAN
+
+score_delta NUMERIC NULL
+
+detail_json JSONB
+
+created_at
+
+```
+
+---
+
+# 39. Matching eligibility
+
+Hard gates:
+
+```text
+provider is ACTIVE
+provider supports service
+request location is in service area
+all mandatory credentials valid
+insurance valid when required
 provider not suspended
-worker qualification available
-availability available
+qualified worker available
+schedule available
 capacity available
 legal entity compatible
 
 ```
 
-Ranking weights V1:
+If one mandatory gate fails:
 
 ```text
-Availability             20
-Distance                 20
-Verified rating          15
-Completion rate          10
-Opportunity acceptance   10
-Response speed           10
-Price competitiveness     5
-Prior relationship        5
-Breero quality score      5
+eligible = false
 
 ```
 
-Do not use ML initially.
+---
+
+# 40. Matching V1 scoring
+
+```text
+Availability                 20
+Distance/service area        20
+Verified rating              15
+Completion rate              10
+Opportunity acceptance       10
+Response speed               10
+Price competitiveness         5
+Prior relationship            5
+BREERO quality score          5
+
+```
+
+Do not use ML for V1.
 
 ---
 
-# 24. Matching APIs
+# 41. Matching APIs
 
 Ops:
 
@@ -1280,33 +1550,37 @@ GET /api/v2/ops/matching-runs/{id}/candidates/{candidateId}
 
 ```
 
-Customer-safe projection:
+Customer-safe:
 
 ```http
 GET /api/v2/project-requests/{id}/matches
 
 ```
 
-Do not reveal internal rejection/quality data publicly.
-
 ---
 
-# 25. Opportunities schema
+# 42. Opportunity schema
 
 ## opportunities
 
 ```text
-id
-project_request_id
-provider_id
-matching_run_id
-candidate_id
-status
-sent_at
-viewed_at nullable
-responded_at nullable
-expires_at
-version
+id UUID PK
+
+project_request_id UUID FK
+provider_id UUID FK
+
+matching_run_id UUID FK
+candidate_id UUID FK
+
+status VARCHAR
+
+sent_at TIMESTAMPTZ
+viewed_at TIMESTAMPTZ NULL
+responded_at TIMESTAMPTZ NULL
+expires_at TIMESTAMPTZ
+
+version INTEGER
+
 created_at
 updated_at
 
@@ -1324,37 +1598,65 @@ WITHDRAWN
 
 ```
 
+---
+
+# 43. Opportunity history
+
 ## opportunity\_status\_history
 
 ```text
-id
-opportunity_id
+id UUID PK
+
+opportunity_id UUID FK
+
 from_status
 to_status
-reason
-actor_id nullable
-created_at
 
-```
+reason NULL
 
-## lead\_connections
+actor_id UUID NULL
 
-```text
-id
-project_request_id
-provider_id
-opportunity_id
-status
-customer_contact_access_level
-connected_at
-closed_at nullable
 created_at
 
 ```
 
 ---
 
-# 26. Opportunity APIs
+# 44. Lead connections
+
+## lead\_connections
+
+```text
+id UUID PK
+
+project_request_id UUID FK
+provider_id UUID FK
+opportunity_id UUID FK
+
+status VARCHAR
+
+customer_contact_access_level VARCHAR
+
+connected_at TIMESTAMPTZ
+closed_at TIMESTAMPTZ NULL
+
+created_at
+updated_at
+
+```
+
+Contact access:
+
+```text
+NONE
+MASKED
+AUTHORIZED
+
+```
+
+---
+
+# 45. Opportunity APIs
 
 Provider:
 
@@ -1379,82 +1681,30 @@ POST /api/v2/ops/opportunities/{id}/withdraw
 
 ```
 
-Customer PII is minimized until LeadConnection authorizes access.
-
 ---
 
-# 27. Quote schema
+# 46. Quote schema
 
 ## quotes
 
 ```text
-id
-project_request_id
-lead_connection_id
-provider_id
-current_version_id nullable
-status
-currency
+id UUID PK
+
+project_request_id UUID FK
+lead_connection_id UUID FK
+
+provider_id UUID FK
+
+current_version_id UUID NULL
+
+status VARCHAR
+
+currency CHAR(3)
+
+version INTEGER
+
 created_at
 updated_at
-
-```
-
-## quote\_versions
-
-```text
-id
-quote_id
-version_number
-subtotal_minor
-tax_minor
-discount_minor
-fee_minor
-total_minor
-notes
-valid_until
-created_by
-created_at
-sent_at nullable
-
-```
-
-## quote\_line\_items
-
-```text
-id
-quote_version_id
-type
-description
-quantity NUMERIC
-unit_price_minor BIGINT
-amount_minor BIGINT
-sort_order
-
-```
-
-Types:
-
-```text
-LABOR
-MATERIAL
-TRAVEL
-PERMIT
-OTHER
-DISCOUNT
-
-```
-
-## quote\_status\_history
-
-```text
-id
-quote_id
-from_status
-to_status
-quote_version_id
-actor_id
-created_at
 
 ```
 
@@ -1473,14 +1723,111 @@ WITHDRAWN
 
 ---
 
-# 28. Quote APIs
+# 47. Quote versions
+
+## quote\_versions
+
+```text
+id UUID PK
+
+quote_id UUID FK
+
+version_number INTEGER
+
+subtotal_minor BIGINT
+tax_minor BIGINT
+discount_minor BIGINT
+fee_minor BIGINT
+total_minor BIGINT
+
+notes TEXT NULL
+
+valid_until TIMESTAMPTZ
+
+created_by UUID
+
+created_at
+sent_at NULL
+
+```
+
+Unique:
+
+```text
+(quote_id, version_number)
+
+```
+
+Sent versions are immutable.
+
+---
+
+# 48. Quote line items
+
+## quote\_line\_items
+
+```text
+id UUID PK
+
+quote_version_id UUID FK
+
+type VARCHAR
+description VARCHAR
+
+quantity NUMERIC
+
+unit_price_minor BIGINT
+amount_minor BIGINT
+
+sort_order INTEGER
+
+```
+
+Types:
+
+```text
+LABOR
+MATERIAL
+TRAVEL
+PERMIT
+OTHER
+DISCOUNT
+
+```
+
+---
+
+# 49. Quote history
+
+## quote\_status\_history
+
+```text
+id UUID PK
+
+quote_id UUID FK
+
+from_status
+to_status
+
+quote_version_id UUID
+
+actor_id UUID
+
+created_at
+
+```
+
+---
+
+# 50. Quote APIs
 
 Provider:
 
 ```http
-POST /api/v2/partner/project-requests/{id}/quotes
+GET /api/v2/partner/quotes
+GET /api/v2/partner/quotes/{id}
 
-GET   /api/v2/partner/quotes/{id}
+POST /api/v2/partner/project-requests/{id}/quotes
 PATCH /api/v2/partner/quotes/{id}
 
 POST /api/v2/partner/quotes/{id}/send
@@ -1500,74 +1847,77 @@ POST /api/v2/quotes/{id}/decline
 
 ```
 
-Sent versions are immutable.
+Acceptance must be idempotent.
 
 ---
 
-# 29. Messaging schema
+# 51. Conversation schema
 
 ## conversations
 
 ```text
-id
-project_request_id
-lead_connection_id
-booking_id nullable
-job_id nullable
-status
+id UUID PK
+
+project_request_id UUID FK
+lead_connection_id UUID FK
+
+booking_id UUID NULL
+job_id UUID NULL
+
+status VARCHAR
+
 created_at
 updated_at
 
 ```
 
+---
+
+# 52. Conversation participants
+
 ## conversation\_participants
 
 ```text
-conversation_id
-user_id
-participant_type
-provider_id nullable
+conversation_id UUID FK
+user_id UUID FK
+
+participant_type VARCHAR
+
+provider_id UUID NULL
+
 joined_at
-left_at nullable
+left_at NULL
 
 ```
+
+Unique:
+
+```text
+(conversation_id, user_id)
+
+```
+
+---
+
+# 53. Messages
 
 ## messages
 
 ```text
-id
-conversation_id
-sender_user_id nullable
-message_type
-body_text nullable
-metadata_json
+id UUID PK
+
+conversation_id UUID FK
+
+sender_user_id UUID NULL
+
+message_type VARCHAR
+
+body_text TEXT NULL
+metadata_json JSONB
+
 created_at
-edited_at nullable
-deleted_at nullable
-
-```
-
-## message\_attachments
-
-```text
-id
-message_id
-storage_key
-content_type
-original_filename
-size_bytes
-checksum
-scan_status
-
-```
-
-## message\_receipts
-
-```text
-message_id
-user_id
-delivered_at nullable
-read_at nullable
+edited_at NULL
+deleted_at NULL
 
 ```
 
@@ -1585,7 +1935,51 @@ SYSTEM
 
 ---
 
-# 30. Messaging APIs
+# 54. Message attachments
+
+## message\_attachments
+
+```text
+id UUID PK
+message_id UUID FK
+
+storage_key
+content_type
+original_filename
+size_bytes
+checksum_sha256
+
+scan_status
+
+created_at
+
+```
+
+---
+
+# 55. Message receipts
+
+## message\_receipts
+
+```text
+message_id UUID FK
+user_id UUID FK
+
+delivered_at NULL
+read_at NULL
+
+```
+
+Unique:
+
+```text
+(message_id, user_id)
+
+```
+
+---
+
+# 56. Messaging APIs
 
 ```http
 GET /api/v2/conversations
@@ -1600,29 +1994,29 @@ POST /api/v2/conversations/{id}/read
 
 ```
 
-Participant membership is mandatory server-side.
+Server must validate conversation membership.
 
 ---
 
-# 31. Booking bridge
+# 57. Booking bridge
 
-Extend current Booking additively.
+Extend existing Booking rather than replace historical records.
 
-Recommended additions:
+Add nullable:
 
 ```text
-project_request_id UUID NULL
-accepted_quote_id UUID NULL
-provider_id UUID NULL
-worker_id UUID NULL
+project_request_id UUID
+accepted_quote_id UUID
+provider_id UUID
+worker_id UUID
 
 ```
 
-Existing historical Booking rows remain valid.
+Do not force legacy rows to populate these fields.
 
-Do not destructive-backfill ambiguous historical rows.
+---
 
-Booking APIs:
+# 58. Booking APIs
 
 ```http
 GET /api/v2/bookings/{id}
@@ -1634,15 +2028,22 @@ POST /api/v2/bookings/{id}/cancel
 
 ```
 
-When instant booking is false, requested timing is not confirmation.
+If:
+
+```text
+instant_booking = false
+
+```
+
+preferred time remains a request until backend confirmation.
 
 ---
 
-# 32. Job schema
+# 59. Job domain
 
-Reuse existing Job where possible.
+Preserve current Job where possible.
 
-Required execution states:
+Execution states:
 
 ```text
 CREATED
@@ -1668,13 +2069,35 @@ job_additional_work
 
 ```
 
-Never overwrite assignment history.
+---
+
+# 60. Job assignment history
+
+## job\_assignments
+
+```text
+id UUID PK
+
+job_id UUID FK
+provider_id UUID FK
+worker_id UUID NULL
+
+assigned_at
+unassigned_at NULL
+
+assigned_by UUID
+
+reason VARCHAR NULL
+
+```
+
+Never overwrite old assignment.
 
 ---
 
-# 33. Job APIs
+# 61. Job APIs
 
-Customer/provider-safe:
+Customer/provider:
 
 ```http
 GET /api/v2/jobs/{id}
@@ -1682,7 +2105,7 @@ GET /api/v2/jobs/{id}/timeline
 
 ```
 
-Provider/worker commands:
+Provider/worker:
 
 ```http
 POST /api/v2/jobs/{id}/en-route
@@ -1707,29 +2130,46 @@ POST /api/v2/ops/jobs/{id}/cancel
 
 ---
 
-# 34. Review schema
+# 62. Reviews
 
 ## reviews
 
 ```text
-id
-job_id UNIQUE
-customer_id
-provider_id
-overall_rating
-body nullable
-status
+id UUID PK
+
+job_id UUID UNIQUE FK
+customer_id UUID FK
+provider_id UUID FK
+
+overall_rating SMALLINT
+
+body TEXT NULL
+
+status VARCHAR
+
 created_at
 updated_at
 
 ```
 
+Constraint:
+
+```text
+overall_rating BETWEEN 1 AND 5
+
+```
+
+---
+
+# 63. Review dimensions
+
 ## review\_dimensions
 
 ```text
-review_id
-dimension
-rating
+review_id UUID FK
+
+dimension VARCHAR
+rating SMALLINT
 
 ```
 
@@ -1743,55 +2183,68 @@ VALUE
 
 ```
 
+Unique:
+
+```text
+(review_id, dimension)
+
+```
+
+---
+
+# 64. Review responses
+
 ## review\_responses
 
 ```text
-id
-review_id
-provider_id
-body
+id UUID PK
+
+review_id UUID FK
+provider_id UUID FK
+
+body TEXT
+
 created_at
 updated_at
 
 ```
 
+---
+
+# 65. Review moderation
+
 ## review\_moderation
 
 ```text
-id
-review_id
-moderator_id
-action
-reason
+id UUID PK
+
+review_id UUID FK
+moderator_id UUID
+
+action VARCHAR
+reason TEXT
+
 created_at
 
 ```
 
-Only COMPLETED jobs are eligible.
-
 ---
 
-# 35. Review APIs
+# 66. Review APIs
 
 Customer:
 
 ```http
 POST /api/v2/jobs/{id}/review
-GET  /api/v2/reviews/{id}
+GET /api/v2/reviews/{id}
 
 ```
 
 Provider:
 
 ```http
+GET /api/v2/partner/reviews
 POST /api/v2/partner/reviews/{id}/response
-
-```
-
-Admin:
-
-```http
-POST /api/v2/admin/reviews/{id}/moderate
 
 ```
 
@@ -1802,20 +2255,29 @@ GET /api/v2/providers/{slug}/reviews
 
 ```
 
+Admin:
+
+```http
+GET /api/v2/admin/reviews
+POST /api/v2/admin/reviews/{id}/moderate
+
+```
+
+Only completed jobs are eligible.
+
 ---
 
-# 36. Customer portal API inventory
-
-Customer account:
+# 67. Customer portal API inventory
 
 ```http
 GET   /api/v2/customer/profile
 PATCH /api/v2/customer/profile
 
-GET /api/v2/customer/properties
+GET  /api/v2/customer/properties
 POST /api/v2/customer/properties
-GET /api/v2/customer/properties/{id}
-PATCH /api/v2/customer/properties/{id}
+
+GET    /api/v2/customer/properties/{id}
+PATCH  /api/v2/customer/properties/{id}
 DELETE /api/v2/customer/properties/{id}
 
 GET /api/v2/customer/project-requests
@@ -1825,11 +2287,14 @@ GET /api/v2/customer/bookings
 GET /api/v2/customer/jobs
 GET /api/v2/customer/reviews
 
+GET /api/v2/customer/communication-preferences
+PUT /api/v2/customer/communication-preferences
+
 ```
 
 ---
 
-# 37. Provider portal complete API inventory
+# 68. Provider portal API inventory
 
 Dashboard:
 
@@ -1846,15 +2311,72 @@ PATCH /api/v2/partner/profile
 
 ```
 
-Opportunities/leads:
+Services:
+
+```http
+GET /api/v2/partner/services
+PUT /api/v2/partner/services
+
+```
+
+Areas:
+
+```http
+GET    /api/v2/partner/service-areas
+POST   /api/v2/partner/service-areas
+PATCH  /api/v2/partner/service-areas/{id}
+DELETE /api/v2/partner/service-areas/{id}
+
+```
+
+Workers:
+
+```http
+GET /api/v2/partner/workers
+POST /api/v2/partner/workers
+GET /api/v2/partner/workers/{id}
+PATCH /api/v2/partner/workers/{id}
+
+```
+
+Availability:
+
+```http
+GET /api/v2/partner/availability
+PUT /api/v2/partner/availability
+
+POST   /api/v2/partner/availability/exceptions
+PATCH  /api/v2/partner/availability/exceptions/{id}
+DELETE /api/v2/partner/availability/exceptions/{id}
+
+```
+
+Credentials:
+
+```http
+GET /api/v2/partner/credentials
+POST /api/v2/partner/credentials
+GET /api/v2/partner/credentials/{id}
+PATCH /api/v2/partner/credentials/{id}
+POST /api/v2/partner/credentials/{id}/documents
+
+```
+
+Opportunities:
 
 ```http
 GET /api/v2/partner/opportunities
 GET /api/v2/partner/opportunities/{id}
+
 POST /api/v2/partner/opportunities/{id}/view
 POST /api/v2/partner/opportunities/{id}/accept
 POST /api/v2/partner/opportunities/{id}/decline
 
+```
+
+Leads:
+
+```http
 GET /api/v2/partner/leads
 GET /api/v2/partner/leads/{id}
 
@@ -1865,8 +2387,11 @@ Quotes:
 ```http
 GET /api/v2/partner/quotes
 GET /api/v2/partner/quotes/{id}
+
 POST /api/v2/partner/project-requests/{id}/quotes
+
 PATCH /api/v2/partner/quotes/{id}
+
 POST /api/v2/partner/quotes/{id}/send
 POST /api/v2/partner/quotes/{id}/revise
 POST /api/v2/partner/quotes/{id}/withdraw
@@ -1889,56 +2414,6 @@ GET /api/v2/partner/customers/{id}
 
 ```
 
-Workers:
-
-```http
-GET /api/v2/partner/workers
-POST /api/v2/partner/workers
-GET /api/v2/partner/workers/{id}
-PATCH /api/v2/partner/workers/{id}
-
-```
-
-Services:
-
-```http
-GET /api/v2/partner/services
-PUT /api/v2/partner/services
-
-```
-
-Service areas:
-
-```http
-GET /api/v2/partner/service-areas
-POST /api/v2/partner/service-areas
-PATCH /api/v2/partner/service-areas/{id}
-DELETE /api/v2/partner/service-areas/{id}
-
-```
-
-Availability:
-
-```http
-GET /api/v2/partner/availability
-PUT /api/v2/partner/availability
-POST /api/v2/partner/availability/exceptions
-PATCH /api/v2/partner/availability/exceptions/{id}
-DELETE /api/v2/partner/availability/exceptions/{id}
-
-```
-
-Credentials:
-
-```http
-GET /api/v2/partner/credentials
-POST /api/v2/partner/credentials
-GET /api/v2/partner/credentials/{id}
-PATCH /api/v2/partner/credentials/{id}
-POST /api/v2/partner/credentials/{id}/documents
-
-```
-
 Reviews:
 
 ```http
@@ -1957,17 +2432,9 @@ GET /api/v2/partner/analytics/revenue
 
 ```
 
-Billing later:
-
-```http
-GET /api/v2/partner/subscription
-GET /api/v2/partner/billing
-
-```
-
 ---
 
-# 38. Worker portal APIs
+# 69. Worker APIs
 
 ```http
 GET /api/v2/worker/profile
@@ -1990,11 +2457,9 @@ GET /api/v2/worker/credentials
 
 ```
 
-Worker access is restricted to its provider and eligible assignments.
-
 ---
 
-# 39. Operations API inventory
+# 70. Ops APIs
 
 Requests:
 
@@ -2067,16 +2532,31 @@ POST /api/v2/ops/integration-events/{id}/cancel
 
 ```
 
+Analytics:
+
+```http
+GET /api/v2/ops/analytics/funnel
+GET /api/v2/ops/analytics/matching
+GET /api/v2/ops/analytics/providers
+GET /api/v2/ops/analytics/jobs
+
+```
+
 ---
 
-# 40. Admin API inventory
+# 71. Admin APIs
 
-Users/RBAC:
+Users:
 
 ```http
 GET /api/v2/admin/users
 GET /api/v2/admin/users/{id}
 
+```
+
+Roles:
+
+```http
 GET /api/v2/admin/roles
 GET /api/v2/admin/permissions
 
@@ -2096,6 +2576,18 @@ POST /api/v2/admin/providers/{id}/reactivate
 
 ```
 
+Applications:
+
+```http
+GET /api/v2/admin/provider-applications
+GET /api/v2/admin/provider-applications/{id}
+
+POST /api/v2/admin/provider-applications/{id}/approve
+POST /api/v2/admin/provider-applications/{id}/reject
+POST /api/v2/admin/provider-applications/{id}/request-information
+
+```
+
 Credentials:
 
 ```http
@@ -2108,18 +2600,12 @@ POST /api/v2/admin/credentials/{id}/revoke
 
 ```
 
-Catalog:
-
-```http
-GET/POST/PATCH /api/v2/admin/catalog/...
-
-```
-
 Features:
 
 ```http
 GET /api/v2/admin/features
 GET /api/v2/admin/features/{key}
+
 PUT /api/v2/admin/features/{key}
 
 ```
@@ -2142,9 +2628,99 @@ POST /api/v2/admin/reviews/{id}/moderate
 
 ---
 
-# 41. RBAC
+# 72. Public APIs
 
-Canonical roles:
+Capabilities:
+
+```http
+GET /api/v2/capabilities
+
+```
+
+Contact:
+
+```http
+POST /api/v2/public/contact-requests
+
+```
+
+Provider application:
+
+```http
+POST /api/v2/public/provider-applications
+
+```
+
+Communication preferences:
+
+```http
+POST /api/v2/public/communication-preferences
+
+```
+
+Catalog/provider discovery uses the public catalog/provider routes.
+
+---
+
+# 73. Contact request schema
+
+## contact\_requests
+
+```text
+id UUID PK
+
+name
+email
+phone NULL
+
+subject
+message
+
+status VARCHAR
+
+source_url NULL
+
+created_at
+updated_at
+
+```
+
+States:
+
+```text
+NEW
+IN_PROGRESS
+RESOLVED
+CLOSED
+
+```
+
+---
+
+# 74. Contact APIs
+
+Public:
+
+```http
+POST /api/v2/public/contact-requests
+
+```
+
+Ops:
+
+```http
+GET /api/v2/ops/contact-requests
+GET /api/v2/ops/contact-requests/{id}
+
+POST /api/v2/ops/contact-requests/{id}/resolve
+
+```
+
+---
+
+# 75. RBAC
+
+Roles:
 
 ```text
 CUSTOMER
@@ -2194,8 +2770,10 @@ job.complete
 
 provider.read
 provider.manage
+
 provider.credentials.manage
 provider.credentials.verify
+
 provider.suspend
 
 review.create
@@ -2214,126 +2792,140 @@ admin.audit.read
 
 ```
 
-Permissions are enforced server-side.
-
-Feature entitlement != permission.
+Backend authorization is authoritative.
 
 ---
 
-# 42. Runtime capabilities API
-
-Preserve PR-00 V1 endpoint and add V2 projection.
-
-```http
-GET /api/v2/capabilities
-
-```
-
-Eventually return:
-
-```json
-{
-  "request_intake": true,
-  "marketplace_matching": false,
-  "provider_opportunities": false,
-  "provider_self_service": false,
-  "quotes": false,
-  "messaging": false,
-  "reviews": false,
-  "instant_booking": false,
-  "automatic_assignment": false,
-  "payments": false,
-  "payouts": false,
-  "paid_leads": false,
-  "marketing": false
-}
-
-```
-
-Creating an endpoint does not enable the feature.
-
----
-
-# 43. Audit schema
+# 76. Audit events
 
 ## audit\_events
 
 ```text
-id
-actor_id nullable
-actor_type
-tenant_id nullable
-legal_entity_id nullable
-action
-resource_type
-resource_id
-correlation_id
-ip_address nullable
-user_agent nullable
-metadata_json
+id UUID PK
+
+actor_id UUID NULL
+actor_type VARCHAR
+
+tenant_id UUID NULL
+legal_entity_id UUID NULL
+
+action VARCHAR
+
+resource_type VARCHAR
+resource_id UUID NULL
+
+correlation_id VARCHAR
+
+ip_address INET NULL
+user_agent TEXT NULL
+
+metadata_json JSONB
+
 created_at
 
 ```
 
-Important actions:
+Index:
 
 ```text
-PROJECT_REQUEST_SUBMITTED
-MATCHING_RUN_STARTED
-OPPORTUNITY_SENT
-OPPORTUNITY_ACCEPTED
-QUOTE_SENT
-QUOTE_ACCEPTED
-BOOKING_CONFIRMED
-JOB_ASSIGNED
-JOB_COMPLETED
-CREDENTIAL_VERIFIED
-PROVIDER_SUSPENDED
-INTEGRATION_RETRIED
-REFUND_APPROVED
-FEATURE_CHANGED
+(resource_type, resource_id, created_at)
+(actor_id, created_at)
+(correlation_id)
 
 ```
 
 ---
 
-# 44. Transactional outbox schema
+# 77. Idempotency
 
-Extend current outbox toward:
+Add or standardize:
+
+## idempotency\_records
 
 ```text
-id UUID
-event_type
-aggregate_type
-aggregate_id
-aggregate_version
-schema_version
-payload JSONB
+id UUID PK
 
-status
+actor_key VARCHAR
+operation VARCHAR
+idempotency_key VARCHAR
 
-idempotency_key UNIQUE
+request_hash VARCHAR
 
-attempt_count
-max_attempts
-available_at
+status VARCHAR
 
-lease_owner nullable
-lease_until nullable
+response_code INTEGER NULL
+response_json JSONB NULL
 
-last_error_code nullable
-last_error_message_redacted nullable
-last_error_at nullable
+resource_type VARCHAR NULL
+resource_id UUID NULL
 
-correlation_id
-causation_id nullable
+expires_at TIMESTAMPTZ
 
 created_at
-delivered_at nullable
+updated_at
 
 ```
 
-States:
+Unique:
+
+```text
+(actor_key, operation, idempotency_key)
+
+```
+
+A reused key with a different request hash returns:
+
+```text
+409 IDEMPOTENCY_KEY_REUSED
+
+```
+
+---
+
+# 78. Transactional outbox
+
+Use:
+
+## integration\_events
+
+```text
+id UUID PK
+
+event_type VARCHAR
+
+aggregate_type VARCHAR
+aggregate_id UUID
+aggregate_version INTEGER
+
+schema_version INTEGER
+
+payload JSONB
+
+status VARCHAR
+
+idempotency_key VARCHAR UNIQUE
+
+attempt_count INTEGER
+max_attempts INTEGER
+
+available_at TIMESTAMPTZ
+
+lease_owner VARCHAR NULL
+lease_until TIMESTAMPTZ NULL
+
+last_error_code VARCHAR NULL
+last_error_message_redacted TEXT NULL
+last_error_at TIMESTAMPTZ NULL
+
+correlation_id VARCHAR
+causation_id VARCHAR NULL
+
+created_at
+delivered_at NULL
+
+```
+
+Statuses:
 
 ```text
 PENDING_CONFIGURATION
@@ -2345,14 +2937,21 @@ FAILED_TERMINAL
 
 ```
 
-Claim:
+Index:
+
+```text
+(status, available_at)
+
+```
+
+Worker claim:
 
 ```sql
-SELECT ...
+SELECT *
 FROM integration_events
 WHERE status IN ('PENDING', 'RETRYABLE')
-  AND available_at <= now()
-  AND (lease_until IS NULL OR lease_until < now())
+  AND available_at <= NOW()
+  AND (lease_until IS NULL OR lease_until < NOW())
 ORDER BY created_at
 FOR UPDATE SKIP LOCKED
 LIMIT :batch_size;
@@ -2361,32 +2960,35 @@ LIMIT :batch_size;
 
 ---
 
-# 45. Integration inbox
-
-Add:
+# 79. Integration inbox
 
 ## integration\_inbox
 
 ```text
-id
-provider
-external_event_id
-event_type
-schema_version nullable
+id UUID PK
 
-request_hash
-signature_verified
-tenant_id nullable
+provider VARCHAR
+external_event_id VARCHAR
 
-status
+event_type VARCHAR
+schema_version INTEGER NULL
+
+request_hash VARCHAR
+signature_verified BOOLEAN
+
+tenant_id UUID NULL
+
+status VARCHAR
+
 payload JSONB
 
-received_at
-processing_started_at nullable
-processed_at nullable
+received_at TIMESTAMPTZ
+processing_started_at NULL
+processed_at NULL
 
-attempt_count
-last_error_code nullable
+attempt_count INTEGER
+
+last_error_code VARCHAR NULL
 
 ```
 
@@ -2411,7 +3013,27 @@ STRIPE
 
 ---
 
-# 46. Middleware architecture
+# 80. Middleware architecture
+
+Every customer/provider form:
+
+```text
+Browser
+   ↓
+BREERO API
+   ↓
+BREERO DB
+ + Outbox
+   ↓
+COMMIT
+   ↓
+Background Worker
+   ↓
+Codestra/Kong
+   ↓
+external system
+
+```
 
 Never:
 
@@ -2423,286 +3045,168 @@ Browser → n8n
 
 ```
 
-Always:
+---
+
+# 81. System ownership
 
 ```text
-Browser
-   ↓
-BREERO API
-   ↓
-Domain transaction
-   ↓
-BREERO database + outbox
-   ↓
-COMMIT
-   ↓
-Worker
-   ↓
-Codestra/Kong
-   ├── Odoo
-   ├── Klyrow
-   ├── Telnexa
-   └── approved n8n workflow
+BREERO PostgreSQL
+= marketplace source of truth
+
+Codestra
+= integration/control plane
+
+Odoo
+= CRM projection
+
+Klyrow
+= email delivery
+
+Telnexa
+= SMS delivery
+
+n8n
+= explicitly approved workflow automation
+
+Stripe
+= payment authority after payments are activated
 
 ```
 
-Source-of-truth ownership:
-
-```text
-Breero DB = marketplace truth
-Codestra   = integration/control plane
-Odoo       = CRM projection
-Klyrow     = email delivery
-Telnexa    = SMS delivery
-n8n        = approved orchestration
-Stripe     = settlement authority only after activation
-
-```
+Odoo must never overwrite marketplace state.
 
 ---
 
-# 47. Form/event mapping
-
-Customer ProjectRequest submission:
+# 82. Event catalog
 
 ```text
+project_request.created.v1
+project_request.updated.v1
 project_request.submitted.v1
+project_request.qualified.v1
+project_request.cancelled.v1
 
-```
-
-Provider application:
-
-```text
 provider_application.submitted.v1
+provider.approved.v1
+provider.suspended.v1
 
-```
+matching.started.v1
+matching.completed.v1
 
-Opportunity:
-
-```text
 opportunity.sent.v1
+opportunity.viewed.v1
 opportunity.accepted.v1
 opportunity.declined.v1
+opportunity.expired.v1
 
-```
-
-Lead:
-
-```text
 lead.connected.v1
 
-```
-
-Quote:
-
-```text
 quote.sent.v1
 quote.revised.v1
 quote.accepted.v1
 quote.declined.v1
 
-```
-
-Messaging:
-
-```text
 conversation.message_sent.v1
 
-```
-
-Booking:
-
-```text
 booking.created.v1
 booking.confirmed.v1
 booking.cancelled.v1
 
-```
-
-Job:
-
-```text
 job.assigned.v1
 job.en_route.v1
 job.arrived.v1
 job.started.v1
 job.completed.v1
 
-```
+review.submitted.v1
 
-Credential:
-
-```text
 credential.submitted.v1
 credential.verified.v1
 credential.expiring.v1
 credential.expired.v1
 credential.revoked.v1
 
-```
-
-Review:
-
-```text
-review.submitted.v1
-
-```
-
-Communications:
-
-```text
 communication.preference_changed.v1
+
+contact_request.created.v1
+
+```
+
+Later:
+
+```text
+payment.captured.v1
+payment.refunded.v1
+payout.created.v1
+payout.paid.v1
+subscription.activated.v1
+subscription.cancelled.v1
 
 ```
 
 ---
 
-# 48. Event envelope
-
-Standard envelope:
+# 83. Standard event envelope
 
 ```json
 {
   "event_id": "uuid",
   "event_type": "project_request.submitted.v1",
   "schema_version": 1,
-  "occurred_at": "ISO-8601",
+  "occurred_at": "2026-08-23T14:30:00Z",
+
   "aggregate_type": "project_request",
   "aggregate_id": "uuid",
-  "aggregate_version": 3,
-  "tenant_id": "uuid-or-null",
-  "legal_entity_id": "uuid-or-null",
+  "aggregate_version": 4,
+
+  "tenant_id": null,
+  "legal_entity_id": "uuid",
+
   "correlation_id": "uuid",
-  "causation_id": "uuid-or-null",
+  "causation_id": null,
+
   "payload": {}
 }
 
 ```
 
-Never silently change event payloads.
-
 ---
 
-# 49. Middleware adapter
+# 84. Runtime capabilities
 
-Example abstraction:
-
-```python
-from typing import Protocol
-
-class MiddlewareClient(Protocol):
-    async def publish(
-        self,
-        event_type: str,
-        payload: dict,
-        *,
-        idempotency_key: str,
-        correlation_id: str,
-    ) -> None: ...
-
-```
-
-Codestra implementation must use:
-
-```text
-TLS
-machine credentials
-correct audience
-tenant authorization
-idempotency key
-correlation ID
-bounded timeout
-bounded retry
-structured error mapping
-redacted logs
-
-```
-
----
-
-# 50. Public/contact forms
-
-Add durable entities rather than direct emails.
-
-## contact\_requests
-
-```text
-id
-name
-email
-phone nullable
-subject
-message
-status
-source_url
-created_at
-
-```
-
-API:
+Public:
 
 ```http
-POST /api/v2/public/contact-requests
+GET /api/v2/capabilities
 
 ```
 
-Outbox:
+Response:
 
-```text
-contact_request.created.v1
+```json
+{
+  "request_intake": true,
+  "marketplace_matching": false,
+  "provider_opportunities": false,
+  "provider_self_service": false,
+  "quotes": false,
+  "messaging": false,
+  "reviews": false,
+  "instant_booking": false,
+  "automatic_assignment": false,
+  "payments": false,
+  "payouts": false,
+  "paid_leads": false,
+  "marketing": false
+}
 
 ```
 
-Support/admin API:
-
-```http
-GET /api/v2/ops/contact-requests
-GET /api/v2/ops/contact-requests/{id}
-POST /api/v2/ops/contact-requests/{id}/resolve
-
-```
+Code existing does not imply capability enabled.
 
 ---
 
-# 51. Communication preferences
-
-Preserve compliance domain.
-
-API should include:
-
-```http
-GET /api/v2/customer/communication-preferences
-PUT /api/v2/customer/communication-preferences
-
-POST /api/v2/public/communication-preferences
-
-```
-
-Track:
-
-```text
-transactional email
-transactional SMS
-marketing email
-marketing SMS
-purpose
-channel
-disclosure
-policy version
-source
-timestamp
-
-```
-
-Explicit re-opt-in only clears matching channel/purpose suppression.
-
----
-
-# 52. Analytics backend
-
-## analytics\_events
-
-Consider append-only product events or send to analytics sink from outbox.
+# 85. Analytics events
 
 Capture:
 
@@ -2726,35 +3230,22 @@ job_started
 job_completed
 
 review_submitted
+
 repeat_request
 
 ```
 
-Provider endpoints:
+Analytics must not slow operational transactions.
 
-```http
-GET /api/v2/partner/analytics/overview
-GET /api/v2/partner/analytics/funnel
-GET /api/v2/partner/analytics/jobs
-GET /api/v2/partner/analytics/revenue
-
-```
-
-Ops:
-
-```http
-GET /api/v2/ops/analytics/funnel
-GET /api/v2/ops/analytics/matching
-GET /api/v2/ops/analytics/providers
-GET /api/v2/ops/analytics/jobs
-
-```
+Prefer outbox/event projection.
 
 ---
 
-# 53. Payment phase — disabled until authorized
+# 86. Payments — production gated
 
-Later tables:
+Implement only after marketplace core passes.
+
+Tables:
 
 ```text
 payment_intents
@@ -2763,30 +3254,34 @@ payment_events
 refunds
 platform_fees
 provider_balances
+provider_ledger_entries
 payouts
 
 ```
 
-Later APIs:
+APIs:
 
 ```http
 POST /api/v2/payments/intents
-GET  /api/v2/payments/{id}
+
+GET /api/v2/payments/{id}
 
 POST /api/v2/admin/refunds
-GET  /api/v2/partner/payouts
+
+GET /api/v2/partner/payouts
+GET /api/v2/partner/balance
 
 ```
 
 Rules:
 
 ```text
-Stripe webhook authoritative
-redirect is not settlement authority
-idempotent webhook processing
-customer charge != provider payout
+Stripe webhook is authoritative
+browser redirect is not payment authority
+all callbacks idempotent
+provider payout separate from customer payment
 refund audited
-payout finance-controlled
+payout requires finance permission
 
 ```
 
@@ -2800,7 +3295,7 @@ payouts=false
 
 ---
 
-# 54. Provider subscriptions — later
+# 87. Provider subscriptions — gated
 
 Tables:
 
@@ -2812,97 +3307,352 @@ subscription_events
 
 ```
 
-Plans can eventually support:
+APIs:
 
-```text
-FREE
-PRO
-BUSINESS
+```http
+GET /api/v2/partner/subscription
+POST /api/v2/partner/subscription/change
+POST /api/v2/partner/subscription/cancel
+
+GET /api/v2/admin/subscription-plans
+POST /api/v2/admin/subscription-plans
+PATCH /api/v2/admin/subscription-plans/{id}
 
 ```
 
-Do not mix entitlements with RBAC.
+Entitlement is separate from authorization.
 
 ---
 
-# 55. Required Alembic sequence
+# 88. Database deletion rules
 
-Use actual current head, not hard-coded revision numbers.
-
-Recommended conceptual order:
+Do not hard-delete:
 
 ```text
 ProjectRequest
-Catalog questionnaire additions
-Provider marketplace extensions
-Provider onboarding
-Credentials/trust additions
-Availability
-Matching
-Opportunities
-Quotes
-Conversations
-Booking bridge
-Reviews
-Integration inbox/outbox
-Analytics
-Transactions
-Subscriptions
+Opportunity history
+Quote history
+Booking
+Job
+Credential verification
+Review
+Payment
+Audit event
+Outbox/inbox event
 
 ```
 
-Migration rules:
+Use lifecycle status.
+
+For optional related content:
 
 ```text
-additive first
-bounded backfill
-validate
-then add strict constraints
-no production DB in tests
-practical downgrade where safe
-no destructive historical rewrite
+attachments
+gallery items
+draft objects
+
+```
+
+safe deletion may be allowed according to retention policy.
+
+---
+
+# 89. Foreign-key policy
+
+Prefer:
+
+```text
+ON DELETE RESTRICT
+
+```
+
+for business history.
+
+Use:
+
+```text
+ON DELETE SET NULL
+
+```
+
+only where losing the optional association does not destroy history.
+
+Avoid cascading deletion through marketplace transactions.
+
+---
+
+# 90. Production migration strategy
+
+Use expand → migrate → contract.
+
+Example:
+
+```text
+Migration A
+add nullable column
+
+Deploy application supporting old + new
+
+Backfill
+
+Validate data
+
+Migration B
+add NOT NULL / constraints
+
+Later remove obsolete fields
+
+```
+
+Every migration PR must prove:
+
+```text
+current production head → new head
+
+```
+
+Do not test migrations against production DB.
+
+---
+
+# 91. Database indexes required
+
+At minimum:
+
+```text
+project_requests(customer_id, created_at)
+project_requests(status, created_at)
+
+provider_organizations(status)
+provider_services(service_id, active)
+
+provider_service_areas USING GIST
+
+provider_credentials(provider_id, status, expires_at)
+
+provider_availability_rules(provider_id, weekday)
+
+matching_runs(project_request_id, created_at)
+match_candidates(matching_run_id, eligible, rank)
+
+opportunities(provider_id, status, expires_at)
+opportunities(project_request_id, status)
+
+lead_connections(project_request_id, provider_id)
+
+quotes(project_request_id, status)
+quotes(provider_id, status)
+
+conversations(project_request_id)
+messages(conversation_id, created_at)
+
+bookings(project_request_id)
+bookings(provider_id, window_start)
+
+jobs(provider_id, status)
+jobs(worker_id, status)
+
+reviews(provider_id, created_at)
+
+integration_events(status, available_at)
+integration_inbox(provider, external_event_id)
+
+audit_events(resource_type, resource_id, created_at)
+
+```
+
+Use EXPLAIN for high-volume queries before production activation.
+
+---
+
+# 92. API security
+
+All authenticated APIs require:
+
+```text
+valid token/session
+correct issuer
+correct audience
+not expired
+required permission
+tenant/provider ownership
+resource state authorization
+rate limits
+
+```
+
+Sensitive responses require explicit DTO projection.
+
+Never serialize ORM models blindly.
+
+---
+
+# 93. PII protection
+
+Never expose unmatched-provider access to:
+
+```text
+customer email
+customer phone
+full private address where not needed
+private notes
+identity documents
+payment details
+
+```
+
+Credential documents require protected signed access.
+
+Sensitive logs must redact:
+
+```text
+Authorization
+Cookie
+tokens
+passwords
+credential numbers
+payment details
+message content where not necessary
 
 ```
 
 ---
 
-# 56. Backend testing required for every branch
+# 94. Rate limits
 
-Run:
+Apply suitable limits to:
+
+```text
+login
+registration
+password reset
+
+public request submission
+provider application
+contact form
+
+message sending
+attachment upload
+
+quote mutation
+
+opportunity response
+
+webhooks
+
+admin retries
+
+```
+
+Rate-limit keys should include appropriate combination of:
+
+```text
+IP
+user
+provider
+tenant
+route
+
+```
+
+---
+
+# 95. Health/operations endpoints
+
+Keep internal/protected:
+
+```http
+GET /health/live
+GET /health/ready
+GET /health/dependencies
+
+```
+
+Readiness should check required dependencies only.
+
+Optional integrations being disabled should not necessarily make the API unhealthy.
+
+---
+
+# 96. Observability
+
+Every request:
+
+```text
+request_id
+correlation_id
+route
+method
+status
+duration
+actor safe identifier
+tenant safe identifier
+
+```
+
+Domain events:
+
+```text
+aggregate
+event
+status
+duration
+
+```
+
+Metrics:
+
+```text
+request latency
+error rate
+DB pool
+queue depth
+outbox pending
+outbox retryable
+outbox failed terminal
+inbox failures
+matching duration
+matching no-result rate
+quote acceptance
+job completion
+
+```
+
+---
+
+# 97. Backend CI
+
+Every backend PR:
 
 ```text
 Ruff
 compileall
 pytest
 
-PostgreSQL/PostGIS integration suite
+PostgreSQL/PostGIS integration tests
 
-Alembic upgrade
-schema-drift validation
-prior-head → new-head upgrade
-practical downgrade where possible
+Alembic upgrade tests
+schema drift
 
 domain transition tests
-repository tests
 
-authorization tests
+RBAC tests
 negative authorization tests
 
 idempotency tests
 concurrency tests
 
-outbox/inbox tests where applicable
+outbox/inbox tests
 
 OpenAPI generation
-contract compatibility
+
+dependency/security checks
 
 ```
 
 ---
 
-# 57. Mandatory negative-security tests
-
-Prove:
+# 98. Mandatory negative tests
 
 ```text
 Provider A cannot read Provider B opportunity
@@ -2912,37 +3662,35 @@ Provider A cannot read Provider B conversation
 Provider A cannot read Provider B customer PII
 Provider A cannot read Provider B job
 
-Customer A cannot read Customer B request
+Customer A cannot read Customer B ProjectRequest
 Customer A cannot read Customer B quote
 Customer A cannot read Customer B conversation
 
-Worker cannot execute unassigned provider job
+Worker cannot execute another provider's job
 
-Expired credential cannot match
-Revoked credential cannot match
-Suspended provider cannot match
+expired credential cannot match
+revoked credential cannot match
+suspended provider cannot match
 
-Dispatcher cannot approve payout
-Support cannot verify credentials
-Unmatched provider cannot obtain customer contact data
+dispatcher cannot approve payout
+
+unmatched provider cannot receive customer contact data
 
 ```
 
 ---
 
-# 58. Reliability acceptance tests
-
-Prove:
+# 99. Reliability tests
 
 ```text
-duplicate request submit
+duplicate ProjectRequest submit
 → one logical submission
 
 duplicate opportunity acceptance
 → one LeadConnection
 
 duplicate quote acceptance
-→ one acceptance
+→ one accepted quote
 
 duplicate booking command
 → one Booking
@@ -2950,21 +3698,21 @@ duplicate booking command
 duplicate webhook
 → one business effect
 
-worker crash
+worker crashes
 → lease expires
-→ event safely reclaimed
+→ safe reclaim
 
 middleware disabled
 → PENDING_CONFIGURATION
 
 middleware enabled
 → PENDING
-→ delivered once
+→ one delivery
 
-retryable failure
+retryable integration failure
 → retried
 
-terminal failure
+terminal integration failure
 → visible to Ops
 
 expired hold
@@ -2974,51 +3722,91 @@ expired hold
 
 ---
 
-# 59. Backend Marketplace MVP definition
+# 100. Backend Definition of Done
 
-Backend is MVP-ready only when:
+Backend Marketplace V2 is complete only when:
 
 ```text
 ProjectRequest
 → qualification
 → matching
-→ 3 eligible candidates
+→ eligible providers
 → opportunities
 → provider acceptance
 → LeadConnection
 → conversation
-→ versioned quote
+→ quote
 → customer acceptance
 → scheduling
 → Booking
-→ eligible worker
-→ Job completion
+→ worker assignment
+→ Job
+→ completion
 → verified review
 
 ```
 
 works with payments disabled.
 
-Also prove:
+Production activation requires all relevant CI, migrations, authorization, idempotency, integration and observability gates to pass.
+---
+
+# 101. Shared command and transaction contract
+
+Every externally retryable state-changing command requires:
 
 ```text
-zero-provider path
-expired-credential path
-suspended-provider path
-integration outage
-duplicate command
-duplicate event
-worker lease recovery
-cross-tenant isolation
-payments disabled
+authenticated actor
+tenant and legal-entity context
+permission and resource ownership validation
+Idempotency-Key and request hash
+correlation ID
+expected/current aggregate version
+explicit state transition
+audit entry
+versioned outbox event
+one atomic database commit
+```
 
+Repositories may add and flush but must not independently commit application workflows. State, immutable history, audit and outbox records succeed or fail together.
+
+```python
+from dataclasses import dataclass
+from uuid import UUID
+
+@dataclass(frozen=True)
+class CommandContext:
+    actor_id: UUID
+    tenant_id: UUID | None
+    legal_entity_id: UUID | None
+    idempotency_key: str
+    request_hash: str
+    correlation_id: str
 ```
 
 ---
 
-# 60. Backend completion output for every PR
+# 102. Codestra/Kong transport contract
 
-Every PR description must include:
+Outbound marketplace events must use the transactional outbox and a bounded adapter. The adapter requires TLS, machine credentials with the correct audience, tenant/legal-entity authorization, stable event and idempotency identifiers, correlation IDs, bounded timeouts and retries, structured error mapping and redacted logs.
+
+The protected Codestra boundary requires mTLS, HMAC-V2 request signing where configured, timestamp validation, replay protection and exact tenant, environment and scope checks. Browser clients never call Codestra, Odoo, Klyrow, Telnexa or n8n directly.
+
+Inbound callbacks must authenticate, verify signature and timestamp, reject replay, deduplicate by `(provider, external_event_id)`, authorize tenant scope, process idempotently and audit the outcome.
+
+---
+
+# 103. Communication preference and compliance contract
+
+Communication preferences must distinguish transactional email, transactional SMS, marketing email and marketing SMS. Store purpose, channel, disclosure/policy version, source, timestamp and suppression state.
+
+Explicit re-opt-in may clear only the matching channel-and-purpose suppression. Marketing consent must never be inferred from transactional consent, account creation, a service request or provider onboarding.
+
+---
+
+# 104. Required completion evidence for every backend PR
+
+Every backend PR description must report:
 
 ```text
 BASE_SHA
@@ -3027,18 +3815,17 @@ ALEMBIC_PREVIOUS_HEAD
 ALEMBIC_NEW_HEAD
 MIGRATION_UPGRADE
 MIGRATION_DOWNGRADE
-POSTGRES_TESTS
+POSTGRES_POSTGIS_TESTS
 UNIT_TESTS
-AUTH_TESTS
+AUTH_AND_NEGATIVE_AUTH_TESTS
 IDEMPOTENCY_TESTS
 CONCURRENCY_TESTS
-OPENAPI
+OPENAPI_AND_COMPATIBILITY
 OUTBOX_INBOX_TESTS
 FEATURE_FLAGS_ENABLED
 PRODUCTION_DB_TOUCHED
 KNOWN_RISKS
 ROLLBACK
-
 ```
 
-Do not enable a production capability simply because its code exists.
+A capability remains disabled merely because its schema, endpoint or worker exists.
