@@ -15,6 +15,7 @@ from app.config import settings
 PBKDF2_ITERATIONS = 600_000
 TOKEN_TTL_SECONDS = 3600
 REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 3600
+CANONICAL_KEYCLOAK_ISSUER = "https://auth.codestra.co/realms/codestra"
 
 
 def hash_password(password: str) -> str:
@@ -101,10 +102,20 @@ def decode_access_token(token: str) -> dict[str, Any]:
         raise error from exc
 
 
+def _validated_keycloak_issuer() -> str:
+    issuer = settings.keycloak_issuer.rstrip("/")
+    if issuer != CANONICAL_KEYCLOAK_ISSUER:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid identity issuer configuration",
+        )
+    return issuer
+
+
 def decode_keycloak_access_token(token: str) -> dict[str, Any]:
     error = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    issuer = _validated_keycloak_issuer()
     try:
-        issuer = settings.keycloak_issuer.rstrip("/")
         signing_key = jwt.PyJWKClient(f"{issuer}/protocol/openid-connect/certs").get_signing_key_from_jwt(
             token
         )
