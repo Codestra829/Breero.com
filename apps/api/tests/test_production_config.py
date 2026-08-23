@@ -114,11 +114,19 @@ def test_stripe_keys_cannot_mix_test_and_live_modes():
         "online_checkout_enabled",
         "paid_leads_enabled",
         "automatic_refunds_enabled",
+        "payout_enabled",
         "automatic_booking_enabled",
+        "automatic_provider_assignment_enabled",
         "automatic_confirmed_bookings",
+        "provider_self_service_enabled",
+        "marketplace_matching_enabled",
+        "marketplace_messaging_enabled",
+        "marketplace_reviews_enabled",
+        "marketing_email_enabled",
+        "marketing_sms_enabled",
     ],
 )
-def test_request_only_production_rejects_payment_and_booking_flags(flag):
+def test_request_only_production_rejects_prohibited_capability_flags(flag):
     values = {
         "app_env": "production",
         "database_url": "postgresql+psycopg://prod:strong-password@postgres:5432/prod",
