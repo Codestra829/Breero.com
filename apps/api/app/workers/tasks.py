@@ -2,6 +2,7 @@ import asyncio
 from datetime import UTC, datetime
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.session import SessionLocal
@@ -14,26 +15,36 @@ from app.integrations.middleware import MiddlewareAdapter
 from app.workers.celery_app import celery_app
 
 
+async def expire_booking_holds(session: AsyncSession, *, now: datetime) -> int:
+    """Expire only currently expirable booking states at or before ``now``.
+
+    Capacity queries independently ignore expired holds by ``expires_at`` so delayed
+    worker execution cannot consume capacity. This cleanup is intentionally idempotent:
+    once a booking becomes ``EXPIRED`` it is no longer selected on later runs.
+    """
+    rows = list(
+        (
+            await session.scalars(
+                select(Booking)
+                .where(
+                    Booking.status.in_(EXPIRING_BOOKING_STATUSES),
+                    Booking.expires_at <= now,
+                )
+                .with_for_update(skip_locked=True)
+            )
+        ).all()
+    )
+    for booking in rows:
+        booking.status = BookingStatus.EXPIRED
+    await session.commit()
+    return len(rows)
+
+
 @celery_app.task(name="app.workers.tasks.expire_bookings")
 def expire_bookings() -> int:
     async def run() -> int:
         async with SessionLocal() as session:
-            rows = list(
-                (
-                    await session.scalars(
-                        select(Booking)
-                        .where(
-                            Booking.status.in_(EXPIRING_BOOKING_STATUSES),
-                            Booking.expires_at < datetime.now(UTC),
-                        )
-                        .with_for_update(skip_locked=True)
-                    )
-                ).all()
-            )
-            for booking in rows:
-                booking.status = BookingStatus.EXPIRED
-            await session.commit()
-            return len(rows)
+            return await expire_booking_holds(session, now=datetime.now(UTC))
 
     return asyncio.run(run())
 
