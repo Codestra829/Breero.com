@@ -46,9 +46,9 @@ jobs:
         working-directory: .
         env:
           BREERO_PROD_API_IMAGE: ghcr.io/example/breero-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-          BREERO_PROD_API_ENV: deploy/production/api.env.example
-          BREERO_PROD_POSTGRES_ENV: deploy/production/postgres.env.example
-          BREERO_PROD_REDIS_ENV: deploy/production/redis.env.example
+          BREERO_PROD_API_ENV: api.env.example
+          BREERO_PROD_POSTGRES_ENV: postgres.env.example
+          BREERO_PROD_REDIS_ENV: redis.env.example
           DATABASE_URL_REFERENCE: /tmp/breero-database-url
           REDIS_URL_REFERENCE: /tmp/breero-redis-url
           JWT_SECRET_REFERENCE: /tmp/breero-jwt-access
