@@ -13,6 +13,7 @@ These are P0 production prerequisites, not proof that the Marketplace V2 feature
 This document is planning authority only and must not be deployed. Preserve request-only/manual dispatch. Keep Marketplace V2, payments, payouts, paid leads, instant booking, automatic assignment/confirmation, marketing and unrestricted communications disabled.
 
 The canonical Keycloak issuer is `https://auth.codestra.co/realms/codestra`; `auth.codestra.agency` is deprecated.
+
 # A. BACKEND PRODUCTION TRACK
 
 Backend owns:
@@ -1544,6 +1545,7 @@ fe/marketplace-v2-reviews
 ```
 
 ---
+
 # FE-P0-01 — Typed V2 client
 
 All portal calls go through:
