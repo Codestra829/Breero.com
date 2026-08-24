@@ -1,0 +1,123 @@
+import enum
+import uuid
+from datetime import date, datetime
+
+from geoalchemy2 import Geography
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base import Base
+
+
+class VendorStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    ACTIVE = "ACTIVE"
+    SUSPENDED = "SUSPENDED"
+    REJECTED = "REJECTED"
+
+
+class WorkerStatus(str, enum.Enum):
+    INVITED = "INVITED"
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+
+
+class ProviderCredentialType(str, enum.Enum):
+    LICENSE = "LICENSE"
+    INSURANCE = "INSURANCE"
+
+
+class Vendor(Base):
+    __tablename__ = "vendors"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    legal_name: Mapped[str] = mapped_column(String(180))
+    display_name: Mapped[str] = mapped_column(String(120))
+    email: Mapped[str] = mapped_column(String(320), unique=True)
+    phone: Mapped[str] = mapped_column(String(32))
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), unique=True)
+    status: Mapped[VendorStatus] = mapped_column(
+        Enum(VendorStatus, name="vendor_status"), index=True
+    )
+    service_radius_meters: Mapped[int] = mapped_column(Integer, default=40000)
+    home_location: Mapped[object | None] = mapped_column(Geography("POINT", srid=4326))
+    capabilities: Mapped[list] = mapped_column(JSONB, default=list)
+    payout_profile_ref: Mapped[str | None] = mapped_column(String(255))
+    odoo_partner_id: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Worker(Base):
+    __tablename__ = "workers"
+    __table_args__ = (UniqueConstraint("vendor_id", "email"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    vendor_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("vendors.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), unique=True)
+    first_name: Mapped[str] = mapped_column(String(80))
+    last_name: Mapped[str] = mapped_column(String(80))
+    email: Mapped[str] = mapped_column(String(320))
+    phone: Mapped[str] = mapped_column(String(32))
+    status: Mapped[WorkerStatus] = mapped_column(
+        Enum(WorkerStatus, name="worker_status"), index=True
+    )
+    skills: Mapped[list] = mapped_column(JSONB, default=list)
+    current_location: Mapped[object | None] = mapped_column(Geography("POINT", srid=4326))
+    location_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    available: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class WorkerLocationEvent(Base):
+    __tablename__ = "worker_location_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    worker_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workers.id", ondelete="CASCADE"), index=True
+    )
+    location: Mapped[object] = mapped_column(Geography("POINT", srid=4326))
+    accuracy_meters: Mapped[int | None] = mapped_column(Integer)
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+
+class ProviderCredential(Base):
+    """Operator-verified provider qualification metadata; never stores secret documents."""
+
+    __tablename__ = "provider_credentials"
+    __table_args__ = (UniqueConstraint("vendor_id", "credential_type", "jurisdiction"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    vendor_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("vendors.id", ondelete="CASCADE"), index=True
+    )
+    credential_type: Mapped[ProviderCredentialType] = mapped_column(
+        Enum(ProviderCredentialType, name="provider_credential_type"), index=True
+    )
+    jurisdiction: Mapped[str] = mapped_column(String(3), index=True)
+    reference_last4: Mapped[str | None] = mapped_column(String(4))
+    verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_on: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    verified_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

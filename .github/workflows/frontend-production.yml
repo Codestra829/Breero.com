@@ -1,0 +1,46 @@
+name: Frontend production gates
+
+on:
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "apps/partner/**"
+      - "apps/ops/**"
+      - "apps/admin/**"
+      - "apps/api/**"
+      - "packages/portal/**"
+      - "deploy/portals/**"
+      - "packages/api-client/**"
+      - "packages/types/**"
+      - "packages/ui/**"
+      - "scripts/check-frontend-openapi.mjs"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - ".github/workflows/frontend-production.yml"
+  push:
+    branches: ["codex/frontend-master-final"]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.0.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Frontend dependency audit
+        run: pnpm audit --audit-level high
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm contract:check
+      - run: pnpm build
+      - run: pnpm --filter @breero/web exec playwright install --with-deps chromium firefox webkit
+      - run: pnpm --filter @breero/web test:e2e

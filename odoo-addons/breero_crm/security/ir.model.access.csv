@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_case_support,case support,model_breero_crm_case,group_breero_support,1,1,1,0
+access_case_dispute,case dispute,model_breero_crm_case,group_breero_dispute_reviewer,1,1,1,0
+access_case_manager,case manager,model_breero_crm_case,group_breero_crm_manager,1,1,1,0
+access_case_integration,case integration,model_breero_crm_case,group_breero_integration,1,1,1,0
+access_sync_manager,sync manager,model_breero_sync_event,group_breero_crm_manager,1,0,0,0
+access_sync_integration,sync integration,model_breero_sync_event,group_breero_integration,1,1,1,0

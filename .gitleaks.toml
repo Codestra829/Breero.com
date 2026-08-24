@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Alembic merge revision identifiers are not credentials"
+paths = ['''apps/api/migrations/versions/007_backend_merge\.py''']
+regexes = ['''006_(auth_customer_payments|finance_integrations)''']
+
+[[allowlists]]
+description = "Documented immutable Docker image tags are Git commit identifiers"
+paths = ['''docs/backend-staging-deployment\.md''']
+regexes = ['''breero-api:[0-9a-f]{40}''']

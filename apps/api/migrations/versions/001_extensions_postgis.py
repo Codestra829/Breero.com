@@ -19,5 +19,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DROP EXTENSION IF EXISTS postgis")
-    op.execute("DROP EXTENSION IF EXISTS pgcrypto")
+    # Extensions may be shared with other schemas and own many PostGIS objects.
+    # Deliberately retain them during application downgrade.
+    pass

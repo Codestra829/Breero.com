@@ -1,40 +1,93 @@
-from datetime import datetime
+import hashlib
+import hmac
+import uuid
+from datetime import UTC, datetime
 
-from fastapi import APIRouter
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, Depends, Header, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.rate_limit import rate_limit
+from app.db.session import get_db
+from app.domains.booking.models import Booking
+from app.domains.booking.schemas import (
+    BookingConfirmation,
+    BookingCreateRequest,
+    BookingCreateResponse,
+)
+from app.domains.booking.service import BookingService
 
 router = APIRouter()
 
 
-class CustomerInput(BaseModel):
-    first_name: str
-    last_name: str
-    email: EmailStr
-    phone: str
+def to_response(booking: Booking) -> BookingCreateResponse:
+    return BookingCreateResponse(
+        id=booking.id,
+        reference=booking.reference,
+        status=booking.status,
+        total_amount=booking.total_amount,
+        currency=booking.currency,
+        window_start=booking.window_start,
+        window_end=booking.window_end,
+        payment_required=False,
+        guest_confirmation_token=getattr(booking, "guest_confirmation_token", None),
+    )
 
 
-class BookingWindow(BaseModel):
-    start: datetime
-    end: datetime
+@router.post("", response_model=BookingCreateResponse, status_code=201)
+async def create_booking(
+    payload: BookingCreateRequest,
+    idempotency_key: str = Header(min_length=8, max_length=128, alias="Idempotency-Key"),
+    session: AsyncSession = Depends(get_db),
+    _rate_limit: None = Depends(rate_limit("booking-create", 10, 60)),
+) -> BookingCreateResponse:
+    return to_response(await BookingService(session).create(payload, idempotency_key))
 
 
-class BookingAnswer(BaseModel):
-    question_id: str
-    value: str
+async def guest_booking(
+    session: AsyncSession, booking_id: uuid.UUID, authorization: str
+) -> Booking:
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Guest confirmation token is required")
+    token = authorization.removeprefix("Bearer ").strip()
+    if len(token) < 32:
+        raise HTTPException(401, "Invalid guest confirmation token")
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    booking = await session.get(Booking, booking_id)
+    if (
+        not booking
+        or not hmac.compare_digest(booking.guest_confirmation_token_hash, token_hash)
+        or booking.guest_confirmation_revoked_at is not None
+        or booking.guest_confirmation_expires_at <= datetime.now(UTC)
+    ):
+        raise HTTPException(403, "Guest confirmation token is invalid or expired")
+    return booking
 
 
-class BookingCreateRequest(BaseModel):
-    service_id: str
-    customer: CustomerInput
-    address_id: str
-    window: BookingWindow
-    answers: list[BookingAnswer] = []
-
-
-@router.post("", status_code=201)
-async def create_booking(payload: BookingCreateRequest) -> dict:
-    return {
-        "status": "PENDING_PAYMENT",
-        "booking_id": None,
-        "payment_required": True,
-    }
+@router.get("/{booking_id}/confirmation", response_model=BookingConfirmation)
+async def booking_confirmation(
+    booking_id: uuid.UUID,
+    authorization: str = Header(alias="Authorization"),
+    session: AsyncSession = Depends(get_db),
+    _rate_limit: None = Depends(rate_limit("guest-booking-confirmation", 30, 60)),
+) -> BookingConfirmation:
+    booking = await guest_booking(session, booking_id, authorization)
+    payment_status = "disabled"
+    if booking.status.value == "CONFIRMED":
+        next_action = "confirmed"
+    elif booking.status.value == "PENDING_PROVIDER_CONFIRMATION":
+        next_action = "await_provider_confirmation"
+    elif booking.status.value in {"EXPIRED", "CANCELLED"}:
+        next_action = "booking_unavailable"
+    else:
+        next_action = "await_operator_confirmation"
+    return BookingConfirmation(
+        booking_id=booking.id,
+        reference=booking.reference,
+        booking_status=booking.status,
+        payment_status=payment_status,
+        window_start=booking.window_start,
+        window_end=booking.window_end,
+        amount_minor=0,
+        currency=booking.currency,
+        next_action=next_action,
+    )

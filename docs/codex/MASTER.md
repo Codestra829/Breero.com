@@ -86,3 +86,36 @@ Stripe, Odoo, email, SMS and geocoding live behind adapters. Business services d
 - Tests cover success plus invalid service area, unavailable slot and core retry/concurrency behavior.
 - README explains startup.
 - No secrets are committed.
+
+## BREERO FRONTEND — MASTER FINAL EXECUTION MISSION
+
+Branch: `codex/frontend-master-final`
+
+Integrate and reconcile these completed frontend workstreams without starting a new architecture from scratch:
+
+- `codex/frontend-system-90`
+- `codex/frontend-booking-90`
+- `codex/frontend-customer-90`
+- `codex/frontend-integration-90`
+
+Preserve strong completed work, resolve conflicts deliberately, and produce one coherent frontend implementation. Backend/OpenAPI is authoritative. The primary target is approximately 90% staging-ready frontend completion.
+
+Execution priorities:
+
+1. Integrate the four frontend workstreams.
+2. Reconcile `packages/ui`.
+3. Reconcile `packages/api-client` and `packages/types`.
+4. Replace stale mocks with live backend contracts.
+5. Complete homepage and service discovery.
+6. Complete the booking flow.
+7. Complete authentication UX.
+8. Complete the customer portal.
+9. Complete quote and additional-payment UX.
+10. Complete loading, empty, error, and session states.
+11. Complete responsive behavior.
+12. Complete accessibility fundamentals.
+13. Run full lint, typecheck, tests, and production build.
+14. Run canonical and negative end-to-end tests.
+15. Deliver a precise staging-readiness report.
+
+Do not merge this branch. Push only to `codex/frontend-master-final`.

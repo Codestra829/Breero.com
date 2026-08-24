@@ -1,0 +1,5 @@
+<odoo>
+ <menuitem id="menu_breero_root" name="BREERO CRM" sequence="40" groups="group_breero_crm_manager,group_breero_support,group_breero_dispute_reviewer"/>
+ <menuitem id="menu_breero_cases" name="Cases" parent="menu_breero_root" action="action_cases" sequence="10"/>
+ <menuitem id="menu_breero_sync" name="Delivery Events" parent="menu_breero_root" action="action_sync_events" sequence="20" groups="group_breero_crm_manager"/>
+</odoo>
