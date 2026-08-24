@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 
 const document = JSON.parse(readFileSync(new URL("../apps/api/openapi.json", import.meta.url), "utf8"));
 const required = {
+  "/api/v2/capabilities": ["get"],
   "/api/v1/public/capabilities": ["get"],
   "/api/v1/auth/login": ["post"],
   "/api/v1/auth/register": ["post"],
