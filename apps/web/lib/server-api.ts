@@ -1,5 +1,6 @@
 import "server-only";
 import { NextRequest, NextResponse } from "next/server";
+import { safeTraceId } from "./trace-id";
 
 const DEFAULT_API = "https://api.breero.com/api/v1";
 const FORWARDED_RESPONSE_HEADERS = [
@@ -30,8 +31,8 @@ function responseHeaders(response: Response): Headers {
 
 function unavailableResponse(request: NextRequest): NextResponse {
   const requestId =
-    request.headers.get("x-request-id")
-    ?? request.headers.get("x-correlation-id")
+    safeTraceId(request.headers.get("x-correlation-id"))
+    ?? safeTraceId(request.headers.get("x-request-id"))
     ?? globalThis.crypto.randomUUID();
   return NextResponse.json(
     {
@@ -84,9 +85,9 @@ export function forwardedHeaders(request: NextRequest, extra: HeadersInit = {}):
   if (userAgent) headers.set("user-agent", userAgent);
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) headers.set("x-forwarded-for", forwardedFor);
-  const requestId = request.headers.get("x-request-id");
+  const requestId = safeTraceId(request.headers.get("x-request-id"));
   if (requestId) headers.set("x-request-id", requestId);
-  const correlationId = request.headers.get("x-correlation-id");
+  const correlationId = safeTraceId(request.headers.get("x-correlation-id"));
   if (correlationId) headers.set("x-correlation-id", correlationId);
   return headers;
 }
