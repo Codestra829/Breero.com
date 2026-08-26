@@ -9,7 +9,7 @@ from app.api.v1.operations.router import router
 from app.main import app
 
 
-def test_legacy_operations_module_is_a_compatibility_facade() -> None:
+def test_operations_package_is_the_compatibility_facade() -> None:
     assert operations.router is router
     assert operations.dispatcher_queue is dispatcher_queue
     assert operations.update_dispatcher_queue_item is update_dispatcher_queue_item
@@ -19,7 +19,9 @@ def test_operations_routes_remain_registered_after_module_split() -> None:
     paths = app.openapi()["paths"]
     expected = {
         "/api/v1/operations/bookings/{booking_id}/confirm": {"post"},
-        "/api/v1/operations/vendors/{vendor_id}/credentials/{credential_type}/{jurisdiction}": {"put"},
+        "/api/v1/operations/vendors/{vendor_id}/credentials/{credential_type}/{jurisdiction}": {
+            "put"
+        },
         "/api/v1/operations/dispatcher/queue": {"get"},
         "/api/v1/operations/dispatcher/queue/{request_id}": {"patch"},
         "/api/v1/operations/workers/{worker_id}/booking-coverage": {"put"},
@@ -31,11 +33,9 @@ def test_operations_routes_remain_registered_after_module_split() -> None:
         assert methods <= set(paths[path])
 
 
-def test_operations_monolith_is_reduced_to_a_facade() -> None:
+def test_same_named_operations_monolith_is_removed() -> None:
     path = Path(__file__).resolve().parents[1] / "app" / "api" / "v1" / "operations.py"
-    source = path.read_text(encoding="utf-8")
-    assert len(source.splitlines()) <= 24
-    assert "from fastapi import HTTPException" not in source
+    assert not path.exists()
 
 
 def test_operations_resource_modules_do_not_use_lazy_fastapi_imports() -> None:
