@@ -5,7 +5,8 @@ The tool is intentionally conservative:
 
 - dry-run is the default;
 - it operates only in a verified BREERO repository checkout;
-- apply mode is allowed only from a clean worktree;
+- apply mode is allowed only on the expected clean feature branch;
+- the other-branch override is dry-run only;
 - apply mode is forbidden on protected/release branches;
 - existing non-identical files are never overwritten;
 - database migrations and production/runtime activation are never performed;
@@ -31,6 +32,7 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 EXPECTED_BRANCH = "bootstrap/backend-production-foundation"
+EXPECTED_REPOSITORY_NAME = "breero.com"
 PROTECTED_BRANCHES = frozenset({"main", "master", "production", "prod"})
 PROTECTED_PREFIXES = ("release/", "production/", "prod/")
 
@@ -183,6 +185,16 @@ def find_repo_root(start: Path) -> Path:
     raise BootstrapError("No Git repository found from the current directory.")
 
 
+def repository_name_from_remote(remote: str) -> str:
+    """Extract a repository name from HTTPS, SSH, or SCP-style Git remotes."""
+
+    normalized = remote.strip().rstrip("/")
+    if normalized.casefold().endswith(".git"):
+        normalized = normalized[:-4]
+    repository_name = normalized.rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+    return repository_name.casefold()
+
+
 def verify_breero_scope(root: Path) -> None:
     """Fail unless *root* has the expected BREERO monorepo identity."""
 
@@ -199,17 +211,18 @@ def verify_breero_scope(root: Path) -> None:
         )
 
     readme = (root / "README.md").read_text(encoding="utf-8", errors="ignore")
-    remote = run_git(root, "remote", "get-url", "origin")
-    identity_text = f"{readme}\n{remote}".lower()
-
-    if "breero" not in identity_text:
+    if "breero" not in readme.casefold():
         raise BootstrapError(
-            "Repository identity check failed: BREERO was not found in README/origin."
+            "Repository identity check failed: README does not identify BREERO."
         )
 
-    forbidden = "money" + "bee"
-    if forbidden in remote.lower():
-        raise BootstrapError("Cross-project repository detected; refusing to modify it.")
+    remote = run_git(root, "remote", "get-url", "origin")
+    repository_name = repository_name_from_remote(remote)
+    if repository_name != EXPECTED_REPOSITORY_NAME:
+        raise BootstrapError(
+            "Repository origin identity check failed: expected repository "
+            f"{EXPECTED_REPOSITORY_NAME!r}, found {repository_name!r}."
+        )
 
 
 def current_branch(root: Path) -> str:
@@ -242,15 +255,26 @@ def validate_execution_context(
     if not branch:
         raise BootstrapError("Detached HEAD is not a safe bootstrap execution context.")
 
+    if apply and is_protected_branch(branch):
+        raise BootstrapError(
+            f"Apply mode is forbidden on protected/release branch {branch!r}."
+        )
+
+    if apply and allow_other_branch:
+        raise BootstrapError(
+            "--allow-other-branch is restricted to dry-run mode and cannot be "
+            "combined with --apply."
+        )
+
+    if apply and branch != EXPECTED_BRANCH:
+        raise BootstrapError(
+            f"Apply mode requires branch {EXPECTED_BRANCH!r}; found {branch!r}."
+        )
+
     if branch != EXPECTED_BRANCH and not allow_other_branch:
         raise BootstrapError(
             f"Expected branch {EXPECTED_BRANCH!r}, found {branch!r}. "
             "Switch branches or use --allow-other-branch for an intentional dry-run."
-        )
-
-    if apply and is_protected_branch(branch):
-        raise BootstrapError(
-            f"Apply mode is forbidden on protected/release branch {branch!r}."
         )
 
     if apply and dirty:
@@ -375,15 +399,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="Write missing files/directories. Default is dry-run.",
+        help="Write missing files/directories on the expected clean feature branch.",
     )
     parser.add_argument(
         "--allow-other-branch",
         action="store_true",
         help=(
-            "Allow an intentional run outside bootstrap/backend-production-foundation. "
-            "This never permits apply mode on protected/release branches and never "
-            "permits dirty apply mode."
+            "Allow an intentional dry-run outside "
+            "bootstrap/backend-production-foundation. This option cannot be "
+            "combined with --apply."
         ),
     )
     return parser.parse_args(argv)
