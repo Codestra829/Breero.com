@@ -113,6 +113,18 @@ class FileSafetyTests(unittest.TestCase):
             with self.assertRaisesRegex(bootstrap.BootstrapError, "escaped"):
                 bootstrap.safe_relative(root, Path("../outside.txt"))
 
+    def test_plan_rejects_symlinked_scaffold_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            redirect = root / "redirect"
+            redirect.mkdir()
+            boundary = root / bootstrap.APP_ROOT / "application"
+            boundary.parent.mkdir(parents=True)
+            boundary.symlink_to(redirect, target_is_directory=True)
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "symlinked component"):
+                bootstrap.plan_actions(root)
+            self.assertFalse((redirect / "__init__.py").exists())
+
     def test_write_if_missing_is_idempotent_for_identical_content(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "file.txt"

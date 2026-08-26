@@ -294,13 +294,28 @@ def validate_execution_context(
 
 
 def safe_relative(root: Path, path: Path) -> Path:
-    """Resolve *path* beneath *root* and reject path traversal."""
+    """Validate *path* beneath *root* without following scaffold symlinks."""
 
-    resolved = (root / path).resolve()
+    lexical = Path(path)
+    if lexical.is_absolute():
+        raise BootstrapError(f"Path escaped repository root: {path}")
+    candidate = root / lexical
+    resolved = candidate.resolve()
     try:
-        return resolved.relative_to(root.resolve())
+        resolved.relative_to(root.resolve())
     except ValueError as exc:
         raise BootstrapError(f"Path escaped repository root: {path}") from exc
+
+    current = root
+    for component in lexical.parts:
+        if component in {"", "."}:
+            continue
+        current /= component
+        if current.is_symlink():
+            raise BootstrapError(
+                f"Refusing scaffold path with symlinked component: {path}"
+            )
+    return lexical
 
 
 def plan_actions(root: Path) -> list[Action]:
