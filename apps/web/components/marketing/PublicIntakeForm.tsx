@@ -2,6 +2,7 @@
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import type { PublicCapabilities } from "@breero/types";
+import { intakeServices } from "@/content/services";
 import {
   endpointForSubmission,
   prepareSubmissionAttempt,
@@ -16,6 +17,12 @@ type Service = { id: string; slug: string; name: string; is_active?: boolean };
 type AddressValidation = { serviceable: boolean; formatted_address: string };
 type SubmissionAccepted = { request_id?: string; status?: string; downstream_status?: string };
 type FormState = "idle" | "sending" | "accepted" | "unserviceable" | "error";
+
+const fallbackServices: Service[] = intakeServices.map((service) => ({
+  id: `catalog-${service.slug}`,
+  ...service,
+  is_active: true,
+}));
 
 const US_STATES = [
   "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI",
@@ -32,6 +39,16 @@ const MARKETING_SMS_DISCLOSURE =
 
 function value(data: FormData, key: string): string {
   return String(data.get(key) ?? "").trim();
+}
+
+function cleanServices(items: Service[]): Service[] {
+  const unique = new Map<string, Service>();
+  for (const item of items) {
+    if (item.is_active !== false && item.slug && item.name && !unique.has(item.slug)) {
+      unique.set(item.slug, item);
+    }
+  }
+  return [...unique.values()];
 }
 
 function StateSelect() {
@@ -80,8 +97,11 @@ function submitLabel(kind: PublicSubmissionKind): string {
 }
 
 export function PublicIntakeForm({ kind }: { kind: PublicSubmissionKind }) {
-  const [services, setServices] = useState<Service[]>([]);
-  const [loadError, setLoadError] = useState(false);
+  const needsCatalog = kind !== "contact";
+  const [services, setServices] = useState<Service[]>(needsCatalog ? fallbackServices : []);
+  const [catalogError, setCatalogError] = useState(false);
+  const [catalogEmpty, setCatalogEmpty] = useState(false);
+  const [capabilitiesError, setCapabilitiesError] = useState(false);
   const [capabilities, setCapabilities] = useState<PublicCapabilities | null>(null);
   const [state, setState] = useState<FormState>("idle");
   const [submissionError, setSubmissionError] = useState<PublicSubmissionError | null>(null);
@@ -90,8 +110,10 @@ export function PublicIntakeForm({ kind }: { kind: PublicSubmissionKind }) {
   const consentTimestampRef = useRef<string | null>(null);
 
   useEffect(() => {
-    setLoadError(false);
-    setServices([]);
+    setCatalogError(false);
+    setCatalogEmpty(false);
+    setCapabilitiesError(false);
+    setServices(kind === "contact" ? [] : fallbackServices);
     setCapabilities(null);
     if (kind === "contact") return;
 
@@ -101,9 +123,17 @@ export function PublicIntakeForm({ kind }: { kind: PublicSubmissionKind }) {
         if (!response.ok) throw new Error("catalog unavailable");
         return response.json() as Promise<Service[]>;
       })
-      .then((items) => setServices(items.filter((item) => item.is_active !== false)))
+      .then((items) => {
+        const cleaned = cleanServices(items);
+        if (cleaned.length) {
+          setServices(cleaned);
+        } else {
+          setServices([]);
+          setCatalogEmpty(true);
+        }
+      })
       .catch((error: unknown) => {
-        if ((error as { name?: string }).name !== "AbortError") setLoadError(true);
+        if ((error as { name?: string }).name !== "AbortError") setCatalogError(true);
       });
 
     if (kind === "service") {
@@ -114,7 +144,7 @@ export function PublicIntakeForm({ kind }: { kind: PublicSubmissionKind }) {
         })
         .then(setCapabilities)
         .catch((error: unknown) => {
-          if ((error as { name?: string }).name !== "AbortError") setLoadError(true);
+          if ((error as { name?: string }).name !== "AbortError") setCapabilitiesError(true);
         });
     }
 
@@ -278,9 +308,9 @@ export function PublicIntakeForm({ kind }: { kind: PublicSubmissionKind }) {
     }
   }
 
-  const needsCatalog = kind !== "contact";
-  const catalogReady = !needsCatalog || services.length > 0;
-  const capabilityReady = kind !== "service" || capabilities?.request_intake === true;
+  const catalogReady = !needsCatalog || (services.length > 0 && !catalogEmpty);
+  const capabilityReady = kind !== "service"
+    || (!capabilitiesError && capabilities?.request_intake === true);
   const submitDisabled = state === "sending" || !catalogReady || !capabilityReady;
   const fieldMessages = submissionError?.fields
     ? Object.values(submissionError.fields).flat().slice(0, 4)
@@ -313,10 +343,9 @@ export function PublicIntakeForm({ kind }: { kind: PublicSubmissionKind }) {
         <>
           <label>
             Service
-            <select name="service_slug" required disabled={!services.length}>
-              {services.length
-                ? services.map((service) => <option key={service.id} value={service.slug}>{service.name}</option>)
-                : <option>Loading live services…</option>}
+            <select name="service_slug" required defaultValue="" disabled={!services.length || catalogEmpty}>
+              <option value="" disabled>Select a service</option>
+              {services.map((service) => <option key={service.slug} value={service.slug}>{service.name}</option>)}
             </select>
           </label>
           <label>Street address<input name="address_line1" required minLength={3} maxLength={240} autoComplete="street-address" /></label>
@@ -360,10 +389,9 @@ export function PublicIntakeForm({ kind }: { kind: PublicSubmissionKind }) {
           <label>Website <span>(optional)</span><input name="business_website" type="url" /></label>
           <label>
             Primary service
-            <select name="service_category" required disabled={!services.length}>
-              {services.length
-                ? services.map((service) => <option key={service.id} value={service.slug}>{service.name}</option>)
-                : <option>Loading live services…</option>}
+            <select name="service_category" required defaultValue="" disabled={!services.length || catalogEmpty}>
+              <option value="" disabled>Select a service</option>
+              {services.map((service) => <option key={service.slug} value={service.slug}>{service.name}</option>)}
             </select>
           </label>
           <label>City<input name="city" required minLength={2} maxLength={120} autoComplete="address-level2" /></label>
@@ -391,8 +419,20 @@ export function PublicIntakeForm({ kind }: { kind: PublicSubmissionKind }) {
         BREERO coordinates requests with independent service providers. Providers remain responsible for final estimates, scope, pricing, licensing, permits, insurance, workmanship and service performance.
       </p>
 
-      {loadError && needsCatalog && (
-        <p role="alert">Live services are unavailable right now. Your form has not been submitted.</p>
+      {catalogError && needsCatalog && (
+        <p className="mk-intake__notice" role="status">
+          We could not refresh the live catalog, so the standard service list is shown. You can still send your request.
+        </p>
+      )}
+      {catalogEmpty && needsCatalog && (
+        <p role="alert">
+          No services are currently accepting requests. Please check back later or contact support@breero.com.
+        </p>
+      )}
+      {kind === "service" && capabilitiesError && (
+        <p role="alert">
+          Request availability could not be verified. Please retry or contact support@breero.com.
+        </p>
       )}
       {kind === "service" && capabilities && !capabilities.request_intake && (
         <p role="alert">Service request intake is temporarily unavailable.</p>
