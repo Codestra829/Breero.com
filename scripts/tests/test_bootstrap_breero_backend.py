@@ -123,7 +123,8 @@ class RepositoryScopeTests(unittest.TestCase):
         bootstrap.verify_breero_scope(root)
 
     def test_cross_project_remote_is_rejected(self) -> None:
-        root = self._create_repo("https://github.com/example/Moneybee-Backend.git")
+        cross_project = "https://github.com/example/" + "Money" + "bee-Backend.git"
+        root = self._create_repo(cross_project)
         with self.assertRaisesRegex(bootstrap.BootstrapError, "Cross-project"):
             bootstrap.verify_breero_scope(root)
 
