@@ -1,11 +1,11 @@
 # BREERO Main Lineage Reconciliation
 
-This record has two distinct purposes:
+This record separates:
 
-1. preserve the immutable lineage snapshot captured immediately after PR #34 entered `main` on 2026-08-24; and
-2. record the post-reconciliation status verified on 2026-08-26.
+1. the immutable snapshot captured after PR #34 entered `main` on 2026-08-24; and
+2. the final review-preparation state verified on 2026-08-26.
 
-The snapshot classifications describe what was true **before** PRs #38–#42 were reconstructed. They must not be read as current branch status.
+Historical classifications must not be read as current branch status.
 
 ## 1. Immutable post-#34 snapshot — 2026-08-24
 
@@ -17,95 +17,125 @@ MIGRATION_HEAD_AT_CONSOLIDATION=017_provider_credentials
 
 PR_15_STATUS_AT_SNAPSHOT=SUPERSEDED
 PR_16_STATUS_AT_SNAPSHOT=SUPERSEDED
-PR_38_STATUS_AT_SNAPSHOT=REBASE_REQUIRED
-PR_39_STATUS_AT_SNAPSHOT=REBASE_DOCS
-PR_40_STATUS_AT_SNAPSHOT=REBASE_DOCS
-PR_41_STATUS_AT_SNAPSHOT=PARTIAL_REUSE
-PR_42_STATUS_AT_SNAPSHOT=PARTIAL_REUSE
+PR_38_STATUS_AT_SNAPSHOT=RECONSTRUCTION_REQUIRED
+PR_39_STATUS_AT_SNAPSHOT=RECONSTRUCTION_REQUIRED
+PR_40_STATUS_AT_SNAPSHOT=RECONSTRUCTION_REQUIRED
+PR_41_STATUS_AT_SNAPSHOT=PARTIAL_REUSE_ONLY
+PR_42_STATUS_AT_SNAPSHOT=PARTIAL_REUSE_ONLY
 
 PRODUCTION_DEPLOYED=NO
 CAPABILITIES_ACTIVATED=NO
 ```
 
-### Snapshot classification rationale
+PRs #15 and #16 were contained in the accepted #34 baseline. PRs #38–#42 had useful additive material but were not safe blind-merge candidates; they required reconstruction directly on accepted `main`.
 
-- **PR #15 — backend master integration:** contained in the accepted #34 baseline; do not merge or cherry-pick again.
-- **PR #16 — frontend master integration:** contained in the accepted #34 baseline; do not merge or cherry-pick again.
-- **PR #38 — P0 API foundation:** additive V2/API foundation work existed on a diverged branch and required reconstruction on accepted `main`.
-- **PR #39 — Marketplace V2 authority:** documentation and scope-guard work remained useful but required reconstruction on accepted `main`.
-- **PR #40 — Odoo CRM authority:** the additive authority document remained useful, while old baseline content did not.
-- **PR #41 — backend bootstrap:** only the conservative reconciliation tool was a candidate for selective reuse; generated scaffolding required re-evaluation.
-- **PR #42 — frontend bootstrap:** only route/safety authority was a candidate for selective reuse; placeholder shells, layout/config changes, and generated workspace files were unsafe to merge over the richer accepted frontend.
-
-The required rule at this point was reconstruction, not blind rebase/merge.
-
-## 2. Verified post-reconciliation status — 2026-08-26
+## 2. Final review-preparation state — 2026-08-26
 
 ```text
 ACCEPTED_MAIN_SHA=8071572c90905d98894ab1a4cafe99a4178f7dd8
 CURRENT_MIGRATION_HEAD=017_provider_credentials
 
-PR_38_HEAD=2318b15115df5066592ad2f8653ba17435d6b15e
-PR_38_STATUS=READY_FOR_INDEPENDENT_REVIEW
-PR_38_BACKEND_RUN=32935147544_PASS
-PR_38_FRONTEND_RUN=32935147530_PASS
+PR_38_HEAD=954b3f05cbbf21c9176801f1db35cb5b80b78f16
+PR_38_BACKEND_RUN=32937169770_PASS
+PR_38_FRONTEND_RUN=32937169756_PASS
+PR_38_UNRESOLVED_THREADS=0
 
-PR_39_HEAD=b1a0865918971e3ce16f62aaeda38bd6001a1308
-PR_39_STATUS=READY_FOR_INDEPENDENT_DOCUMENTATION_REVIEW
-PR_39_SCOPE_GUARD_RUN=32936351888_PASS
+PR_39_HEAD=c17741341f4109479f9bfac25c47c62558b6eb84
+PR_39_SCOPE_GUARD_RUN=32937675558_PASS
+PR_39_UNRESOLVED_THREADS=0
 
-PR_40_HEAD=132d27b91d56748e82d0e6b4eb6d53fb1ce8db0e
-PR_40_STATUS=READY_FOR_INDEPENDENT_DOCUMENTATION_SECURITY_REVIEW
+PR_40_HEAD=5cbc2d386dce1ec8063641d0e3c7d82d8a2320f4
+PR_40_UNRESOLVED_THREADS=0
 
-PR_41_HEAD=969b3d7fd5b87fd7a0df7e4f499cd452e0e1c6fa
-PR_41_STATUS=READY_FOR_INDEPENDENT_CODE_SECURITY_REVIEW
-PR_41_BOOTSTRAP_TOOL_RUN=32936774159_PASS
-PR_41_UNIT_TESTS=13_PASS
+PR_41_HEAD=11183c7ef9b6bc2a0ce4b12aeadb8fd31c4e5125
+PR_41_BOOTSTRAP_TOOL_RUN=32938001986_PASS
+PR_41_UNIT_TESTS=20_PASS
+PR_41_UNRESOLVED_THREADS=0
 PR_41_SCAFFOLDING_APPLIED=NO
 
 PR_42_HEAD=9ebed8c91de5d9c9b0e5e14b470b724ba5971180
-PR_42_STATUS=READY_FOR_INDEPENDENT_DOCUMENTATION_REVIEW
+PR_42_UNRESOLVED_THREADS=0
 
 ALL_POST_CONSOLIDATION_PRS_REVIEWABLE=YES
+INDEPENDENT_APPROVAL_ON_CURRENT_HEADS=NO
 MERGE_READY=NO
 PRODUCTION_DEPLOYED=NO
 CAPABILITIES_ACTIVATED=NO
 ```
 
-Every review-ready status above means the branch is prepared for independent review. It does not mean an approval exists, the repository ruleset is satisfied, or a merge is authorized.
+“Reviewable” means the branch is prepared for fresh independent review. It does not mean approval exists, the active ruleset is satisfied, or merge/deployment is authorized.
 
-### PR #38 outcome
+### PR #38 — P0 API foundation
 
-PR #38 was reconstructed directly on accepted `main`. The initial frontend failure was a stale request-only OpenAPI guard that rejected three manual-scheduling routes already accepted by PR #34. The guard now treats those routes as required while continuing to reject payment mutations.
+PR #38 was reconstructed on accepted `main`.
 
-Exact-head backend and frontend production gates pass, including contract verification, production build and full Playwright E2E. CI success does not replace independent review or branch-protection gates.
+The stale request-only OpenAPI guard was corrected to preserve the three manual-scheduling routes accepted by PR #34 while continuing to reject payment mutations.
 
-### PR #39 outcome
+Automated review then found two V2 error-contract defects. The final head now:
 
-PR #39 is the current Marketplace V2 documentation and BREERO scope-guard authority. It now binds status to the accepted quote-only/operator-confirmed scheduling baseline, includes a deny-by-default authorization matrix, defines evidence for each production/readiness/activation gate, and records the current system-of-record and identity boundaries. The old pre-consolidation application tree was discarded. Its exact-head BREERO scope guard passes.
+- normalizes unexpected V2 failures into the stable correlated JSON envelope without leaking implementation details;
+- preserves `Allow`, `Retry-After`, `WWW-Authenticate`, and other HTTP exception headers;
+- adds regression coverage for 405, 429, and unexpected 500 behavior.
 
-### PR #40 outcome
+Both production workflows pass and all review threads are resolved.
 
-PR #40 retains the Odoo campaign CRM implementation authority and an Odoo 19 platform/review-gate companion. BREERO PostgreSQL/PostGIS remains authoritative marketplace state, while Odoo remains a campaign CRM projection/workspace. The documents require exact Odoo 19 build/dependency evidence, multi-company/tenant record rules, mail safety, upgrade/rollback tests, and separately approved channel activation. No Odoo installation, upgrade, external send or runtime change is included.
+### PR #39 — Marketplace V2 implementation authority
 
-### PR #41 outcome
+PR #39 is the current Marketplace V2 documentation and BREERO scope-guard authority.
 
-PR #41 retains and hardens `scripts/bootstrap_breero_backend.py`; no generated scaffolding was applied.
+Its final review repair:
 
-The repaired tool:
+- makes expired `PROCESSING` outbox rows reclaimable;
+- requires a fresh claim token for every claim generation and exact-token finalization;
+- recycles expired idempotency records before active replay/conflict behavior;
+- standardizes `quote.accept` as the canonical customer quote-decision permission;
+- replaces unsafe copy/paste pseudo-code with a binding reliability contract that extends existing BREERO services.
 
-- remains dry-run by default;
-- rejects dirty apply mode;
-- rejects apply mode on protected/production/release branches even with override;
-- rejects detached HEAD, path escape, cross-project scope and non-identical overwrite;
-- applies only missing structural boundaries;
-- has 13 focused safety tests and a dedicated compile/unit/dry-run CI gate.
+The exact-head BREERO scope guard passes and all review threads are resolved.
 
-Exact-head workflow run `32936774159` passes. The workflow never invokes `--apply`.
+### PR #40 — Odoo 19 campaign CRM authority
 
-### PR #42 outcome
+PR #40 remains documentation-only.
 
-PR #42 retains only two documentation files. The route registry labels all Marketplace V2 paths as target-state rather than current runtime, protects existing accepted routes, separates navigation from backend authority, forbids placeholders, and enumerates all high-risk capabilities as disabled. It changes no frontend runtime code.
+The final contract:
+
+- extends `odoo-addons/breero_crm` version `19.0.1.0.0`;
+- preserves the existing `breero.sync.event` delivery contract;
+- forbids a disconnected replacement addon tree;
+- enforces one authoritative campaign membership per `(campaign_id, user_id)` with separate history;
+- requires validated first-class company, BREERO tenant, and campaign scope on accepted integration rows;
+- retains BREERO PostgreSQL/PostGIS as authoritative marketplace state;
+- keeps external email/SMS, telephony writes, and automated execution disabled.
+
+All review threads are resolved. No Odoo module was installed or upgraded.
+
+### PR #41 — fail-closed backend bootstrap tool
+
+PR #41 retains only the hardened tool, tests, and dedicated workflow. No scaffold was applied.
+
+The final tool:
+
+- defaults to dry-run;
+- independently validates README and origin repository identity;
+- requires origin repository name `Breero.com`;
+- permits the other-branch override only in dry-run mode;
+- requires the exact feature branch for apply mode;
+- rejects dirty, detached, protected/release, path-escape, and non-identical-overwrite contexts;
+- has 20 safety tests plus compile and real dry-run smoke coverage.
+
+The exact-head workflow passes and all review threads are resolved.
+
+### PR #42 — frontend target-route and safety authority
+
+PR #42 retains only two documentation files. It:
+
+- labels Marketplace V2 routes as target-state rather than current runtime;
+- protects existing accepted routes;
+- separates frontend navigation from backend identity, tenant, permission, record-policy, and capability authority;
+- forbids placeholder success pages and fake portal data;
+- enumerates all high-risk capabilities as disabled.
+
+It changes no frontend runtime code and has no unresolved review threads.
 
 ## 3. Historical PR cleanup
 
@@ -121,39 +151,48 @@ The following obsolete pre-consolidation PRs were closed without merging or dele
 #36 superseded Marketplace V2 planning authority
 ```
 
-Their branches and discussions remain available for audit. Current infrastructure and UAT gates remain issues #17–#19 and require fresh read-only evidence.
+Their branches and discussions remain available for audit.
 
-## 4. Current governance blocker
+## 4. Open P1 gates
 
-Issue #45 records a repository ruleset defect:
+```text
+#17 production-host disk/capacity safety
+#18 isolated staging/UAT/DNS/provider readiness
+#19 public data-plane ports and production database revision
+#45 required-check/ruleset governance
+```
+
+Issues #17–#19 require fresh read-only evidence. August 12 host observations are historical until revalidated on the actual approved infrastructure.
+
+Issue #45 records this ruleset defect:
 
 ```text
 ACTIVE_RULESET=protected-main-production-release
+RULESET_ID=20802489
 REQUIRED_CONTEXT=quality
 BACKEND_WORKFLOW_CONTEXT=quality
 FRONTEND_WORKFLOW_CONTEXT=quality
 DOCUMENTATION_ONLY_CONTEXT=ABSENT
 ```
 
-This creates ambiguous duplicate ownership for mixed code PRs and a missing required context for documentation-only PRs. Until workflows and ruleset `20802489` are repaired and verified together, a GitHub “mergeable” result is not proof that the required-check gate passed.
+This creates ambiguous duplicate ownership for mixed code PRs and a missing required context for documentation-only PRs. A GitHub “mergeable” result is not proof that the required-check gate passed.
 
 ## 5. Current review and implementation sequence
 
 ```text
-1. Obtain independent review of unchanged PR #38 exact head.
-2. Resolve any findings and rerun exact-head checks after every code push.
-3. Repair and verify issue #45 without weakening backend/frontend gates.
-4. Merge #38 only after valid approval, resolved threads and ruleset requirements pass.
-5. Verify the new main SHA and exact checks after merge.
-6. Independently review documentation/tooling authorities #39, #40, #41, #42 and this lineage record.
-7. Merge each only in dependency-safe order and only after its own valid review/check gates.
-8. Begin production identity/authentication and authorization as the first new engineering workstream.
-9. Do not start provider, matching, messaging, transaction or activation work early.
+1. obtain fresh independent review on each unchanged final head
+2. address findings and rerun exact-head checks after every push
+3. repair and verify issue #45 without weakening backend/frontend gates
+4. merge PR #38 only after valid approval, resolved threads, and ruleset gates pass
+5. verify the new main SHA and checks after merge
+6. review/merge #39–#43 only in dependency-safe order with their own gates
+7. begin production identity/authentication and authorization next
+8. do not begin provider, matching, messaging, financial, or activation work early
 ```
 
 ## 6. Next engineering boundary
 
-The first new implementation branch after the P0 API foundation is production identity/authentication and authorization only:
+After an approved P0 API-foundation merge, the next implementation boundary is production identity/authentication and authorization only:
 
 ```text
 OIDC production enforcement
@@ -166,7 +205,7 @@ local-production-auth shutdown
 Principal construction
 /api/v2/me
 tenant membership and RBAC authority
-production auth configuration
+record-policy enforcement
 negative authentication and authorization tests
 ```
 
@@ -191,4 +230,4 @@ NO unrestricted external sends
 NO capability activation
 ```
 
-This record does not deploy, migrate production data, merge an implementation PR, modify the active ruleset, or activate any capability.
+This record does not merge a PR, deploy, migrate production data, modify the active ruleset, install Odoo, send externally, or activate any capability.
