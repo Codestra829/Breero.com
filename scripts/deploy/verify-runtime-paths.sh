@@ -54,6 +54,7 @@ required_keys=(
   VERIFICATION_STATE
   LIVE_MUTATION_ALLOWED
   EXPECTED_HOSTNAME
+  EXPECTED_REPOSITORY_SHA
   REPOSITORY_ROOT
   BACKEND_COMPOSE_PATH
   FRONTEND_COMPOSE_PATH
@@ -121,6 +122,10 @@ for key in EXPECTED_HOSTNAME EXPECTED_PRIVATE_NETWORK EXPECTED_BACKEND_EDGE_NETW
   [[ "${cfg[$key]}" == UNVERIFIED || "${cfg[$key]}" =~ $safe_name ]] || fail "$key contains unsafe characters"
 done
 
+commit_pattern='^[0-9a-f]{40}$'
+[[ "${cfg[EXPECTED_REPOSITORY_SHA]}" == UNVERIFIED || "${cfg[EXPECTED_REPOSITORY_SHA]}" =~ $commit_pattern ]] \
+  || fail "EXPECTED_REPOSITORY_SHA must be UNVERIFIED or a 40-character Git SHA"
+
 image_pattern='^[^[:space:]]+@sha256:[0-9a-f]{64}$'
 for key in EXPECTED_API_IMAGE EXPECTED_FRONTEND_IMAGE; do
   [[ "${cfg[$key]}" == UNVERIFIED || "${cfg[$key]}" =~ $image_pattern ]] || fail "$key must be UNVERIFIED or an immutable sha256 digest"
@@ -143,11 +148,11 @@ fi
 
 [[ "${cfg[VERIFICATION_STATE]}" == READY_FOR_READ_ONLY_VERIFICATION ]] \
   || fail "host-read-only mode requires VERIFICATION_STATE=READY_FOR_READ_ONLY_VERIFICATION"
-for key in EXPECTED_HOSTNAME EXPECTED_BACKEND_COMPOSE_SHA256 EXPECTED_FRONTEND_COMPOSE_SHA256 EXPECTED_CADDY_CONFIG_SHA256 EXPECTED_API_IMAGE EXPECTED_FRONTEND_IMAGE EXPECTED_PRIVATE_NETWORK EXPECTED_BACKEND_EDGE_NETWORK EXPECTED_FRONTEND_EDGE_NETWORK EXPECTED_WEB_HOST EXPECTED_API_HOST EXPECTED_WEB_UPSTREAM EXPECTED_API_UPSTREAM; do
+for key in EXPECTED_HOSTNAME EXPECTED_REPOSITORY_SHA EXPECTED_BACKEND_COMPOSE_SHA256 EXPECTED_FRONTEND_COMPOSE_SHA256 EXPECTED_CADDY_CONFIG_SHA256 EXPECTED_API_IMAGE EXPECTED_FRONTEND_IMAGE EXPECTED_PRIVATE_NETWORK EXPECTED_BACKEND_EDGE_NETWORK EXPECTED_FRONTEND_EDGE_NETWORK EXPECTED_WEB_HOST EXPECTED_API_HOST EXPECTED_WEB_UPSTREAM EXPECTED_API_UPSTREAM; do
   [[ "${cfg[$key]}" != UNVERIFIED ]] || fail "$key must be populated for host-read-only verification"
 done
 
-for command_name in hostname sha256sum stat docker caddy ss grep awk; do
+for command_name in hostname sha256sum stat docker caddy ss grep awk git realpath python3; do
   command -v "$command_name" >/dev/null 2>&1 || fail "required read-only command is unavailable: $command_name"
 done
 
@@ -155,6 +160,16 @@ done
 for key in BACKEND_COMPOSE_PATH FRONTEND_COMPOSE_PATH LEGACY_BACKEND_COMPOSE_PATH CADDY_CONFIG_PATH BACKEND_ENV_PATH FRONTEND_ENV_PATH; do
   [[ -f "${cfg[$key]}" && -r "${cfg[$key]}" ]] || fail "$key is not a readable file"
 done
+
+repository_real="$(realpath -e "${cfg[REPOSITORY_ROOT]}")"
+for key in BACKEND_COMPOSE_PATH FRONTEND_COMPOSE_PATH LEGACY_BACKEND_COMPOSE_PATH; do
+  candidate_real="$(realpath -e "${cfg[$key]}")"
+  [[ "$candidate_real" == "$repository_real/"* ]] || fail "$key resolves outside the approved repository root"
+done
+
+actual_repository_sha="$(git -C "$repository_real" rev-parse HEAD)"
+[[ "$actual_repository_sha" == "${cfg[EXPECTED_REPOSITORY_SHA]}" ]] || fail "repository SHA does not match the approved candidate"
+[[ -z "$(git -C "$repository_real" status --porcelain --untracked-files=normal)" ]] || fail "repository worktree is not clean"
 
 actual_hostname="$(hostname -f 2>/dev/null || hostname)"
 [[ "$actual_hostname" == "${cfg[EXPECTED_HOSTNAME]}" ]] || fail "hostname does not match the approved inventory"
@@ -169,11 +184,14 @@ verify_hash "${cfg[BACKEND_COMPOSE_PATH]}" "${cfg[EXPECTED_BACKEND_COMPOSE_SHA25
 verify_hash "${cfg[FRONTEND_COMPOSE_PATH]}" "${cfg[EXPECTED_FRONTEND_COMPOSE_SHA256]}" FRONTEND_COMPOSE
 verify_hash "${cfg[CADDY_CONFIG_PATH]}" "${cfg[EXPECTED_CADDY_CONFIG_SHA256]}" CADDY_CONFIG
 
-for key in BACKEND_ENV_PATH FRONTEND_ENV_PATH; do
-  mode_bits="$(stat -c '%a' "${cfg[$key]}")"
+assert_not_world_accessible() {
+  local path="$1" label="$2" mode_bits world_digit
+  mode_bits="$(stat -c '%a' "$path")"
   world_digit="${mode_bits: -1}"
-  [[ "$world_digit" == 0 ]] || fail "$key must not be world-accessible"
-done
+  [[ "$world_digit" == 0 ]] || fail "$label must not be world-accessible"
+}
+assert_not_world_accessible "${cfg[BACKEND_ENV_PATH]}" BACKEND_ENV_PATH
+assert_not_world_accessible "${cfg[FRONTEND_ENV_PATH]}" FRONTEND_ENV_PATH
 
 backend_images="$(docker compose --profile migration --env-file "${cfg[BACKEND_ENV_PATH]}" -f "${cfg[BACKEND_COMPOSE_PATH]}" config --images)"
 docker compose --profile migration --env-file "${cfg[BACKEND_ENV_PATH]}" -f "${cfg[BACKEND_COMPOSE_PATH]}" config --quiet
@@ -181,6 +199,20 @@ frontend_images="$(docker compose --env-file "${cfg[FRONTEND_ENV_PATH]}" -f "${c
 docker compose --env-file "${cfg[FRONTEND_ENV_PATH]}" -f "${cfg[FRONTEND_COMPOSE_PATH]}" config --quiet
 grep -Fxq "${cfg[EXPECTED_API_IMAGE]}" <<<"$backend_images" || fail "approved API image digest is not rendered by backend Compose"
 grep -Fxq "${cfg[EXPECTED_FRONTEND_IMAGE]}" <<<"$frontend_images" || fail "approved frontend image digest is not rendered by frontend Compose"
+
+secret_count=0
+while IFS= read -r secret_path; do
+  [[ -n "$secret_path" ]] || continue
+  ((secret_count += 1))
+  [[ "$secret_path" == /* ]] || fail "rendered secret path is not absolute"
+  secret_real="$(realpath -e "$secret_path")"
+  [[ -f "$secret_real" && -r "$secret_real" ]] || fail "rendered secret path is not a readable file"
+  assert_not_world_accessible "$secret_real" "SECRET_PATH_$secret_count"
+done < <(
+  docker compose --profile migration --env-file "${cfg[BACKEND_ENV_PATH]}" -f "${cfg[BACKEND_COMPOSE_PATH]}" config --format json \
+    | python3 -c 'import json,sys; document=json.load(sys.stdin); [print(item.get("file")) for item in (document.get("secrets") or {}).values() if isinstance(item,dict) and item.get("file")]'
+)
+((secret_count > 0)) || fail "rendered backend Compose contains no file-backed secret paths"
 
 private_internal="$(docker network inspect --format '{{.Internal}}' "${cfg[EXPECTED_PRIVATE_NETWORK]}")"
 [[ "$private_internal" == true ]] || fail "approved private network is missing or not internal"
@@ -205,7 +237,9 @@ while IFS= read -r local_address; do
 done < <(ss -H -lnt | awk '{print $4}')
 
 printf 'EXPECTED_HOSTNAME=%s\n' "${cfg[EXPECTED_HOSTNAME]}"
+printf 'EXPECTED_REPOSITORY_SHA=%s\n' "${cfg[EXPECTED_REPOSITORY_SHA]}"
 printf 'CANONICAL_BACKEND_COMPOSE=%s\n' "${cfg[BACKEND_COMPOSE_PATH]}"
 printf 'LEGACY_BACKEND_COMPOSE_INVENTORY=%s\n' "${cfg[LEGACY_BACKEND_COMPOSE_PATH]}"
+printf 'FILE_BACKED_SECRET_PATHS_VERIFIED=%s\n' "$secret_count"
 printf 'RUNTIME_PATHS_VERIFIED=YES\n'
 printf 'LIVE_SERVER_CHANGED=NO\n'
