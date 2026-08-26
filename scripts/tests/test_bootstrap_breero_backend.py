@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 import sys
 import tempfile
@@ -132,6 +133,67 @@ class FileSafetyTests(unittest.TestCase):
             self.assertTrue(actions)
             bootstrap.apply_actions(root, actions)
             self.assertEqual(bootstrap.plan_actions(root), [])
+
+    def test_apply_tracks_test_boundaries_and_preserves_odoo_module(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            integrations = root / "apps" / "api" / "app" / "integrations"
+            integrations.mkdir(parents=True)
+            (root / "apps" / "api" / "app" / "__init__.py").write_text("", encoding="utf-8")
+            (integrations / "__init__.py").write_text("", encoding="utf-8")
+            (integrations / "odoo.py").write_text(
+                "class OdooAdapter: pass\nclass OdooDeliveryError(Exception): pass\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(
+                ["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "fixture"],
+                cwd=root,
+                check=True,
+            )
+
+            bootstrap.apply_actions(root, bootstrap.plan_actions(root))
+            status = subprocess.run(
+                ["git", "status", "--short", "--untracked-files=all"],
+                cwd=root,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+            for directory in bootstrap.TEST_DIRS:
+                marker = directory / "README.md"
+                self.assertTrue((root / marker).is_file())
+                self.assertIn(str(marker), status)
+            self.assertFalse((integrations / "odoo" / "__init__.py").exists())
+
+            previous_path = list(sys.path)
+            previous_cwd = Path.cwd()
+            try:
+                os.chdir(root / "apps" / "api")
+                sys.path.insert(0, str(root / "apps" / "api"))
+                from app.integrations.odoo import OdooAdapter, OdooDeliveryError
+
+                self.assertIsNotNone(OdooAdapter)
+                self.assertTrue(issubclass(OdooDeliveryError, Exception))
+            finally:
+                os.chdir(previous_cwd)
+                sys.path[:] = previous_path
+                for name in tuple(sys.modules):
+                    if name == "app" or name.startswith("app."):
+                        sys.modules.pop(name, None)
+
+            self.assertEqual(bootstrap.plan_actions(root), [])
+
+    def test_plan_fails_closed_for_any_same_name_module_and_package(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            conflicting = bootstrap.PACKAGE_DIRS[0]
+            module = (root / conflicting).with_suffix(".py")
+            module.parent.mkdir(parents=True)
+            module.write_text("VALUE = 1\n", encoding="utf-8")
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "shadow"):
+                bootstrap.plan_actions(root)
 
 
 class RepositoryScopeTests(unittest.TestCase):

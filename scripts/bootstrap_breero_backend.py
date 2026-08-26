@@ -61,7 +61,8 @@ PACKAGE_DIRS: tuple[Path, ...] = (
     APP_ROOT / "domains" / "capabilities",
     APP_ROOT / "domains" / "integrations",
     APP_ROOT / "integrations" / "codestra",
-    APP_ROOT / "integrations" / "odoo",
+    # Keep this name distinct from the deployed integrations/odoo.py module.
+    APP_ROOT / "integrations" / "odoo_extensions",
     APP_ROOT / "integrations" / "klyrow",
     APP_ROOT / "integrations" / "telnexa",
     APP_ROOT / "integrations" / "n8n",
@@ -81,6 +82,8 @@ TEST_DIRS: tuple[Path, ...] = (
 PACKAGE_MARKERS: tuple[Path, ...] = tuple(
     directory / "__init__.py" for directory in PACKAGE_DIRS
 )
+
+TEST_MARKERS: tuple[Path, ...] = tuple(directory / "README.md" for directory in TEST_DIRS)
 
 README_FILES: dict[Path, str] = {
     APP_ROOT / "domains" / "README.md": """# BREERO backend domains
@@ -145,6 +148,12 @@ PACKAGE_MARKER_CONTENT = (
     "Behavior is added only in the owning reviewed implementation PR.\n"
     '"""\n'
 )
+
+TEST_MARKER_CONTENT = """# Tracked test boundary
+
+Tests for this boundary are added by its owning independently reviewed mission.
+The tracked marker keeps the intended suite visible across clean checkouts.
+"""
 
 
 @dataclass(frozen=True)
@@ -299,6 +308,15 @@ def plan_actions(root: Path) -> list[Action]:
 
     actions: list[Action] = []
 
+    for directory in PACKAGE_DIRS:
+        relative = safe_relative(root, directory)
+        sibling_module = (root / relative).with_suffix(".py")
+        if sibling_module.is_file():
+            raise BootstrapError(
+                "Refusing to shadow existing Python module with a package: "
+                f"{sibling_module.relative_to(root)}"
+            )
+
     for directory in (*PACKAGE_DIRS, *TEST_DIRS):
         relative = safe_relative(root, directory)
         if not (root / relative).exists():
@@ -308,6 +326,11 @@ def plan_actions(root: Path) -> list[Action]:
         relative = safe_relative(root, marker)
         if not (root / relative).exists():
             actions.append(Action("write", relative, "create Python package marker"))
+
+    for marker in TEST_MARKERS:
+        relative = safe_relative(root, marker)
+        if not (root / relative).exists():
+            actions.append(Action("write", relative, "create tracked test-boundary marker"))
 
     for path, content in README_FILES.items():
         relative = safe_relative(root, path)
@@ -347,12 +370,15 @@ def content_for_action(root: Path, action: Action) -> str:
         safe_relative(root, path): content for path, content in README_FILES.items()
     }
     package_markers = {safe_relative(root, path) for path in PACKAGE_MARKERS}
+    test_markers = {safe_relative(root, path) for path in TEST_MARKERS}
     branch_plan_path = safe_relative(
         root, Path("docs") / "backend" / "BRANCH_PLAN.md"
     )
 
     if action.path in package_markers:
         return PACKAGE_MARKER_CONTENT
+    if action.path in test_markers:
+        return TEST_MARKER_CONTENT
     if action.path in readme_lookup:
         return readme_lookup[action.path]
     if action.path == branch_plan_path:
