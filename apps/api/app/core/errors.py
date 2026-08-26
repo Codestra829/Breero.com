@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from datetime import datetime
 from decimal import Decimal
 from http import HTTPStatus
 from typing import Any
@@ -11,6 +12,7 @@ from fastapi.exception_handlers import (
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
@@ -56,6 +58,29 @@ def _v2_response_headers(
     return response_headers
 
 
+def _encode_error_datetime(value: datetime) -> str:
+    """Preserve the caller-visible ISO-8601 representation consistently."""
+
+    return value.isoformat()
+
+
+def _encode_error_model(value: BaseModel) -> Any:
+    """Encode nested models from Python values so custom scalar encoders apply."""
+
+    return _encode_error_content(value.model_dump(mode="python"))
+
+
+def _encode_error_content(value: Any) -> Any:
+    return jsonable_encoder(
+        value,
+        custom_encoder={
+            Decimal: str,
+            datetime: _encode_error_datetime,
+            BaseModel: _encode_error_model,
+        },
+    )
+
+
 def _v2_error(
     request: Request,
     *,
@@ -68,14 +93,15 @@ def _v2_error(
     # Decimal values commonly represent money and measurements. Encode them as
     # strings so structured error feedback remains exact across JSON and
     # JavaScript clients instead of silently rounding through IEEE-754 floats.
-    content = jsonable_encoder(
+    # Nested Pydantic models are first dumped in Python mode so their datetime
+    # and Decimal values use the same lossless encoders as direct field values.
+    content = _encode_error_content(
         {
             "code": code,
             "message": message,
             "correlation_id": _correlation_id(request),
             "fields": dict(fields) if fields is not None else None,
-        },
-        custom_encoder={Decimal: str},
+        }
     )
     return JSONResponse(
         status_code=status_code,
