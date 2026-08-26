@@ -98,7 +98,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -Eq '^USER[[:space:]]+breero$' apps/api/Dockerfile
-          grep -Eq '^USER[[:space:]]+(nextjs|1001)$' deploy/frontend/Dockerfile
+          grep -Eq '^USER[[:space:]]+(breero|nextjs|1001)$' deploy/frontend/Dockerfile
 
       - name: Record non-deployment status
         shell: bash
