@@ -2,17 +2,33 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import type { PublicCapabilities } from "@breero/types";
+import { intakeServices } from "@/content/services";
 
 type FormKind = "service" | "contact" | "provider";
 type Service = { id: string; slug: string; name: string; is_active?: boolean };
 type AddressValidation = { serviceable: boolean; formatted_address: string };
+const fallbackServices: Service[] = intakeServices.map((service) => ({
+  id: `catalog-${service.slug}`,
+  ...service,
+  is_active: true,
+}));
+
+function cleanServices(items: Service[]) {
+  const unique = new Map<string, Service>();
+  for (const item of items) {
+    if (item.is_active !== false && item.slug && item.name && !unique.has(item.slug)) {
+      unique.set(item.slug, item);
+    }
+  }
+  return [...unique.values()];
+}
 
 function value(data: FormData, key: string) {
   return String(data.get(key) ?? "").trim();
 }
 
 export function PublicIntakeForm({ kind }: { kind: FormKind }) {
-  const [services, setServices] = useState<Service[]>([]);
+  const [services, setServices] = useState<Service[]>(kind === "service" ? fallbackServices : []);
   const [catalogError, setCatalogError] = useState(false);
   const [capabilities, setCapabilities] = useState<PublicCapabilities | null>(null);
   const [state, setState] = useState<"idle" | "sending" | "accepted" | "unserviceable" | "error">("idle");
@@ -34,7 +50,11 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
         if (!response.ok) throw new Error("catalog unavailable");
         return response.json() as Promise<Service[]>;
       })
-      .then((items) => setServices(items.filter((item) => item.is_active !== false)))
+      .then((items) => {
+        const cleaned = cleanServices(items);
+        if (cleaned.length) setServices(cleaned);
+        else setCatalogError(true);
+      })
       .catch((error: unknown) => {
         if ((error as { name?: string }).name !== "AbortError") setCatalogError(true);
       });
@@ -171,8 +191,8 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
       <label>Phone<input name="phone" type="tel" required={kind !== "contact"} autoComplete="tel" /></label>
       {kind === "service" && (
         <>
-          <label>Service<select name="service_slug" required disabled={!services.length}>{services.length ? services.map((service) => <option key={service.id} value={service.slug}>{service.name}</option>) : <option>Loading live services…</option>}</select></label>
-          {catalogError && <p role="alert">Live services are unavailable right now. Please try again shortly.</p>}
+          <label>Service<select name="service_slug" required defaultValue=""><option value="" disabled>Select a service</option>{services.map((service) => <option key={service.slug} value={service.slug}>{service.name}</option>)}</select></label>
+          {catalogError && <p className="mk-intake__notice" role="status">We could not refresh the live catalog, so the standard service list is shown. You can still send your request.</p>}
           <label>Street address<input name="address_line1" required autoComplete="street-address" /></label>
           <label>City<input name="city" required autoComplete="address-level2" /></label>
           <label>State or district<select name="state" required autoComplete="address-level1"><option value="">Select state</option>{["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
@@ -192,7 +212,7 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
       {kind === "provider" && (
         <>
           <label>Website <span>(optional)</span><input name="business_website" type="url" /></label>
-          <label>Primary service<select name="service_category">{["plumbing","electrical","handyman","heating","cooling","appliance-repair","cleaning","locksmith","painting","carpentry","moving-help","home-maintenance"].map((slug) => <option key={slug} value={slug}>{slug.replaceAll("-", " ")}</option>)}</select></label>
+          <label>Primary service<select name="service_category" required defaultValue=""><option value="" disabled>Select a service</option>{intakeServices.map((service) => <option key={service.slug} value={service.slug}>{service.name}</option>)}</select></label>
           <label>City<input name="city" required autoComplete="address-level2" /></label>
           <label>State or district<select name="state" required autoComplete="address-level1"><option value="">Select state</option>{["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
           <label>ZIP code<input name="postal_code" required pattern="[0-9]{5}(-[0-9]{4})?" autoComplete="postal-code" /></label>

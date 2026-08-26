@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { marketingServices } from "@/content/services";
+import { intakeServices, marketingServices } from "@/content/services";
 import { FAQ } from "./FAQ";
 import { Hero } from "./Hero";
 import { PublicIntakeForm } from "./PublicIntakeForm";
@@ -17,6 +17,13 @@ describe("marketing system", () => {
   it("links service cards to public service pages", () => {
     render(<ServiceCard service={marketingServices[0]} />);
     expect(screen.getByRole("link")).toHaveAttribute("href", "/services/plumbing");
+  });
+
+  it("keeps intake service slugs unique and includes the expanded catalog", () => {
+    expect(new Set(intakeServices.map((service) => service.slug)).size).toBe(intakeServices.length);
+    expect(intakeServices.map((service) => service.slug)).toEqual(expect.arrayContaining([
+      "roofing", "flooring", "pest-control", "lawn-landscaping", "garage-door",
+    ]));
   });
 
   it("renders accessible FAQ controls", () => {
@@ -50,6 +57,18 @@ describe("marketing system", () => {
     expect(screen.getByLabelText("Preferred local time (request only)")).toBeEnabled();
     expect(screen.queryByLabelText("Appointment date")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Appointment time")).not.toBeInTheDocument();
+  });
+
+  it("keeps the standard service catalog available when live catalog refresh fails", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("capabilities")
+      ? Promise.resolve(new Response(JSON.stringify({ request_intake: true }), { status: 200 }))
+      : Promise.reject(new Error("catalog unavailable"))));
+
+    render(<PublicIntakeForm kind="service" />);
+
+    await waitFor(() => expect(screen.getByText(/standard service list is shown/i)).toBeInTheDocument());
+    expect(screen.getByRole("option", { name: "Roofing" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send request" })).toBeEnabled();
   });
 
 });
