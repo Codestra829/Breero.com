@@ -22,7 +22,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" \
+          # Disable rename detection so both the deleted source and added
+          # destination are classified across trust-boundary moves.
+          git diff --no-renames --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" \
             | scripts/ci/classify-quality-scope.sh \
             | tee -a "$GITHUB_OUTPUT"
 

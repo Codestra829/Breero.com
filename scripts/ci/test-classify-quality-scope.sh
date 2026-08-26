@@ -20,4 +20,32 @@ assert_scope backend-and-frontend $'backend=true\nfrontend=true\nbootstrap=false
 assert_scope workflow-only $'backend=false\nfrontend=false\nbootstrap=false' .github/workflows/quality.yml
 assert_scope documentation-only $'backend=false\nfrontend=false\nbootstrap=false' docs/runbook.md
 
+test_cross_boundary_rename() {
+  local fixture base head actual expected
+  fixture="$(mktemp -d)"
+  trap 'rm -rf "$fixture"' RETURN
+
+  git -C "$fixture" init -q
+  git -C "$fixture" config user.name quality-scope-test
+  git -C "$fixture" config user.email quality-scope-test@example.invalid
+  mkdir -p "$fixture/apps/api" "$fixture/docs"
+  printf 'runtime\n' >"$fixture/apps/api/module.py"
+  git -C "$fixture" add apps/api/module.py
+  git -C "$fixture" commit -qm baseline
+  base="$(git -C "$fixture" rev-parse HEAD)"
+
+  git -C "$fixture" mv apps/api/module.py docs/module.py
+  git -C "$fixture" commit -qm cross-boundary-rename
+  head="$(git -C "$fixture" rev-parse HEAD)"
+
+  actual="$(git -C "$fixture" diff --no-renames --name-only "$base" "$head" | "$classifier")"
+  expected=$'backend=true\nfrontend=true\nbootstrap=false'
+  [[ "$actual" == "$expected" ]] || {
+    printf 'scenario cross-boundary-rename failed\nexpected:\n%s\nactual:\n%s\n' "$expected" "$actual" >&2
+    exit 1
+  }
+}
+
+test_cross_boundary_rename
+
 echo 'QUALITY_SCOPE_SCENARIOS=PASS'
