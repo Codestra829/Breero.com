@@ -175,8 +175,8 @@ for key in BACKEND_ENV_PATH FRONTEND_ENV_PATH; do
   [[ "$world_digit" == 0 ]] || fail "$key must not be world-accessible"
 done
 
-backend_images="$(docker compose --env-file "${cfg[BACKEND_ENV_PATH]}" -f "${cfg[BACKEND_COMPOSE_PATH]}" config --images)"
-docker compose --env-file "${cfg[BACKEND_ENV_PATH]}" -f "${cfg[BACKEND_COMPOSE_PATH]}" config --quiet
+backend_images="$(docker compose --profile migration --env-file "${cfg[BACKEND_ENV_PATH]}" -f "${cfg[BACKEND_COMPOSE_PATH]}" config --images)"
+docker compose --profile migration --env-file "${cfg[BACKEND_ENV_PATH]}" -f "${cfg[BACKEND_COMPOSE_PATH]}" config --quiet
 frontend_images="$(docker compose --env-file "${cfg[FRONTEND_ENV_PATH]}" -f "${cfg[FRONTEND_COMPOSE_PATH]}" config --images)"
 docker compose --env-file "${cfg[FRONTEND_ENV_PATH]}" -f "${cfg[FRONTEND_COMPOSE_PATH]}" config --quiet
 grep -Fxq "${cfg[EXPECTED_API_IMAGE]}" <<<"$backend_images" || fail "approved API image digest is not rendered by backend Compose"
