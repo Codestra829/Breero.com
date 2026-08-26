@@ -1710,4 +1710,4 @@ System
 30 Ops/Admin UI
 ```
 
-The important change is philosophical as much as structural: **BREERO should no longer be an API with business logic embedded in routers. It should** 
+The important change is philosophical as much as structural: **BREERO should no longer be an API with business logic embedded in routers. It should**
