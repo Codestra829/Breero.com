@@ -117,7 +117,7 @@ for key in "${absolute_path_keys[@]}"; do
   [[ ! "$value" =~ (^|/)\.\.(/|$) ]] || fail "$key must not contain parent traversal"
 done
 
-safe_name='^[A-Za-z0-9._:-]+$'
+safe_name='^[A-Za-z0-9][A-Za-z0-9._:-]*$'
 for key in EXPECTED_HOSTNAME EXPECTED_PRIVATE_NETWORK EXPECTED_BACKEND_EDGE_NETWORK EXPECTED_FRONTEND_EDGE_NETWORK EXPECTED_WEB_HOST EXPECTED_API_HOST EXPECTED_WEB_UPSTREAM EXPECTED_API_UPSTREAM; do
   [[ "${cfg[$key]}" == UNVERIFIED || "${cfg[$key]}" =~ $safe_name ]] || fail "$key contains unsafe characters"
 done
@@ -152,7 +152,7 @@ for key in EXPECTED_HOSTNAME EXPECTED_REPOSITORY_SHA EXPECTED_BACKEND_COMPOSE_SH
   [[ "${cfg[$key]}" != UNVERIFIED ]] || fail "$key must be populated for host-read-only verification"
 done
 
-for command_name in hostname sha256sum stat docker caddy ss grep awk git realpath python3; do
+for command_name in hostname sha256sum stat docker caddy ss awk git realpath python3; do
   command -v "$command_name" >/dev/null 2>&1 || fail "required read-only command is unavailable: $command_name"
 done
 
@@ -169,7 +169,8 @@ done
 
 actual_repository_sha="$(git -C "$repository_real" rev-parse HEAD)"
 [[ "$actual_repository_sha" == "${cfg[EXPECTED_REPOSITORY_SHA]}" ]] || fail "repository SHA does not match the approved candidate"
-[[ -z "$(git -C "$repository_real" status --porcelain --untracked-files=normal)" ]] || fail "repository worktree is not clean"
+[[ -z "$(GIT_OPTIONAL_LOCKS=0 git -C "$repository_real" status --porcelain --untracked-files=normal)" ]] \
+  || fail "repository worktree is not clean"
 
 actual_hostname="$(hostname -f 2>/dev/null || hostname)"
 [[ "$actual_hostname" == "${cfg[EXPECTED_HOSTNAME]}" ]] || fail "hostname does not match the approved inventory"
@@ -185,46 +186,66 @@ verify_hash "${cfg[FRONTEND_COMPOSE_PATH]}" "${cfg[EXPECTED_FRONTEND_COMPOSE_SHA
 verify_hash "${cfg[CADDY_CONFIG_PATH]}" "${cfg[EXPECTED_CADDY_CONFIG_SHA256]}" CADDY_CONFIG
 
 assert_not_world_accessible() {
-  local path="$1" label="$2" mode_bits world_digit
+  local path="$1" label="$2" mode_bits
   mode_bits="$(stat -c '%a' "$path")"
-  world_digit="${mode_bits: -1}"
-  [[ "$world_digit" == 0 ]] || fail "$label must not be world-accessible"
+  (( (8#$mode_bits & 7) == 0 )) || fail "$label must not be world-accessible"
 }
 assert_not_world_accessible "${cfg[BACKEND_ENV_PATH]}" BACKEND_ENV_PATH
 assert_not_world_accessible "${cfg[FRONTEND_ENV_PATH]}" FRONTEND_ENV_PATH
 
-backend_images="$(docker compose --profile migration --env-file "${cfg[BACKEND_ENV_PATH]}" -f "${cfg[BACKEND_COMPOSE_PATH]}" config --images)"
-docker compose --profile migration --env-file "${cfg[BACKEND_ENV_PATH]}" -f "${cfg[BACKEND_COMPOSE_PATH]}" config --quiet
-frontend_images="$(docker compose --env-file "${cfg[FRONTEND_ENV_PATH]}" -f "${cfg[FRONTEND_COMPOSE_PATH]}" config --images)"
-docker compose --env-file "${cfg[FRONTEND_ENV_PATH]}" -f "${cfg[FRONTEND_COMPOSE_PATH]}" config --quiet
-grep -Fxq "${cfg[EXPECTED_API_IMAGE]}" <<<"$backend_images" || fail "approved API image digest is not rendered by backend Compose"
-grep -Fxq "${cfg[EXPECTED_FRONTEND_IMAGE]}" <<<"$frontend_images" || fail "approved frontend image digest is not rendered by frontend Compose"
+if ! backend_json="$(
+  docker compose --profile migration --env-file "${cfg[BACKEND_ENV_PATH]}" \
+    -f "${cfg[BACKEND_COMPOSE_PATH]}" config --format json
+)"; then
+  fail "backend migration-profile Compose rendering failed"
+fi
+if ! frontend_json="$(
+  docker compose --env-file "${cfg[FRONTEND_ENV_PATH]}" \
+    -f "${cfg[FRONTEND_COMPOSE_PATH]}" config --format json
+)"; then
+  fail "frontend Compose rendering failed"
+fi
 
-secret_count=0
-while IFS= read -r secret_path; do
-  [[ -n "$secret_path" ]] || continue
-  ((secret_count += 1))
-  [[ "$secret_path" == /* ]] || fail "rendered secret path is not absolute"
-  secret_real="$(realpath -e "$secret_path")"
-  [[ -f "$secret_real" && -r "$secret_real" ]] || fail "rendered secret path is not a readable file"
-  assert_not_world_accessible "$secret_real" "SECRET_PATH_$secret_count"
-done < <(
-  docker compose --profile migration --env-file "${cfg[BACKEND_ENV_PATH]}" -f "${cfg[BACKEND_COMPOSE_PATH]}" config --format json \
-    | python3 -c 'import json,sys; document=json.load(sys.stdin); [print(item.get("file")) for item in (document.get("secrets") or {}).values() if isinstance(item,dict) and item.get("file")]'
-)
-((secret_count > 0)) || fail "rendered backend Compose contains no file-backed secret paths"
+# `caddy validate` provisions modules and may have side effects. `caddy adapt`
+# only parses/adapts the Caddyfile and is the permitted read-only evidence step.
+if ! adapted_caddy="$(caddy adapt --adapter caddyfile --config "${cfg[CADDY_CONFIG_PATH]}" 2>/dev/null)"; then
+  fail "Caddy configuration adaptation failed"
+fi
 
-private_internal="$(docker network inspect --format '{{.Internal}}' "${cfg[EXPECTED_PRIVATE_NETWORK]}")"
-[[ "$private_internal" == true ]] || fail "approved private network is missing or not internal"
-docker network inspect "${cfg[EXPECTED_BACKEND_EDGE_NETWORK]}" >/dev/null
-docker network inspect "${cfg[EXPECTED_FRONTEND_EDGE_NETWORK]}" >/dev/null
+if ! runtime_evidence="$(
+  printf '%s\0%s\0%s' "$backend_json" "$frontend_json" "$adapted_caddy" \
+    | python3 "$repository_real/scripts/deploy/validate-runtime-evidence.py" \
+        --expected-api-image="${cfg[EXPECTED_API_IMAGE]}" \
+        --expected-frontend-image="${cfg[EXPECTED_FRONTEND_IMAGE]}" \
+        --expected-private-network="${cfg[EXPECTED_PRIVATE_NETWORK]}" \
+        --expected-backend-edge-network="${cfg[EXPECTED_BACKEND_EDGE_NETWORK]}" \
+        --expected-frontend-edge-network="${cfg[EXPECTED_FRONTEND_EDGE_NETWORK]}" \
+        --expected-web-host="${cfg[EXPECTED_WEB_HOST]}" \
+        --expected-api-host="${cfg[EXPECTED_API_HOST]}" \
+        --expected-web-upstream="${cfg[EXPECTED_WEB_UPSTREAM]}" \
+        --expected-api-upstream="${cfg[EXPECTED_API_UPSTREAM]}"
+)"; then
+  fail "rendered Compose/Caddy evidence did not validate"
+fi
+printf '%s\n' "$runtime_evidence"
 
-caddy validate --config "${cfg[CADDY_CONFIG_PATH]}" >/dev/null
-adapted_caddy="$(caddy adapt --config "${cfg[CADDY_CONFIG_PATH]}" 2>/dev/null)"
-for key in EXPECTED_WEB_HOST EXPECTED_API_HOST EXPECTED_WEB_UPSTREAM EXPECTED_API_UPSTREAM; do
-  grep -Fq "${cfg[$key]}" <<<"$adapted_caddy" || fail "$key was not found in the adapted Caddy configuration"
-done
+if ! private_internal="$(
+  docker network inspect --format '{{.Internal}}' "${cfg[EXPECTED_PRIVATE_NETWORK]}" 2>/dev/null
+)"; then
+  fail "approved private network cannot be inspected"
+fi
+[[ "$private_internal" == true ]] || fail "approved private network is not internal"
+docker network inspect "${cfg[EXPECTED_BACKEND_EDGE_NETWORK]}" >/dev/null 2>&1 \
+  || fail "approved backend edge network cannot be inspected"
+docker network inspect "${cfg[EXPECTED_FRONTEND_EDGE_NETWORK]}" >/dev/null 2>&1 \
+  || fail "approved frontend edge network cannot be inspected"
 
+if ! listener_table="$(ss -H -lnt)"; then
+  fail "protected-port listener enumeration failed"
+fi
+if ! listener_addresses="$(awk '{print $4}' <<<"$listener_table")"; then
+  fail "protected-port listener parsing failed"
+fi
 while IFS= read -r local_address; do
   [[ -n "$local_address" ]] || continue
   case "$local_address" in
@@ -234,12 +255,11 @@ while IFS= read -r local_address; do
   case "$port" in
     3000|8000|5432|6379) fail "public or non-loopback listener detected on protected port $port" ;;
   esac
-done < <(ss -H -lnt | awk '{print $4}')
+done <<<"$listener_addresses"
 
 printf 'EXPECTED_HOSTNAME=%s\n' "${cfg[EXPECTED_HOSTNAME]}"
 printf 'EXPECTED_REPOSITORY_SHA=%s\n' "${cfg[EXPECTED_REPOSITORY_SHA]}"
 printf 'CANONICAL_BACKEND_COMPOSE=%s\n' "${cfg[BACKEND_COMPOSE_PATH]}"
 printf 'LEGACY_BACKEND_COMPOSE_INVENTORY=%s\n' "${cfg[LEGACY_BACKEND_COMPOSE_PATH]}"
-printf 'FILE_BACKED_SECRET_PATHS_VERIFIED=%s\n' "$secret_count"
 printf 'RUNTIME_PATHS_VERIFIED=YES\n'
 printf 'LIVE_SERVER_CHANGED=NO\n'
