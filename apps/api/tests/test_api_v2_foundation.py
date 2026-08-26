@@ -135,9 +135,10 @@ def test_v2_http_exceptions_preserve_required_headers() -> None:
     assert response.headers["x-correlation-id"] == correlation_id
 
 
-def test_v2_domain_error_fields_are_json_encoded() -> None:
+def test_v2_domain_error_fields_are_json_encoded_losslessly() -> None:
     resource_id = uuid.uuid4()
     observed_at = datetime(2026, 8, 26, 12, 30, tzinfo=UTC)
+    amount = Decimal("9007199254740993.000000000000000001")
     context = ErrorContext(resource_id=resource_id, observed_at=observed_at)
 
     async def structured_failure() -> None:
@@ -147,7 +148,7 @@ def test_v2_domain_error_fields_are_json_encoded() -> None:
             409,
             fields={
                 "resource_id": resource_id,
-                "amount": Decimal("12.50"),
+                "amount": amount,
                 "observed_at": observed_at,
                 "context": context,
             },
@@ -169,7 +170,7 @@ def test_v2_domain_error_fields_are_json_encoded() -> None:
     assert body["correlation_id"] == "structured-domain-error"
     assert body["fields"] == {
         "resource_id": str(resource_id),
-        "amount": 12.5,
+        "amount": str(amount),
         "observed_at": observed_at.isoformat(),
         "context": {
             "resource_id": str(resource_id),
