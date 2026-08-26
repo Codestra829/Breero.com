@@ -12,7 +12,11 @@ from app.api.internal_odoo import router as internal_odoo_router
 from app.api.v1.router import api_router as api_v1_router
 from app.api.v2.router import api_router as api_v2_router
 from app.config import settings
-from app.core.errors import install_error_handlers
+from app.core.errors import (
+    install_error_handlers,
+    is_v2_request,
+    v2_unexpected_error_response,
+)
 from app.db.session import engine
 
 EXPECTED_SCHEMA_REVISION = "017_provider_credentials"
@@ -55,7 +59,9 @@ async def request_context(request: Request, call_next):
             method=request.method,
             path=request.url.path,
         )
-        raise
+        if not is_v2_request(request):
+            raise
+        response = v2_unexpected_error_response(request)
     duration_ms = round((time.perf_counter() - started) * 1000, 2)
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Correlation-ID"] = correlation_id
