@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """Safely bootstrap missing BREERO backend production-foundation boundaries.
 
-This script is intentionally conservative:
+The tool is intentionally conservative:
 
-- It operates only on a BREERO repository checkout.
-- It is dry-run by default.
-- It never overwrites an existing file unless the existing content is identical.
-- It does not create database migrations automatically.
-- It does not enable production capabilities, providers, payments, payouts,
-  external sends, matching, messaging, or automation.
-- It extends the existing ``apps/api`` backend instead of rebuilding it.
+- dry-run is the default;
+- it operates only in a verified BREERO repository checkout;
+- apply mode is allowed only from a clean worktree;
+- apply mode is forbidden on protected/release branches;
+- existing non-identical files are never overwritten;
+- database migrations and production/runtime activation are never performed;
+- generated boundaries extend ``apps/api`` instead of rebuilding it.
 
-Typical use:
+Typical use::
 
     python scripts/bootstrap_breero_backend.py
     python scripts/bootstrap_breero_backend.py --apply
 
-The expected implementation branch is:
+The expected implementation branch is::
 
     bootstrap/backend-production-foundation
 """
@@ -28,9 +28,12 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Sequence
 
 EXPECTED_BRANCH = "bootstrap/backend-production-foundation"
+PROTECTED_BRANCHES = frozenset({"main", "master", "production", "prod"})
+PROTECTED_PREFIXES = ("release/", "production/", "prod/")
+
 BACKEND_ROOT = Path("apps/api")
 APP_ROOT = BACKEND_ROOT / "app"
 TEST_ROOT = BACKEND_ROOT / "tests"
@@ -135,6 +138,12 @@ main
 └── release/staging-recovery
 """
 
+PACKAGE_MARKER_CONTENT = (
+    '"""BREERO backend package boundary.\n\n'
+    "Behavior is added only in the owning reviewed implementation PR.\n"
+    '"""\n'
+)
+
 
 @dataclass(frozen=True)
 class Action:
@@ -144,24 +153,29 @@ class Action:
 
 
 class BootstrapError(RuntimeError):
-    """Raised when the repository is not safe to bootstrap."""
+    """Raised when the repository or requested operation is not safe."""
 
 
-def run_git(*args: str) -> str:
+def run_git(root: Path, *args: str) -> str:
+    """Run one read-only Git command in *root* and return stripped stdout."""
+
     result = subprocess.run(
         ["git", *args],
+        cwd=root,
         check=False,
         capture_output=True,
         text=True,
     )
     if result.returncode != 0:
         raise BootstrapError(
-            f"git {' '.join(args)} failed: {result.stderr.strip()}"
+            f"git {' '.join(args)} failed: {result.stderr.strip() or 'unknown error'}"
         )
     return result.stdout.strip()
 
 
 def find_repo_root(start: Path) -> Path:
+    """Return the nearest parent containing a Git worktree marker."""
+
     current = start.resolve()
     for candidate in (current, *current.parents):
         if (candidate / ".git").exists():
@@ -170,6 +184,8 @@ def find_repo_root(start: Path) -> Path:
 
 
 def verify_breero_scope(root: Path) -> None:
+    """Fail unless *root* has the expected BREERO monorepo identity."""
+
     required = (
         root / "apps",
         root / "apps" / "api",
@@ -183,7 +199,7 @@ def verify_breero_scope(root: Path) -> None:
         )
 
     readme = (root / "README.md").read_text(encoding="utf-8", errors="ignore")
-    remote = run_git("remote", "get-url", "origin")
+    remote = run_git(root, "remote", "get-url", "origin")
     identity_text = f"{readme}\n{remote}".lower()
 
     if "breero" not in identity_text:
@@ -196,16 +212,57 @@ def verify_breero_scope(root: Path) -> None:
         raise BootstrapError("Cross-project repository detected; refusing to modify it.")
 
 
-def current_branch() -> str:
-    return run_git("branch", "--show-current")
+def current_branch(root: Path) -> str:
+    """Return the current branch name; reject detached HEAD."""
+
+    branch = run_git(root, "branch", "--show-current")
+    if not branch:
+        raise BootstrapError("Detached HEAD is not a safe bootstrap execution context.")
+    return branch
 
 
-def ensure_clean_or_report() -> list[str]:
-    status = run_git("status", "--porcelain")
+def worktree_changes(root: Path) -> list[str]:
+    status = run_git(root, "status", "--porcelain")
     return [line for line in status.splitlines() if line.strip()]
 
 
+def is_protected_branch(branch: str) -> bool:
+    return branch in PROTECTED_BRANCHES or branch.startswith(PROTECTED_PREFIXES)
+
+
+def validate_execution_context(
+    *,
+    branch: str,
+    dirty: Sequence[str],
+    apply: bool,
+    allow_other_branch: bool,
+) -> None:
+    """Enforce branch and worktree safety before planning or applying changes."""
+
+    if not branch:
+        raise BootstrapError("Detached HEAD is not a safe bootstrap execution context.")
+
+    if branch != EXPECTED_BRANCH and not allow_other_branch:
+        raise BootstrapError(
+            f"Expected branch {EXPECTED_BRANCH!r}, found {branch!r}. "
+            "Switch branches or use --allow-other-branch for an intentional dry-run."
+        )
+
+    if apply and is_protected_branch(branch):
+        raise BootstrapError(
+            f"Apply mode is forbidden on protected/release branch {branch!r}."
+        )
+
+    if apply and dirty:
+        raise BootstrapError(
+            "Apply mode requires a clean worktree; commit, stash, or remove unrelated "
+            "changes before retrying."
+        )
+
+
 def safe_relative(root: Path, path: Path) -> Path:
+    """Resolve *path* beneath *root* and reject path traversal."""
+
     resolved = (root / path).resolve()
     try:
         return resolved.relative_to(root.resolve())
@@ -214,36 +271,40 @@ def safe_relative(root: Path, path: Path) -> Path:
 
 
 def plan_actions(root: Path) -> list[Action]:
+    """Return only missing, safe scaffold actions."""
+
     actions: list[Action] = []
 
     for directory in (*PACKAGE_DIRS, *TEST_DIRS):
         relative = safe_relative(root, directory)
-        target = root / relative
-        if not target.exists():
+        if not (root / relative).exists():
             actions.append(Action("mkdir", relative, "create directory"))
 
     for marker in PACKAGE_MARKERS:
         relative = safe_relative(root, marker)
-        target = root / relative
-        if not target.exists():
+        if not (root / relative).exists():
             actions.append(Action("write", relative, "create Python package marker"))
 
     for path, content in README_FILES.items():
         relative = safe_relative(root, path)
-        target = root / relative
-        if not target.exists():
+        if not (root / relative).exists():
             actions.append(Action("write", relative, f"create {len(content)}-byte README"))
 
     plan_file = Path("docs") / "backend" / "BRANCH_PLAN.md"
     relative = safe_relative(root, plan_file)
-    target = root / relative
-    if not target.exists():
+    if not (root / relative).exists():
         actions.append(Action("write", relative, "record backend branch sequence"))
 
     return actions
 
 
 def write_if_missing(path: Path, content: str) -> bool:
+    """Write *content* only when *path* is absent.
+
+    Identical existing content is idempotent. Any different existing content is a
+    hard error rather than an overwrite.
+    """
+
     if path.exists():
         existing = path.read_text(encoding="utf-8", errors="strict")
         if existing == content:
@@ -257,12 +318,26 @@ def write_if_missing(path: Path, content: str) -> bool:
     return True
 
 
-def apply_actions(root: Path, actions: Iterable[Action]) -> None:
+def content_for_action(root: Path, action: Action) -> str:
     readme_lookup = {
         safe_relative(root, path): content for path, content in README_FILES.items()
     }
     package_markers = {safe_relative(root, path) for path in PACKAGE_MARKERS}
-    branch_plan_path = Path("docs") / "backend" / "BRANCH_PLAN.md"
+    branch_plan_path = safe_relative(
+        root, Path("docs") / "backend" / "BRANCH_PLAN.md"
+    )
+
+    if action.path in package_markers:
+        return PACKAGE_MARKER_CONTENT
+    if action.path in readme_lookup:
+        return readme_lookup[action.path]
+    if action.path == branch_plan_path:
+        return f"# {BRANCH_PLAN}"
+    raise BootstrapError(f"No content template for {action.path}")
+
+
+def apply_actions(root: Path, actions: Iterable[Action]) -> None:
+    """Apply a reviewed action plan without overwriting existing files."""
 
     for action in actions:
         target = root / action.path
@@ -275,20 +350,7 @@ def apply_actions(root: Path, actions: Iterable[Action]) -> None:
         if action.kind != "write":
             raise BootstrapError(f"Unknown action kind: {action.kind}")
 
-        if action.path in package_markers:
-            content = (
-                '"""BREERO backend package boundary.\n\n'
-                "Behavior is added only in the owning reviewed implementation PR.\n"
-                '"""\n'
-            )
-        elif action.path in readme_lookup:
-            content = readme_lookup[action.path]
-        elif action.path == branch_plan_path:
-            content = f"# {BRANCH_PLAN}"
-        else:
-            raise BootstrapError(f"No content template for {action.path}")
-
-        if write_if_missing(target, content):
+        if write_if_missing(target, content_for_action(root, action)):
             print(f"CREATE_FILE {action.path}")
 
 
@@ -303,7 +365,7 @@ def print_plan(actions: Iterable[Action]) -> None:
         print(f"{action.kind.upper()} {action.path} :: {action.detail}")
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Safely scaffold missing BREERO backend production-foundation "
@@ -319,69 +381,57 @@ def parse_args() -> argparse.Namespace:
         "--allow-other-branch",
         action="store_true",
         help=(
-            "Allow execution outside bootstrap/backend-production-foundation. "
-            "This does not relax repository-scope checks."
+            "Allow an intentional run outside bootstrap/backend-production-foundation. "
+            "This never permits apply mode on protected/release branches and never "
+            "permits dirty apply mode."
         ),
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
 
     try:
         root = find_repo_root(Path.cwd())
-        # git helpers must run inside the repository root.
-        original_cwd = Path.cwd()
-        try:
-            import os
+        verify_breero_scope(root)
+        branch = current_branch(root)
+        dirty = worktree_changes(root)
 
-            os.chdir(root)
-            verify_breero_scope(root)
-            branch = current_branch()
-            dirty = ensure_clean_or_report()
+        print(f"REPOSITORY_ROOT={root}")
+        print(f"BRANCH={branch}")
+        print("SCOPE=BREERO_BACKEND_ONLY")
+        print("PRODUCTION_ACTIVATION=DISABLED")
+        print("EXTERNAL_SENDS=DISABLED")
+        print("PAYMENTS=DISABLED")
+        print("PAYOUTS=DISABLED")
+        print(f"WORKTREE_DIRTY={'YES' if dirty else 'NO'}")
+        for line in dirty:
+            print(f"WORKTREE_CHANGE={line}")
 
-            print(f"REPOSITORY_ROOT={root}")
-            print(f"BRANCH={branch}")
-            print("SCOPE=BREERO_BACKEND_ONLY")
-            print("PRODUCTION_ACTIVATION=DISABLED")
-            print("EXTERNAL_SENDS=DISABLED")
-            print("PAYMENTS=DISABLED")
-            print("PAYOUTS=DISABLED")
+        validate_execution_context(
+            branch=branch,
+            dirty=dirty,
+            apply=args.apply,
+            allow_other_branch=args.allow_other_branch,
+        )
 
-            if branch != EXPECTED_BRANCH and not args.allow_other_branch:
-                raise BootstrapError(
-                    f"Expected branch {EXPECTED_BRANCH!r}, found {branch!r}. "
-                    "Switch branches or use --allow-other-branch deliberately."
-                )
+        actions = plan_actions(root)
+        print_plan(actions)
 
-            if dirty:
-                print("WORKTREE_DIRTY=YES")
-                for line in dirty:
-                    print(f"WORKTREE_CHANGE={line}")
-            else:
-                print("WORKTREE_DIRTY=NO")
-
-            actions = plan_actions(root)
-            print_plan(actions)
-
-            if not args.apply:
-                print("MODE=DRY_RUN")
-                print("NEXT_SAFE_ACTION=rerun with --apply after reviewing the plan")
-                return 0
-
-            apply_actions(root, actions)
-            print("MODE=APPLY")
-            print("BOOTSTRAP_APPLIED=YES")
-            print(
-                "NEXT_SAFE_ACTION=review git diff, run backend CI/tests, "
-                "then open or update the draft PR"
-            )
+        if not args.apply:
+            print("MODE=DRY_RUN")
+            print("NEXT_SAFE_ACTION=review the plan on a clean feature branch")
             return 0
-        finally:
-            import os
 
-            os.chdir(original_cwd)
+        apply_actions(root, actions)
+        print("MODE=APPLY")
+        print("BOOTSTRAP_APPLIED=YES")
+        print(
+            "NEXT_SAFE_ACTION=review git diff, run backend CI/tests, "
+            "then update the draft PR"
+        )
+        return 0
     except BootstrapError as exc:
         print(f"BOOTSTRAP_ERROR={exc}", file=sys.stderr)
         return 2
