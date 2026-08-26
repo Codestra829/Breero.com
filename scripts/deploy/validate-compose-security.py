@@ -11,6 +11,28 @@ from typing import Any
 
 DIGEST_IMAGE = re.compile(r"^[^\s]+@sha256:[0-9a-f]{64}$")
 PINNED_ACTION = re.compile(r"^[0-9a-f]{40}$")
+PERMISSION_SCOPES = {
+    "actions",
+    "attestations",
+    "checks",
+    "contents",
+    "deployments",
+    "discussions",
+    "id-token",
+    "issues",
+    "models",
+    "packages",
+    "pages",
+    "pull-requests",
+    "security-events",
+    "statuses",
+}
+APP_SECRET_BINDINGS = {
+    "DATABASE_URL_FILE": "/run/secrets/breero_database_url",
+    "REDIS_URL_FILE": "/run/secrets/breero_redis_url",
+    "JWT_SECRET_FILE": "/run/secrets/breero_jwt_access_secret",
+    "JWT_REFRESH_SECRET_FILE": "/run/secrets/breero_jwt_refresh_secret",
+}
 
 
 class ValidationError(RuntimeError):
@@ -118,6 +140,12 @@ def validate_backend(document: dict[str, Any]) -> list[str]:
         assert_hardened_application(name, services[name])
         missing_secrets = sorted(required_app_secrets - secret_sources(services[name].get("secrets")))
         require(not missing_secrets, f"{name} is missing file-backed application secrets: {', '.join(missing_secrets)}")
+        environment = environment_map(services[name].get("environment"))
+        for variable, expected_path in APP_SECRET_BINDINGS.items():
+            require(
+                environment.get(variable) == expected_path,
+                f"{name} must bind {variable} to {expected_path}",
+            )
 
     require(bool(services["api"].get("healthcheck")), "api must define a healthcheck")
     require(
@@ -205,17 +233,75 @@ def validate_frontend(document: dict[str, Any]) -> None:
     )
 
 
+def leading_spaces(line: str) -> int:
+    prefix = line[: len(line) - len(line.lstrip(" \t"))]
+    require("\t" not in prefix, "Workflow indentation must not contain tabs")
+    return len(prefix)
+
+
+def validate_permissions(text: str) -> None:
+    lines = text.splitlines()
+    blocks: list[tuple[int, dict[str, str]]] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        stripped = line.lstrip(" \t")
+        if not re.match(r"^permissions\s*:", stripped):
+            index += 1
+            continue
+
+        indent = leading_spaces(line)
+        require(
+            re.fullmatch(r"permissions\s*:\s*(?:#.*)?", stripped) is not None,
+            "Workflow permissions must use an explicit block mapping",
+        )
+        entries: dict[str, str] = {}
+        child_indent: int | None = None
+        cursor = index + 1
+        while cursor < len(lines):
+            candidate = lines[cursor]
+            candidate_stripped = candidate.lstrip(" \t")
+            if not candidate_stripped or candidate_stripped.startswith("#"):
+                cursor += 1
+                continue
+            candidate_indent = leading_spaces(candidate)
+            if candidate_indent <= indent:
+                break
+            if child_indent is None:
+                child_indent = candidate_indent
+                require(child_indent == indent + 2, "Workflow permissions must use one explicit mapping level")
+            require(candidate_indent == child_indent, "Nested or ambiguous workflow permissions are forbidden")
+            match = re.fullmatch(
+                r"([a-z][a-z-]*):\s*(read|none)\s*(?:#.*)?",
+                candidate_stripped,
+            )
+            require(match is not None, "Every workflow permission must be explicitly read or none")
+            scope, access = match.groups()
+            require(scope in PERMISSION_SCOPES, f"Unknown workflow permission scope: {scope}")
+            require(scope not in entries, f"Duplicate workflow permission scope: {scope}")
+            require(not (scope == "id-token" and access != "none"), "id-token must remain none")
+            entries[scope] = access
+            cursor += 1
+
+        require(bool(entries), "Workflow permissions block must not be empty")
+        blocks.append((indent, entries))
+        index = cursor
+
+    top_level = [entries for indent, entries in blocks if indent == 0]
+    require(len(top_level) == 1, "Workflow must contain exactly one top-level permissions block")
+    require(top_level[0].get("contents") == "read", "Top-level contents permission must be read")
+    for _, entries in blocks:
+        require(all(access in {"read", "none"} for access in entries.values()), "Workflow permissions must be read-only")
+
+
 def validate_workflow(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     require("pull_request_target:" not in text, "Deployment preflight must not use pull_request_target")
-    require("contents: read" in text, "Deployment preflight must use read-only repository permissions")
     require("persist-credentials: false" in text, "Checkout credentials must not persist")
+    validate_permissions(text)
+
     forbidden = (
         "secrets.",
-        "id-token: write",
-        "contents: write",
-        "packages: write",
-        "deployments: write",
         "environment: production",
         "docker " + "login",
         "docker " + "push",
@@ -229,7 +315,7 @@ def validate_workflow(path: Path) -> None:
     for token in forbidden:
         require(token not in text, f"Deployment preflight contains forbidden live-action token: {token}")
 
-    references = re.findall(r"^\s*-\s+uses:\s+([^\s#]+)", text, flags=re.MULTILINE)
+    references = re.findall(r"^\s*(?:-\s+)?uses:\s+([^\s#]+)", text, flags=re.MULTILINE)
     require(bool(references), "Deployment preflight must declare reviewed actions explicitly")
     for reference in references:
         if reference.startswith("./"):
