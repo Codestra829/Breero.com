@@ -7,7 +7,7 @@ from pydantic import AnyHttpUrl, BaseModel, EmailStr, Field, field_validator, mo
 
 from app.domains.common.us import US_STATES_AND_DC
 
-from .consent import CHANNEL_CONSENT_FLAGS, CONSENT_DISCLOSURES_BY_POLICY
+from .consent import CONSENT_DISCLOSURES_BY_POLICY, CONSENT_FLAGS
 
 SERVICE_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 LEGACY_CONSENT_FLAGS = ("marketing_consent", "sms_consent", "email_consent")
@@ -56,10 +56,10 @@ class TrackingFields(BaseModel):
                 "Legacy aggregate consent flags are not accepted; use the channel-specific flags"
             )
 
-        if any(getattr(self, flag) for flag in CHANNEL_CONSENT_FLAGS):
+        if any(getattr(self, flag) for flag in CONSENT_FLAGS):
             policy_version = (self.policy_version or "").strip()
             if not policy_version:
-                raise ValueError("A policy version is required for channel consent")
+                raise ValueError("A policy version is required for consent")
             if policy_version not in CONSENT_DISCLOSURES_BY_POLICY:
                 raise ValueError("The supplied consent policy version is not supported")
         return self
