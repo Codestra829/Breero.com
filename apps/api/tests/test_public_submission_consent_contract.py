@@ -2,8 +2,8 @@ import pytest
 from pydantic import ValidationError
 
 from app.domains.public_submissions.consent import (
-    DEFAULT_CONSENT_POLICY_VERSION,
     canonical_disclosures,
+    DEFAULT_CONSENT_POLICY_VERSION,
 )
 from app.domains.public_submissions.schemas import ContactCreate
 
