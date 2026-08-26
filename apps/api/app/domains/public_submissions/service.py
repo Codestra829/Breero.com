@@ -12,10 +12,13 @@ from app.core.errors import DomainError
 from app.domains.catalog.models import Service
 from app.domains.common.outbox import EventStatus, IntegrationEvent
 
+from .consent import (
+    CHANNEL_CONSENT_FLAGS,
+    DEFAULT_CONSENT_POLICY_VERSION,
+    canonical_disclosures,
+)
 from .models import DownstreamStatus, PublicSubmission, SubmissionType
 from .schemas import SubmissionAccepted, TrackingFields
-
-DEFAULT_POLICY_VERSION = "2026-08-13-request-only"
 
 
 class PublicSubmissionService:
@@ -128,10 +131,20 @@ class PublicSubmissionService:
 
         now = datetime.now(UTC)
         payload = dict(client_payload)
+        policy_version = payload.get("policy_version") or DEFAULT_CONSENT_POLICY_VERSION
+        consent_flags = {
+            flag: bool(payload.get(flag)) for flag in CHANNEL_CONSENT_FLAGS
+        }
+        client_disclosures = dict(payload.get("consent_disclosures") or {})
         payload["client_consent_timestamp"] = payload.get("consent_timestamp")
+        payload["client_consent_disclosures"] = client_disclosures
         payload["consent_timestamp"] = now.isoformat()
         payload["consent_source"] = payload.get("consent_source") or "breero_public_api"
-        payload["policy_version"] = payload.get("policy_version") or DEFAULT_POLICY_VERSION
+        payload["policy_version"] = policy_version
+        payload["consent_disclosures"] = canonical_disclosures(
+            consent_flags,
+            policy_version,
+        )
         payload["consent_recorded_by"] = "breero_api"
 
         if submission_type == SubmissionType.SERVICE_REQUEST:
