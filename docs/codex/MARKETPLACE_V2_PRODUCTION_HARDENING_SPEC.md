@@ -768,7 +768,7 @@ POST /api/v2/ops/integration-inbox/{id}/replay
 Requires:
 
 ```
-integration.retry
+integration.replay
 ```
 
 and:
@@ -1586,7 +1586,7 @@ Retention:
 policy-defined
 
 Manual replay:
-integration.retry permission
+integration.replay permission; `integration.retry` does not grant durable-inbox replay
 ```
 
 ---

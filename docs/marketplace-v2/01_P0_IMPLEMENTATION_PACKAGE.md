@@ -211,6 +211,8 @@ terminal failure
 
 manual replay endpoint
 
+manual durable-inbox replay requires `integration.replay`; `integration.retry` is insufficient
+
 provider translator registry
 ```
 

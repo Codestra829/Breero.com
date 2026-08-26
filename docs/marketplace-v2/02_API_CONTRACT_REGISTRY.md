@@ -54,4 +54,22 @@ Example:
 
 No endpoint is complete without a registry entry.
 
+## Durable-inbox replay operation
+
+| Field            | Value                                                        |
+| ---------------- | ------------------------------------------------------------ |
+| Domain           | Integration operations                                       |
+| Method           | POST                                                         |
+| Path             | `/api/v2/ops/integration-inbox/{id}/replay`                  |
+| Operation ID     | `replayIntegrationInboxEvent`                                |
+| Principal        | Authorized operations principal                              |
+| Permission       | `integration.replay`                                         |
+| Record predicate | Tenant-scoped terminal/replayable inbox record               |
+| Capability       | Integration enabled and replay permitted                     |
+| Idempotency      | Required                                                     |
+| Audit            | Reason, actor, source inbox ID, correlation ID, and result   |
+| State            | Original history immutable; create a new token-guarded claim |
+
+`integration.retry` does not satisfy this operation.
+
 ---

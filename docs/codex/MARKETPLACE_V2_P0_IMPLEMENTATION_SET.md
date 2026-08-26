@@ -247,6 +247,7 @@ actor_key
 operation
 idempotency_key
 request_hash
+acquisition_token
 status
 resource_type
 resource_id
@@ -285,20 +286,21 @@ Required algorithm:
    - set `status=IN_PROGRESS`;
    - clear prior `resource_type`, `resource_id`, `response_code`, and `response_json`;
    - set fresh `expires_at`, `created_at`/generation metadata as designed, and `updated_at`;
+   - replace `acquisition_token` with a fresh cryptographically random value that cannot equal any prior generation;
    - return a non-replay acquisition.
 5. For a non-expired record:
    - same key + different hash → `409 IDEMPOTENCY_KEY_REUSED`;
    - same hash + `COMPLETED` → replay the recorded status/body;
    - same hash + active `IN_PROGRESS` → conflict/retry response;
    - retryable terminal state follows the documented retry policy.
-6. When no row exists, insert `IN_PROGRESS` with a fresh expiry.
+6. When no row exists, insert `IN_PROGRESS` with a fresh expiry and a fresh cryptographically random `acquisition_token`.
 7. Handle concurrent insert races through the unique constraint and a savepoint/re-read; do not call `session.rollback()` in a way that discards unrelated command state.
 
 Expiration must have real behavior. It is not acceptable to keep replaying, conflicting, or reporting in-progress forever merely because a cleanup job has not deleted the row.
 
 ## 9.2 Idempotency completion
 
-Completion records the authoritative resource and response in the same transaction as the command result. Failed transactions must not leave a false completed response.
+Completion, failure, and any replay-state mutation require the exact current `acquisition_token` and expected state in their update predicate. Completion records the authoritative resource and response in the same transaction as the command result. A stale owner whose record was recycled must update zero rows, must not complete or fail the newer generation, and must not commit a second business effect. Failed transactions must not leave a false completed response.
 
 Mandatory tests:
 
@@ -308,6 +310,8 @@ same key + different body conflicts
 active in-progress conflicts
 expired completed row is safely recycled
 expired in-progress row is safely recycled according to policy
+every first acquisition and recycle receives a distinct acquisition token
+stale expired owner cannot complete or fail a recycled record
 concurrent first insert has one owner
 insert race does not roll back unrelated staged work
 response replay preserves status/body
@@ -462,7 +466,7 @@ provider request
 → normal authorized domain command
 ```
 
-Persist at least provider, external event ID, event type, schema version, raw/body hash, authentication metadata, payload or approved redacted form, status, attempts, lease ownership, correlation, timestamps, and error code.
+Persist at least provider, external event ID, event type, schema version, raw/body hash, authentication metadata, payload or approved redacted form, status, attempts, stable `claimed_by` worker identity, per-claim `claim_token`, lease expiry, correlation, timestamps, and error code.
 
 Unique identity:
 
@@ -472,9 +476,11 @@ Unique identity:
 
 Handle duplicate insert races through the database constraint. A duplicate event must have at most one business effect.
 
+Every inbox claim and expired-lease reclaim receives a fresh cryptographically random `claim_token`, even when the same stable worker identity reclaims it. Heartbeat, success, retryable failure, and terminal finalization updates require the exact current token and expected processing state. A stale translator must update zero rows and cannot finalize, reschedule, or extend a newer claim.
+
 Do not perform synchronous third-party business mutation in the webhook route.
 
-Mandatory tests include invalid signature, stale timestamp, replay, duplicate race, worker crash/lease recovery, out-of-order event, unknown event type, wrong tenant, translator rejection, and manual replay authorization.
+Manual durable-inbox replay requires `integration.replay`; `integration.retry` never grants inbound-event replay. Mandatory tests include invalid signature, stale timestamp, replay, duplicate race, worker crash/lease recovery, out-of-order event, unknown event type, wrong tenant, translator rejection, retry-only replay denial, and manual replay authorization.
 
 # 14. Provider adapters
 
@@ -633,12 +639,16 @@ test_disabled_capability_rejects_command
 test_idempotency_same_key_same_body_replays
 test_idempotency_same_key_different_body_conflicts
 test_idempotency_expired_record_recycles
+test_idempotency_acquisition_uses_fresh_generation_token
+test_stale_idempotency_owner_cannot_complete_recycled_record
 test_concurrent_command_has_one_authoritative_effect
 test_outbox_worker_reclaims_stale_processing_lease
 test_outbox_reclaim_uses_fresh_claim_token
 test_stale_outbox_attempt_cannot_finalize_new_claim
 test_disabled_integration_parks_event
 test_inbox_duplicate_event_has_one_business_effect
+test_inbox_reclaim_uses_fresh_claim_token
+test_stale_inbox_translator_cannot_finalize_new_claim
 test_webhook_invalid_signature_denied
 test_webhook_timestamp_replay_denied
 test_upload_wrong_content_type_rejected

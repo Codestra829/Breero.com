@@ -216,6 +216,8 @@ Required:
 - Same key plus different request returns 409.
 - Same key while processing returns a safe conflict/retry response.
 - Database uniqueness makes acquisition safe under concurrency.
+- Every first acquisition and expired-record recycle receives a fresh generation token; completion, failure, and replay-state mutation require that exact current token.
+- A stale owner cannot complete or fail a recycled idempotency generation.
 - Important aggregates use optimistic concurrency versions.
 - Commands requiring serialization use row locks where appropriate.
 - Zero rows updated for an expected version returns `409 CONCURRENT_MODIFICATION`.
@@ -225,6 +227,7 @@ Required real PostgreSQL tests:
 
 ```text
 simultaneous acquisition → one owner
+recycled acquisition → fresh token and stale owner cannot finalize
 same request replay → same result
 different payload → conflict
 worker/process failure → safe recovery
@@ -260,6 +263,9 @@ Required inbox behavior:
 - Raw payload hash and safe metadata retention.
 - Asynchronous inbox workers rather than inline third-party business processing.
 - Recoverable leases, retryable/terminal states, and manual recovery.
+- Every inbox claim uses a fresh per-claim token separate from stable worker identity; heartbeat and every finalization require the exact current token.
+- A stale translator cannot finalize a newer inbox claim.
+- Manual durable-inbox replay requires `integration.replay`; `integration.retry` is insufficient.
 
 Required tests:
 
@@ -382,14 +388,23 @@ Only when all are PASS at mutually compatible exact heads:
 ```text
 P0_API_FOUNDATION
 P0_AUTHENTICATION
+P0_IDENTITY
 P0_AUTHORIZATION
 P0_CAPABILITIES
 P0_IDEMPOTENCY
+P0_CONCURRENCY
+P0_AUDIT
 P0_INTEGRATION_RELIABILITY
+P0_OUTBOX
+P0_INBOX
+P0_WEBHOOKS
 P0_STORAGE
+P0_NOTIFICATIONS
+P0_OPERATIONS
 P0_OBSERVABILITY
 P0_DATABASE
 P0_SECURITY
+P0_DEPLOYABILITY
 ```
 
 If any required gate is FAIL, BLOCKED, NOT_RUN, stale, or lacks evidence:

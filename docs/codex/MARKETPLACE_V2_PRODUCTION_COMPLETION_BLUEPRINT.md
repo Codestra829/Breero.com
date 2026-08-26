@@ -807,6 +807,7 @@ dispute.manage
 
 integration.read
 integration.retry
+integration.replay
 
 finance.refund
 finance.payout.approve
@@ -1554,7 +1555,7 @@ POST /api/v2/ops/integration-inbox/{id}/replay
 Requires:
 
 ```text
-integration.retry
+integration.replay
 
 ```
 

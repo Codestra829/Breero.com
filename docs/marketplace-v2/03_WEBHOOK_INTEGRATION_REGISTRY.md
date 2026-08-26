@@ -23,7 +23,7 @@ Template:
 | Event→command            | <br>  |
 | Retention                | <br>  |
 | Redaction                | <br>  |
-| Manual replay permission | <br>  |
+| Manual replay permission | `integration.replay`; `integration.retry` is insufficient <br>  |
 
 Initial providers:
 

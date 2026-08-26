@@ -111,6 +111,8 @@ integration.read
 integration.retry
 integration.replay
 
+`integration.retry` controls eligible outbound delivery retries only. Manual durable-inbox replay requires `integration.replay`; retry-only principals cannot replay inbound provider events.
+
 operations.exception.read
 operations.exception.manage
 
