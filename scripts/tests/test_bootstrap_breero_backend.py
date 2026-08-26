@@ -52,7 +52,7 @@ class ExecutionContextTests(unittest.TestCase):
                         allow_other_branch=True,
                     )
 
-    def test_other_branch_requires_explicit_override(self) -> None:
+    def test_other_branch_requires_explicit_override_for_dry_run(self) -> None:
         with self.assertRaisesRegex(bootstrap.BootstrapError, "Expected branch"):
             bootstrap.validate_execution_context(
                 branch="feature/example",
@@ -67,6 +67,33 @@ class ExecutionContextTests(unittest.TestCase):
             apply=False,
             allow_other_branch=True,
         )
+
+    def test_other_branch_apply_is_rejected_without_override(self) -> None:
+        with self.assertRaisesRegex(bootstrap.BootstrapError, "Apply mode requires branch"):
+            bootstrap.validate_execution_context(
+                branch="feature/example",
+                dirty=[],
+                apply=True,
+                allow_other_branch=False,
+            )
+
+    def test_branch_override_is_restricted_to_dry_run(self) -> None:
+        with self.assertRaisesRegex(bootstrap.BootstrapError, "dry-run mode"):
+            bootstrap.validate_execution_context(
+                branch="feature/example",
+                dirty=[],
+                apply=True,
+                allow_other_branch=True,
+            )
+
+    def test_redundant_override_cannot_be_combined_with_apply(self) -> None:
+        with self.assertRaisesRegex(bootstrap.BootstrapError, "dry-run mode"):
+            bootstrap.validate_execution_context(
+                branch=bootstrap.EXPECTED_BRANCH,
+                dirty=[],
+                apply=True,
+                allow_other_branch=True,
+            )
 
     def test_detached_head_is_rejected(self) -> None:
         with self.assertRaisesRegex(bootstrap.BootstrapError, "Detached HEAD"):
@@ -118,15 +145,45 @@ class RepositoryScopeTests(unittest.TestCase):
         subprocess.run(["git", "remote", "add", "origin", remote], cwd=root, check=True)
         return root
 
-    def test_verified_breero_repository_is_accepted(self) -> None:
+    def test_verified_breero_https_origin_is_accepted(self) -> None:
         root = self._create_repo("https://github.com/appolon1908-hue/Breero.com.git")
         bootstrap.verify_breero_scope(root)
+
+    def test_verified_breero_ssh_origin_is_accepted(self) -> None:
+        root = self._create_repo("git@github.com:appolon1908-hue/Breero.com.git")
+        bootstrap.verify_breero_scope(root)
+
+    def test_readme_cannot_mask_an_unrelated_origin(self) -> None:
+        root = self._create_repo("https://github.com/example/unrelated-service.git")
+        with self.assertRaisesRegex(bootstrap.BootstrapError, "origin identity"):
+            bootstrap.verify_breero_scope(root)
 
     def test_cross_project_remote_is_rejected(self) -> None:
         cross_project = "https://github.com/example/" + "Money" + "bee-Backend.git"
         root = self._create_repo(cross_project)
-        with self.assertRaisesRegex(bootstrap.BootstrapError, "Cross-project"):
+        with self.assertRaisesRegex(bootstrap.BootstrapError, "origin identity"):
             bootstrap.verify_breero_scope(root)
+
+    def test_breero_origin_still_requires_breero_readme_identity(self) -> None:
+        root = self._create_repo(
+            "https://github.com/appolon1908-hue/Breero.com.git",
+            readme="# Unrelated application\n",
+        )
+        with self.assertRaisesRegex(bootstrap.BootstrapError, "README"):
+            bootstrap.verify_breero_scope(root)
+
+    def test_repository_name_parser_handles_supported_remote_forms(self) -> None:
+        remotes = (
+            "https://github.com/appolon1908-hue/Breero.com.git",
+            "ssh://git@github.com/appolon1908-hue/Breero.com.git",
+            "git@github.com:appolon1908-hue/Breero.com.git",
+        )
+        for remote in remotes:
+            with self.subTest(remote=remote):
+                self.assertEqual(
+                    bootstrap.repository_name_from_remote(remote),
+                    bootstrap.EXPECTED_REPOSITORY_NAME,
+                )
 
     def test_missing_monorepo_structure_is_rejected(self) -> None:
         temp = tempfile.TemporaryDirectory()
