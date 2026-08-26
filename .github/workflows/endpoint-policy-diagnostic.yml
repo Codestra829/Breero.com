@@ -1,0 +1,45 @@
+name: Endpoint policy OpenAPI diagnostic
+
+on:
+  push:
+    branches:
+      - diagnostic/endpoint-policy-openapi
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    env:
+      APP_ENV: test
+      DATABASE_URL: sqlite+aiosqlite:///./diagnostic.db
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e apps/api
+      - name: Print runtime and generated policy shapes
+        working-directory: apps/api
+        run: |
+          python - <<'PY'
+          from fastapi.routing import APIRoute
+          from app.api.policy_registry import get_endpoint_registry
+          from app.main import app
+
+          target = "/api/v1/public/capabilities"
+          print(f"CACHE_BEFORE={app.openapi_schema is not None}")
+          print(f"REGISTRY_DIGEST={get_endpoint_registry(app)['digest']}")
+          for route in app.routes:
+              if isinstance(route, APIRoute) and route.path == target:
+                  print(f"ROUTE_METHODS={sorted(route.methods or set())}")
+                  print(f"ROUTE_EXTRA={route.openapi_extra!r}")
+                  print(f"ROUTE_ID={id(route)}")
+          schema = app.openapi()
+          operation = schema["paths"][target]["get"]
+          print(f"CACHE_AFTER={app.openapi_schema is not None}")
+          print(f"OPERATION_KEYS={sorted(operation)}")
+          print(f"OPERATION_POLICY={operation.get('x-breero-policy')!r}")
+          PY
