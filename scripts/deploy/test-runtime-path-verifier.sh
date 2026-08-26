@@ -77,6 +77,11 @@ write_config "$mutable_image"
 sed -i 's#^EXPECTED_API_IMAGE=UNVERIFIED$#EXPECTED_API_IMAGE=ghcr.io/example/breero-api:latest#' "$mutable_image"
 expect_failure mutable-image "$verifier" --config "$mutable_image" --mode syntax
 
+option_like="$fixture/option-like.env"
+write_config "$option_like"
+sed -i 's/^EXPECTED_WEB_HOST=UNVERIFIED$/EXPECTED_WEB_HOST=--help/' "$option_like"
+expect_failure option-like-evidence "$verifier" --config "$option_like" --mode syntax
+
 unready="$fixture/unready.env"
 write_config "$unready"
 expect_failure unready-host-verification "$verifier" --config "$unready" --mode host-read-only
@@ -90,6 +95,7 @@ forbidden_tokens=(
   "docker compose p""ull"
   "docker compose r""un"
   "docker compose e""xec"
+  "caddy v""alidate"
   "caddy r""eload"
   "systemctl r""estart"
   "systemctl r""eload"
@@ -109,6 +115,211 @@ if grep -Eq '(^|[;&|[:space:]])(rm|mv|cp|touch|mkdir|chmod|chown)([;&|[:space:]]
   echo 'read-only verifier contains a filesystem mutation command' >&2
   exit 1
 fi
+
+# Build a fully synthetic host in a temporary directory. Only read-only verifier
+# operations run against it; Docker, Caddy, hostname and listener inspection are
+# mocked so no local or remote runtime can be changed by this test.
+mock_root="$fixture/mock-host"
+repo="$mock_root/repository"
+mock_bin="$mock_root/bin"
+secret_dir="$mock_root/secrets"
+mkdir -p \
+  "$repo/deploy/frontend" \
+  "$repo/deploy/production" \
+  "$repo/scripts/deploy" \
+  "$mock_root/etc/caddy" \
+  "$mock_root/etc/breero" \
+  "$mock_bin" \
+  "$secret_dir"
+
+printf 'backend-compose\n' >"$repo/docker-compose.production.yml"
+printf 'frontend-compose\n' >"$repo/deploy/frontend/docker-compose.frontend.yml"
+printf 'legacy-compose\n' >"$repo/deploy/production/docker-compose.backend.yml"
+cp "$root/scripts/deploy/validate-runtime-evidence.py" "$repo/scripts/deploy/validate-runtime-evidence.py"
+printf 'breero.com { reverse_proxy web:3000 }\napi.breero.com { reverse_proxy api:8000 }\n' \
+  >"$mock_root/etc/caddy/Caddyfile"
+printf 'APP_ENV=production\n' >"$mock_root/etc/breero/backend.env"
+printf 'NEXT_PUBLIC_API_BASE_URL=https://api.breero.com\n' >"$mock_root/etc/breero/frontend.env"
+chmod 600 "$mock_root/etc/breero/backend.env" "$mock_root/etc/breero/frontend.env"
+
+secret_names=(
+  breero_database_url breero_redis_url breero_jwt_access_secret
+  breero_jwt_refresh_secret breero_postgres_password breero_redis_acl
+)
+for secret_name in "${secret_names[@]}"; do
+  printf 'placeholder\n' >"$secret_dir/$secret_name"
+  chmod 600 "$secret_dir/$secret_name"
+done
+
+backend_json="$mock_root/backend.json"
+frontend_json="$mock_root/frontend.json"
+caddy_json="$mock_root/caddy.json"
+python3 - "$backend_json" "$frontend_json" "$caddy_json" "$secret_dir" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+backend_path, frontend_path, caddy_path, secret_dir = map(Path, sys.argv[1:])
+api_image = "ghcr.io/example/breero-api@sha256:" + "1" * 64
+web_image = "ghcr.io/example/breero-web@sha256:" + "2" * 64
+services = {
+    name: {"image": api_image, "networks": {"breero_private": None}}
+    for name in ("migrate", "worker", "scheduler", "postgres", "redis")
+}
+services["api"] = {
+    "image": api_image,
+    "networks": {"breero_private": None, "caddy_shared": None},
+}
+backend = {
+    "services": services,
+    "networks": {
+        "breero_private": {"name": "breero_private_runtime", "internal": True},
+        "caddy_shared": {"name": "breero_edge_runtime", "external": True},
+    },
+    "secrets": {
+        name: {"file": str(secret_dir / name)}
+        for name in (
+            "breero_database_url",
+            "breero_redis_url",
+            "breero_jwt_access_secret",
+            "breero_jwt_refresh_secret",
+            "breero_postgres_password",
+            "breero_redis_acl",
+        )
+    },
+}
+frontend = {
+    "services": {"web": {"image": web_image, "networks": {"frontend": None}}},
+    "networks": {"frontend": {"name": "breero_frontend_runtime", "external": True}},
+}
+caddy = {
+    "apps": {
+        "http": {
+            "servers": {
+                "srv0": {
+                    "routes": [
+                        {
+                            "match": [{"host": ["breero.com"]}],
+                            "handle": [
+                                {
+                                    "handler": "reverse_proxy",
+                                    "upstreams": [{"dial": "web:3000"}],
+                                }
+                            ],
+                        },
+                        {
+                            "match": [{"host": ["api.breero.com"]}],
+                            "handle": [
+                                {
+                                    "handler": "reverse_proxy",
+                                    "upstreams": [{"dial": "api:8000"}],
+                                }
+                            ],
+                        },
+                    ]
+                }
+            }
+        }
+    }
+}
+backend_path.write_text(json.dumps(backend), encoding="utf-8")
+frontend_path.write_text(json.dumps(frontend), encoding="utf-8")
+caddy_path.write_text(json.dumps(caddy), encoding="utf-8")
+PY
+
+git -C "$repo" init -q
+git -C "$repo" config user.name runtime-verifier-test
+git -C "$repo" config user.email runtime-verifier-test@example.invalid
+git -C "$repo" add .
+git -C "$repo" commit -qm fixture
+repo_sha="$(git -C "$repo" rev-parse HEAD)"
+
+cat >"$mock_bin/hostname" <<'EOF'
+#!/usr/bin/env bash
+printf 'breero-test-host\n'
+EOF
+cat >"$mock_bin/docker" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ ${1:-} == compose ]]; then
+  case " $* " in
+    *" docker-compose.frontend.yml "*) cat "$MOCK_FRONTEND_JSON" ;;
+    *) cat "$MOCK_BACKEND_JSON" ;;
+  esac
+  exit 0
+fi
+if [[ ${1:-} == network && ${2:-} == inspect ]]; then
+  if [[ " $* " == *" --format "* ]]; then
+    printf 'true\n'
+  fi
+  exit 0
+fi
+exit 2
+EOF
+cat >"$mock_bin/caddy" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ ${1:-} == adapt ]] || exit 2
+cat "$MOCK_CADDY_JSON"
+EOF
+cat >"$mock_bin/ss" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ ${MOCK_SS_FAIL:-0} == 1 ]]; then
+  exit 9
+fi
+printf 'LISTEN 0 128 127.0.0.1:22 0.0.0.0:*\n'
+EOF
+chmod +x "$mock_bin/hostname" "$mock_bin/docker" "$mock_bin/caddy" "$mock_bin/ss"
+
+host_config="$mock_root/host.env"
+cat >"$host_config" <<EOF
+VERIFICATION_STATE=READY_FOR_READ_ONLY_VERIFICATION
+LIVE_MUTATION_ALLOWED=false
+EXPECTED_HOSTNAME=breero-test-host
+EXPECTED_REPOSITORY_SHA=$repo_sha
+REPOSITORY_ROOT=$repo
+BACKEND_COMPOSE_PATH=$repo/docker-compose.production.yml
+FRONTEND_COMPOSE_PATH=$repo/deploy/frontend/docker-compose.frontend.yml
+LEGACY_BACKEND_COMPOSE_PATH=$repo/deploy/production/docker-compose.backend.yml
+CADDY_CONFIG_PATH=$mock_root/etc/caddy/Caddyfile
+BACKEND_ENV_PATH=$mock_root/etc/breero/backend.env
+FRONTEND_ENV_PATH=$mock_root/etc/breero/frontend.env
+EXPECTED_BACKEND_COMPOSE_SHA256=$(sha256sum "$repo/docker-compose.production.yml" | awk '{print $1}')
+EXPECTED_FRONTEND_COMPOSE_SHA256=$(sha256sum "$repo/deploy/frontend/docker-compose.frontend.yml" | awk '{print $1}')
+EXPECTED_CADDY_CONFIG_SHA256=$(sha256sum "$mock_root/etc/caddy/Caddyfile" | awk '{print $1}')
+EXPECTED_API_IMAGE=ghcr.io/example/breero-api@sha256:$(printf '1%.0s' {1..64})
+EXPECTED_FRONTEND_IMAGE=ghcr.io/example/breero-web@sha256:$(printf '2%.0s' {1..64})
+EXPECTED_PRIVATE_NETWORK=breero_private_runtime
+EXPECTED_BACKEND_EDGE_NETWORK=breero_edge_runtime
+EXPECTED_FRONTEND_EDGE_NETWORK=breero_frontend_runtime
+EXPECTED_WEB_HOST=breero.com
+EXPECTED_API_HOST=api.breero.com
+EXPECTED_WEB_UPSTREAM=web:3000
+EXPECTED_API_UPSTREAM=api:8000
+EOF
+
+host_output="$(
+  env \
+    PATH="$mock_bin:$PATH" \
+    MOCK_BACKEND_JSON="$backend_json" \
+    MOCK_FRONTEND_JSON="$frontend_json" \
+    MOCK_CADDY_JSON="$caddy_json" \
+    "$verifier" --config "$host_config" --mode host-read-only
+)"
+grep -Fxq 'COMPOSE_RUNTIME_BINDING=PASS' <<<"$host_output"
+grep -Fxq 'CADDY_HOST_UPSTREAM_BINDING=PASS' <<<"$host_output"
+grep -Fxq 'RUNTIME_PATHS_VERIFIED=YES' <<<"$host_output"
+grep -Fxq 'LIVE_SERVER_CHANGED=NO' <<<"$host_output"
+
+expect_failure ss-enumeration-failure \
+  env \
+    PATH="$mock_bin:$PATH" \
+    MOCK_BACKEND_JSON="$backend_json" \
+    MOCK_FRONTEND_JSON="$frontend_json" \
+    MOCK_CADDY_JSON="$caddy_json" \
+    MOCK_SS_FAIL=1 \
+    "$verifier" --config "$host_config" --mode host-read-only
 
 echo 'RUNTIME_PATH_VERIFIER_TESTS=PASS'
 echo 'LIVE_SERVER_CHANGED=NO'
