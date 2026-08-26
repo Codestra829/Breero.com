@@ -25,8 +25,11 @@ jobs:
         working-directory: apps/api
         run: |
           python - <<'PY'
+          import inspect
           from fastapi.routing import APIRoute
           from app.api.policy_registry import get_endpoint_registry
+          from app.api.v1.router import api_router as api_v1_router
+          from app.api.v2.router import api_router as api_v2_router
           from app.main import app
 
           target = "/api/v1/public/capabilities"
@@ -36,21 +39,40 @@ jobs:
           print("REGISTRY_TARGETS=" + repr([
               entry for entry in document["endpoints"] if "capabilities" in entry["path"]
           ]))
-          print(f"ROUTE_COUNT={len(app.routes)}")
-          for route in app.routes:
-              path = getattr(route, "path", "")
-              if "capabilities" not in path:
-                  continue
-              print(f"ROUTE_PATH={path!r}")
-              print(f"ROUTE_TYPE={type(route)!r}")
-              print(f"ROUTE_TYPE_MODULE={type(route).__module__}")
-              print(f"ROUTE_IS_API={isinstance(route, APIRoute)}")
-              print(f"ROUTE_METHODS={sorted(getattr(route, 'methods', set()) or set())}")
-              print(f"ROUTE_EXTRA={getattr(route, 'openapi_extra', None)!r}")
-              print(f"ROUTE_ID={id(route)}")
+          print(f"APP_ROUTE_COUNT={len(app.routes)}")
+          print("APP_ROUTES=" + repr([
+              (
+                  getattr(route, "path", None),
+                  type(route).__module__ + "." + type(route).__name__,
+                  sorted(getattr(route, "methods", set()) or set()),
+                  getattr(route, "include_in_schema", None),
+                  getattr(route, "openapi_extra", None),
+              )
+              for route in app.routes
+          ]))
+          print(f"V1_ROUTE_COUNT={len(api_v1_router.routes)}")
+          print("V1_ROUTES=" + repr([
+              (
+                  getattr(route, "path", None),
+                  type(route).__module__ + "." + type(route).__name__,
+                  sorted(getattr(route, "methods", set()) or set()),
+                  getattr(route, "include_in_schema", None),
+                  getattr(route, "openapi_extra", None),
+              )
+              for route in api_v1_router.routes
+          ]))
+          print(f"V2_ROUTE_COUNT={len(api_v2_router.routes)}")
+          print("OPENAPI_CALLABLE=" + repr(app.openapi))
+          print("OPENAPI_MODULE=" + app.openapi.__module__)
+          try:
+              print("OPENAPI_SOURCE=" + inspect.getsource(app.openapi))
+          except (OSError, TypeError):
+              print("OPENAPI_SOURCE=UNAVAILABLE")
           schema = app.openapi()
+          print("SCHEMA_PATHS=" + repr(sorted(schema.get("paths", {}))))
           operation = schema["paths"][target]["get"]
           print(f"CACHE_AFTER={app.openapi_schema is not None}")
           print(f"OPERATION_KEYS={sorted(operation)}")
           print(f"OPERATION_POLICY={operation.get('x-breero-policy')!r}")
+          print("API_ROUTE_CLASS=" + repr(APIRoute))
           PY
