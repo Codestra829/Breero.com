@@ -1,8 +1,12 @@
 import json
 import re
 import uuid
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -17,6 +21,24 @@ EXPECTED_CAPABILITIES = {
     "messaging": False,
     "reviews": False,
 }
+
+
+@contextmanager
+def _temporary_route(
+    path: str,
+    endpoint: Callable[..., Any],
+    *,
+    methods: list[str],
+) -> Iterator[None]:
+    existing_ids = {id(route) for route in app.router.routes}
+    app.add_api_route(path, endpoint, methods=methods, include_in_schema=False)
+    route = next(route for route in app.router.routes if id(route) not in existing_ids)
+    app.openapi_schema = None
+    try:
+        yield
+    finally:
+        app.router.routes.remove(route)
+        app.openapi_schema = None
 
 
 def test_v2_capabilities_reuse_the_v1_authority() -> None:
@@ -47,6 +69,75 @@ def test_v2_missing_routes_use_the_stable_error_contract() -> None:
     }
     assert response.headers["x-correlation-id"] == correlation_id
     assert response.headers["x-request-id"]
+
+
+def test_v2_method_errors_preserve_the_allow_header() -> None:
+    response = TestClient(app).post("/api/v2/capabilities")
+
+    assert response.status_code == 405
+    assert response.json()["code"] == "METHOD_NOT_ALLOWED"
+    assert "GET" in response.headers["allow"]
+    assert response.headers["x-request-id"]
+    assert response.headers["x-correlation-id"]
+
+
+def test_v2_http_exceptions_preserve_required_headers() -> None:
+    async def throttled() -> None:
+        raise HTTPException(
+            status_code=429,
+            detail="Slow down",
+            headers={"Retry-After": "30", "WWW-Authenticate": "Bearer"},
+        )
+
+    correlation_id = "v2-http-header-test"
+    with _temporary_route("/api/v2/_test/http-error", throttled, methods=["GET"]):
+        response = TestClient(app).get(
+            "/api/v2/_test/http-error",
+            headers={"X-Correlation-ID": correlation_id},
+        )
+
+    assert response.status_code == 429
+    assert response.json() == {
+        "code": "TOO_MANY_REQUESTS",
+        "message": "Slow down",
+        "correlation_id": correlation_id,
+        "fields": None,
+    }
+    assert response.headers["retry-after"] == "30"
+    assert response.headers["www-authenticate"] == "Bearer"
+    assert response.headers["x-correlation-id"] == correlation_id
+
+
+def test_v2_unhandled_exceptions_use_the_stable_error_contract() -> None:
+    async def unexpected_failure() -> None:
+        raise RuntimeError("sensitive implementation detail")
+
+    request_id = "v2-unhandled-request"
+    correlation_id = "v2-unhandled-correlation"
+    with _temporary_route(
+        "/api/v2/_test/unhandled",
+        unexpected_failure,
+        methods=["GET"],
+    ):
+        response = TestClient(app, raise_server_exceptions=False).get(
+            "/api/v2/_test/unhandled",
+            headers={
+                "X-Request-ID": request_id,
+                "X-Correlation-ID": correlation_id,
+            },
+        )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "code": "INTERNAL_SERVER_ERROR",
+        "message": "An unexpected error occurred.",
+        "correlation_id": correlation_id,
+        "fields": None,
+    }
+    assert "sensitive implementation detail" not in response.text
+    assert response.headers["x-request-id"] == request_id
+    assert response.headers["x-correlation-id"] == correlation_id
+    assert response.headers["x-content-type-options"] == "nosniff"
 
 
 def test_v1_missing_routes_keep_the_existing_fastapi_contract() -> None:
