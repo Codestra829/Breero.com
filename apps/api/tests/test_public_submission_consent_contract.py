@@ -1,6 +1,10 @@
 import pytest
 from pydantic import ValidationError
 
+from app.domains.public_submissions.consent import (
+    DEFAULT_CONSENT_POLICY_VERSION,
+    canonical_disclosures,
+)
 from app.domains.public_submissions.schemas import ContactCreate
 
 
@@ -15,50 +19,56 @@ BASE_CONTACT = {
 }
 
 
-def test_optional_channel_consent_requires_matching_disclosure_evidence() -> None:
-    with pytest.raises(ValidationError, match="transactional_sms"):
-        ContactCreate(
-            **BASE_CONTACT,
-            transactional_sms_consent=True,
-            policy_version="2026-08-13-request-only",
-        )
-
-
 def test_optional_channel_consent_requires_policy_version() -> None:
     with pytest.raises(ValidationError, match="policy version"):
         ContactCreate(
             **BASE_CONTACT,
             marketing_email_consent=True,
-            consent_disclosures={
-                "marketing_email": "I separately agree to receive BREERO marketing email."
-            },
         )
 
 
-def test_channel_specific_consent_accepts_complete_versioned_evidence() -> None:
+def test_optional_channel_consent_rejects_unknown_policy_version() -> None:
+    with pytest.raises(ValidationError, match="not supported"):
+        ContactCreate(
+            **BASE_CONTACT,
+            transactional_sms_consent=True,
+            policy_version="unknown-policy",
+        )
+
+
+def test_channel_specific_consent_accepts_supported_version_without_trusting_client_text() -> None:
     contact = ContactCreate(
         **BASE_CONTACT,
         transactional_email_consent=True,
         transactional_sms_consent=True,
         marketing_email_consent=True,
         marketing_sms_consent=True,
-        policy_version="2026-08-13-request-only",
+        policy_version=DEFAULT_CONSENT_POLICY_VERSION,
         consent_disclosures={
-            "transactional_email": "I agree to receive request and service-status email.",
-            "transactional_sms": "I agree to receive request and service-status text messages.",
-            "marketing_email": "I separately agree to receive marketing email.",
-            "marketing_sms": "I separately agree to receive marketing text messages.",
+            "transactional_sms": "Client-supplied evidence retained separately by the service."
         },
     )
 
-    assert contact.transactional_sms_consent is True
-    assert contact.marketing_sms_consent is True
-    assert set(contact.consent_disclosures) == {
+    disclosures = canonical_disclosures(
+        {
+            "transactional_email_consent": contact.transactional_email_consent,
+            "transactional_sms_consent": contact.transactional_sms_consent,
+            "marketing_email_consent": contact.marketing_email_consent,
+            "marketing_sms_consent": contact.marketing_sms_consent,
+        },
+        contact.policy_version or "",
+    )
+
+    assert set(disclosures) == {
         "transactional_email",
         "transactional_sms",
         "marketing_email",
         "marketing_sms",
     }
+    assert disclosures["transactional_sms"].startswith(
+        "I agree to receive recurring automated appointment"
+    )
+    assert disclosures["transactional_sms"] != contact.consent_disclosures["transactional_sms"]
 
 
 def test_legacy_aggregate_consent_flags_are_rejected() -> None:
@@ -73,3 +83,8 @@ def test_no_optional_channel_consent_does_not_require_disclosures() -> None:
     assert contact.consent_disclosures == {}
     assert contact.transactional_email_consent is False
     assert contact.transactional_sms_consent is False
+
+
+def test_canonical_disclosure_registry_rejects_unknown_versions() -> None:
+    with pytest.raises(ValueError, match="Unsupported consent policy"):
+        canonical_disclosures({}, "unknown-policy")
