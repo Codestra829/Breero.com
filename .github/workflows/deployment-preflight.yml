@@ -41,13 +41,18 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validate read-only verifier and quality classification
+      - name: Validate read-only verifier and security validators
         shell: bash
         run: |
           set -euo pipefail
           bash -n scripts/deploy/verify-runtime-paths.sh
           bash -n scripts/deploy/test-runtime-path-verifier.sh
+          python -m compileall -q \
+            scripts/deploy/validate-compose-security.py \
+            scripts/deploy/validate-runtime-evidence.py \
+            scripts/deploy/test-security-validators.py
           scripts/deploy/test-runtime-path-verifier.sh
+          python scripts/deploy/test-security-validators.py
           scripts/ci/test-classify-quality-scope.sh
 
       - name: Render candidate Compose configurations with non-secret fixtures
