@@ -28,16 +28,30 @@ class DomainError(Exception):
         super().__init__(message)
 
 
-def _is_v2(request: Request) -> bool:
+def is_v2_request(request: Request) -> bool:
     return request.url.path == "/api/v2" or request.url.path.startswith("/api/v2/")
 
 
+def _request_id(request: Request) -> str:
+    return getattr(request.state, "request_id", "unavailable")
+
+
 def _correlation_id(request: Request) -> str:
-    return getattr(
-        request.state,
-        "correlation_id",
-        getattr(request.state, "request_id", "unavailable"),
-    )
+    return getattr(request.state, "correlation_id", _request_id(request))
+
+
+def _v2_response_headers(
+    request: Request,
+    headers: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    response_headers = {str(key): str(value) for key, value in (headers or {}).items()}
+    response_headers["X-Request-ID"] = _request_id(request)
+    response_headers["X-Correlation-ID"] = _correlation_id(request)
+    response_headers["X-Content-Type-Options"] = "nosniff"
+    response_headers["X-Frame-Options"] = "DENY"
+    response_headers["Referrer-Policy"] = "no-referrer"
+    response_headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    return response_headers
 
 
 def _v2_error(
@@ -47,6 +61,7 @@ def _v2_error(
     code: str,
     message: str,
     fields: Mapping[str, Any] | None = None,
+    headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
@@ -56,6 +71,18 @@ def _v2_error(
             "correlation_id": _correlation_id(request),
             "fields": dict(fields) if fields is not None else None,
         },
+        headers=_v2_response_headers(request, headers),
+    )
+
+
+def v2_unexpected_error_response(request: Request) -> JSONResponse:
+    """Return the stable fail-closed V2 response for an unexpected platform error."""
+
+    return _v2_error(
+        request,
+        status_code=500,
+        code="INTERNAL_SERVER_ERROR",
+        message="An unexpected error occurred.",
     )
 
 
@@ -86,7 +113,7 @@ def _validation_fields(exc: RequestValidationError) -> dict[str, list[str]]:
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(DomainError)
     async def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:
-        if _is_v2(request):
+        if is_v2_request(request):
             return _v2_error(
                 request,
                 status_code=exc.status_code,
@@ -104,13 +131,14 @@ def install_error_handlers(app: FastAPI) -> None:
         request: Request,
         exc: StarletteHTTPException,
     ) -> Response:
-        if not _is_v2(request):
+        if not is_v2_request(request):
             return await http_exception_handler(request, exc)
         return _v2_error(
             request,
             status_code=exc.status_code,
             code=_http_code(exc.status_code),
             message=_http_message(exc),
+            headers=exc.headers,
         )
 
     @app.exception_handler(RequestValidationError)
@@ -118,7 +146,7 @@ def install_error_handlers(app: FastAPI) -> None:
         request: Request,
         exc: RequestValidationError,
     ) -> Response:
-        if not _is_v2(request):
+        if not is_v2_request(request):
             return await request_validation_exception_handler(request, exc)
         return _v2_error(
             request,
