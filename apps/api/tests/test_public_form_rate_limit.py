@@ -1,10 +1,11 @@
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from redis.exceptions import RedisError
 from starlette.requests import Request
 
 from app.api.v1 import public_forms
-from app.core.errors import DomainError
+from app.core.errors import DomainError, install_error_handlers
 
 
 class FakeRedis:
@@ -48,20 +49,43 @@ async def test_public_form_rate_limit_is_one_atomic_redis_operation(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_public_form_rate_limit_returns_retry_after(monkeypatch) -> None:
+async def test_public_form_rate_limit_preserves_domain_envelope_metadata(monkeypatch) -> None:
     client = FakeRedis(result=[11, 37])
     monkeypatch.setattr(public_forms.redis, "from_url", lambda *args, **kwargs: client)
 
-    with pytest.raises(HTTPException) as raised:
+    with pytest.raises(DomainError) as raised:
         await public_forms.enforce_rate_limit(request_from("192.0.2.41"))
 
     assert raised.value.status_code == 429
     assert raised.value.headers == {"Retry-After": "37"}
-    assert raised.value.detail == {
-        "code": "RATE_LIMITED",
-        "message": "Too many submissions; try again shortly",
-    }
+    assert raised.value.code == "RATE_LIMITED"
+    assert raised.value.message == "Too many submissions; try again shortly"
     assert client.closed is True
+
+
+def test_domain_handler_returns_the_public_v1_error_envelope_and_headers() -> None:
+    app = FastAPI()
+    install_error_handlers(app)
+
+    @app.get("/rate-limited")
+    async def rate_limited() -> None:
+        raise DomainError(
+            "RATE_LIMITED",
+            "Too many submissions; try again shortly",
+            429,
+            headers={"Retry-After": "37"},
+        )
+
+    response = TestClient(app).get("/rate-limited")
+
+    assert response.status_code == 429
+    assert response.headers["retry-after"] == "37"
+    assert response.json() == {
+        "error": {
+            "code": "RATE_LIMITED",
+            "message": "Too many submissions; try again shortly",
+        }
+    }
 
 
 @pytest.mark.asyncio
