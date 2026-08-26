@@ -36,9 +36,7 @@ while (($#)); do
       usage
       exit 0
       ;;
-    *)
-      fail "unknown argument: $1"
-      ;;
+    *) fail "unknown argument: $1" ;;
   esac
 done
 
@@ -51,29 +49,13 @@ fi
 declare -A cfg=()
 declare -A allowed=()
 required_keys=(
-  VERIFICATION_STATE
-  LIVE_MUTATION_ALLOWED
-  EXPECTED_HOSTNAME
-  EXPECTED_REPOSITORY_SHA
-  REPOSITORY_ROOT
-  BACKEND_COMPOSE_PATH
-  FRONTEND_COMPOSE_PATH
-  LEGACY_BACKEND_COMPOSE_PATH
-  CADDY_CONFIG_PATH
-  BACKEND_ENV_PATH
-  FRONTEND_ENV_PATH
-  EXPECTED_BACKEND_COMPOSE_SHA256
-  EXPECTED_FRONTEND_COMPOSE_SHA256
-  EXPECTED_CADDY_CONFIG_SHA256
-  EXPECTED_API_IMAGE
-  EXPECTED_FRONTEND_IMAGE
-  EXPECTED_PRIVATE_NETWORK
-  EXPECTED_BACKEND_EDGE_NETWORK
-  EXPECTED_FRONTEND_EDGE_NETWORK
-  EXPECTED_WEB_HOST
-  EXPECTED_API_HOST
-  EXPECTED_WEB_UPSTREAM
-  EXPECTED_API_UPSTREAM
+  VERIFICATION_STATE LIVE_MUTATION_ALLOWED EXPECTED_HOSTNAME EXPECTED_REPOSITORY_SHA
+  REPOSITORY_ROOT BACKEND_COMPOSE_PATH FRONTEND_COMPOSE_PATH LEGACY_BACKEND_COMPOSE_PATH
+  CADDY_CONFIG_PATH BACKEND_ENV_PATH FRONTEND_ENV_PATH
+  EXPECTED_BACKEND_COMPOSE_SHA256 EXPECTED_FRONTEND_COMPOSE_SHA256 EXPECTED_CADDY_CONFIG_SHA256
+  EXPECTED_API_IMAGE EXPECTED_FRONTEND_IMAGE EXPECTED_PRIVATE_NETWORK
+  EXPECTED_BACKEND_EDGE_NETWORK EXPECTED_FRONTEND_EDGE_NETWORK EXPECTED_WEB_HOST
+  EXPECTED_API_HOST EXPECTED_WEB_UPSTREAM EXPECTED_API_UPSTREAM
 )
 for key in "${required_keys[@]}"; do allowed["$key"]=1; done
 
@@ -169,6 +151,25 @@ done
 
 actual_repository_sha="$(git -C "$repository_real" rev-parse HEAD)"
 [[ "$actual_repository_sha" == "${cfg[EXPECTED_REPOSITORY_SHA]}" ]] || fail "repository SHA does not match the approved candidate"
+
+verify_repository_bytes() {
+  local relative="$1" actual_path="$2" expected_blob actual_blob expected_path
+  expected_path="$repository_real/$relative"
+  [[ -f "$expected_path" && -r "$expected_path" ]] || fail "approved repository script is missing: $relative"
+  [[ "$(realpath -e "$actual_path")" == "$(realpath -e "$expected_path")" ]] \
+    || fail "executed script is outside the approved repository path: $relative"
+  expected_blob="$(git -C "$repository_real" rev-parse "HEAD:$relative")" \
+    || fail "unable to resolve approved script blob: $relative"
+  actual_blob="$(git hash-object -- "$actual_path")" \
+    || fail "unable to hash executed script: $relative"
+  [[ "$actual_blob" == "$expected_blob" ]] || fail "executed script bytes differ from approved HEAD: $relative"
+}
+
+script_real="$(realpath -e "${BASH_SOURCE[0]}")"
+validator_path="$repository_real/scripts/deploy/validate-runtime-evidence.py"
+verify_repository_bytes "scripts/deploy/verify-runtime-paths.sh" "$script_real"
+verify_repository_bytes "scripts/deploy/validate-runtime-evidence.py" "$validator_path"
+
 [[ -z "$(GIT_OPTIONAL_LOCKS=0 git -C "$repository_real" status --porcelain --untracked-files=normal)" ]] \
   || fail "repository worktree is not clean"
 
@@ -206,15 +207,13 @@ if ! frontend_json="$(
   fail "frontend Compose rendering failed"
 fi
 
-# Provisioning-oriented validation is intentionally excluded here. Parse-only
-# adaptation is the permitted read-only evidence step for the approved Caddyfile.
 if ! adapted_caddy="$(caddy adapt --adapter caddyfile --config "${cfg[CADDY_CONFIG_PATH]}" 2>/dev/null)"; then
   fail "Caddy configuration adaptation failed"
 fi
 
 if ! runtime_evidence="$(
   printf '%s\0%s\0%s' "$backend_json" "$frontend_json" "$adapted_caddy" \
-    | python3 "$repository_real/scripts/deploy/validate-runtime-evidence.py" \
+    | python3 "$validator_path" \
         --expected-api-image="${cfg[EXPECTED_API_IMAGE]}" \
         --expected-frontend-image="${cfg[EXPECTED_FRONTEND_IMAGE]}" \
         --expected-private-network="${cfg[EXPECTED_PRIVATE_NETWORK]}" \
