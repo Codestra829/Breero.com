@@ -14,7 +14,6 @@ from app.domains.jobs.schemas import JobRead
 router = APIRouter()
 
 
-@router.get("", response_model=list[JobRead])
 async def list_jobs(
     status: JobStatus | None = None,
     vendor_id: uuid.UUID | None = None,
@@ -23,6 +22,8 @@ async def list_jobs(
     session: AsyncSession = Depends(get_db),
     _: User = Depends(require_roles(UserRole.operations, UserRole.admin)),
 ):
+    """List jobs; the collection path is registered by the package router."""
+
     return await JobRepository(session).list(
         status=status,
         vendor_id=vendor_id,
