@@ -3,13 +3,17 @@ import re
 import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
+from app.core.errors import DomainError
 from app.main import app
 
 EXPECTED_CAPABILITIES = {
@@ -22,6 +26,11 @@ EXPECTED_CAPABILITIES = {
     "messaging": False,
     "reviews": False,
 }
+
+
+class ErrorContext(BaseModel):
+    resource_id: uuid.UUID
+    observed_at: datetime
 
 
 @contextmanager
@@ -126,6 +135,49 @@ def test_v2_http_exceptions_preserve_required_headers() -> None:
     assert response.headers["x-correlation-id"] == correlation_id
 
 
+def test_v2_domain_error_fields_are_json_encoded() -> None:
+    resource_id = uuid.uuid4()
+    observed_at = datetime(2026, 8, 26, 12, 30, tzinfo=UTC)
+    context = ErrorContext(resource_id=resource_id, observed_at=observed_at)
+
+    async def structured_failure() -> None:
+        raise DomainError(
+            "RESOURCE_CONFLICT",
+            "The resource cannot be changed.",
+            409,
+            fields={
+                "resource_id": resource_id,
+                "amount": Decimal("12.50"),
+                "observed_at": observed_at,
+                "context": context,
+            },
+        )
+
+    with _temporary_route(
+        "/api/v2/_test/domain-error",
+        structured_failure,
+        methods=["GET"],
+    ):
+        response = TestClient(app, raise_server_exceptions=False).get(
+            "/api/v2/_test/domain-error",
+            headers={"X-Correlation-ID": "structured-domain-error"},
+        )
+
+    assert response.status_code == 409
+    body = response.json()
+    assert body["code"] == "RESOURCE_CONFLICT"
+    assert body["correlation_id"] == "structured-domain-error"
+    assert body["fields"] == {
+        "resource_id": str(resource_id),
+        "amount": 12.5,
+        "observed_at": observed_at.isoformat(),
+        "context": {
+            "resource_id": str(resource_id),
+            "observed_at": observed_at.isoformat(),
+        },
+    }
+
+
 def test_v2_unhandled_exceptions_use_the_stable_error_contract() -> None:
     async def unexpected_failure() -> None:
         raise RuntimeError("sensitive implementation detail")
@@ -188,11 +240,34 @@ def test_v2_unhandled_error_preserves_the_approved_breero_cors_policy() -> None:
     assert allowed.status_code == 500
     assert allowed.headers["access-control-allow-origin"] == origin
     assert allowed.headers["x-correlation-id"] == "cors-allowed"
+    exposed = {
+        header.strip().lower()
+        for header in allowed.headers["access-control-expose-headers"].split(",")
+    }
+    assert {"x-request-id", "x-correlation-id"} <= exposed
     assert allowed.json()["code"] == "INTERNAL_SERVER_ERROR"
     assert "must not be disclosed" not in allowed.text
     assert "access-control-allow-origin" not in denied.headers
     assert preflight.status_code == 200
     assert preflight.headers["access-control-allow-origin"] == origin
+
+
+def test_v2_cors_exposes_trace_headers_on_success() -> None:
+    with _approved_breero_origin() as origin:
+        response = TestClient(app).get(
+            "/api/v2/capabilities",
+            headers={"Origin": origin},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == origin
+    exposed = {
+        header.strip().lower()
+        for header in response.headers["access-control-expose-headers"].split(",")
+    }
+    assert {"x-request-id", "x-correlation-id"} <= exposed
+    assert response.headers["x-request-id"]
+    assert response.headers["x-correlation-id"]
 
 
 def test_v1_missing_routes_keep_the_existing_fastapi_contract() -> None:
