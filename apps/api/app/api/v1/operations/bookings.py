@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.domains.auth.dependencies import require_roles
 from app.domains.auth.models import User, UserRole
-from app.domains.booking.schemas import OperatorBookingConfirmation
 from app.domains.booking.scheduling import OperatorSchedulingService
+from app.domains.booking.schemas import OperatorBookingConfirmation
 
 router = APIRouter()
 
