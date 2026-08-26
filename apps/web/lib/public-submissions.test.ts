@@ -59,6 +59,57 @@ describe("public submission client", () => {
     expect(error.correlationId).toBe("correlation-123");
   });
 
+  it("maps V1 FastAPI validation arrays into safe field messages", async () => {
+    const response = new Response(
+      JSON.stringify({
+        detail: [
+          { type: "string_too_short", loc: ["body", "message"], msg: "String should have at least 10 characters" },
+          { type: "value_error", loc: ["body", "service_categories", 0], msg: "Invalid service slug" },
+          { type: "ignored", loc: { unexpected: true }, msg: 123 },
+        ],
+      }),
+      {
+        status: 422,
+        headers: {
+          "content-type": "application/json",
+          "x-request-id": "request-validation-123",
+        },
+      },
+    );
+
+    const error = await submissionErrorFromResponse(response);
+
+    expect(error.message).toBe("Some details are invalid. Please correct the form and try again.");
+    expect(error.fields).toEqual({
+      message: ["String should have at least 10 characters"],
+      "service_categories.0": ["Invalid service slug"],
+      form: ["Invalid value"],
+    });
+    expect(error.correlationId).toBe("request-validation-123");
+  });
+
+  it("sanitizes malformed V2 field maps instead of trusting arbitrary values", async () => {
+    const response = new Response(
+      JSON.stringify({
+        code: "VALIDATION_ERROR",
+        message: "Request validation failed.",
+        fields: {
+          email: ["Enter a valid email", 7, null],
+          phone: "Enter a valid phone number",
+          ignored: { nested: "not displayed" },
+        },
+      }),
+      { status: 422, headers: { "content-type": "application/json" } },
+    );
+
+    const error = await submissionErrorFromResponse(response);
+
+    expect(error.fields).toEqual({
+      email: ["Enter a valid email"],
+      phone: ["Enter a valid phone number"],
+    });
+  });
+
   it("does not expose an upstream 500 message", async () => {
     const response = new Response(
       JSON.stringify({ message: "database password and stack detail" }),
