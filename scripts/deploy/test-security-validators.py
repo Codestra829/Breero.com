@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Adversarial standard-library tests for deployment preflight validators."""
+"""Adversarial tests for deployment preflight validators."""
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
-import json
 import os
 import sys
 import tempfile
@@ -170,6 +170,51 @@ def caddy_document(*, reverse: bool = False) -> dict[str, object]:
     }
 
 
+def contradictory_caddy_document() -> dict[str, object]:
+    return {
+        "routes": [
+            {
+                "match": [{"host": ["breero.com"]}],
+                "handle": [
+                    {
+                        "handler": "subroute",
+                        "routes": [
+                            {
+                                "match": [{"host": ["api.breero.com"]}],
+                                "handle": [
+                                    {
+                                        "handler": "reverse_proxy",
+                                        "upstreams": [{"dial": "web:3000"}],
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "match": [{"host": ["api.breero.com"]}],
+                "handle": [
+                    {
+                        "handler": "subroute",
+                        "routes": [
+                            {
+                                "match": [{"host": ["breero.com"]}],
+                                "handle": [
+                                    {
+                                        "handler": "reverse_proxy",
+                                        "upstreams": [{"dial": "api:8000"}],
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            },
+        ]
+    }
+
+
 class WorkflowPermissionTests(unittest.TestCase):
     def write_workflow(self, text: str) -> Path:
         temp = tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False)
@@ -192,13 +237,13 @@ jobs:
           persist-credentials: false
 """
 
-    def test_current_workflow_is_read_only(self) -> None:
-        compose_validator.validate_workflow(ROOT / ".github" / "workflows" / "deployment-preflight.yml")
-
     def test_job_level_write_is_rejected(self) -> None:
-        workflow = self.write_workflow(
-            self.safe_workflow("    permissions:\n      actions: write\n")
-        )
+        workflow = self.write_workflow(self.safe_workflow("    permissions:\n      actions: write\n"))
+        with self.assertRaises(compose_validator.ValidationError):
+            compose_validator.validate_workflow(workflow)
+
+    def test_quoted_permissions_key_is_parsed_and_rejected(self) -> None:
+        workflow = self.write_workflow(self.safe_workflow('    "permissions": write-all\n'))
         with self.assertRaises(compose_validator.ValidationError):
             compose_validator.validate_workflow(workflow)
 
@@ -216,6 +261,23 @@ jobs:
         with self.assertRaises(compose_validator.ValidationError):
             compose_validator.validate_workflow(workflow)
 
+    def test_quoted_uses_key_is_parsed_and_rejected(self) -> None:
+        workflow = self.write_workflow(
+            self.safe_workflow().replace(
+                "- uses: actions/checkout@" + "a" * 40,
+                '- "uses": owner/action@main',
+            )
+        )
+        with self.assertRaises(compose_validator.ValidationError):
+            compose_validator.validate_workflow(workflow)
+
+    def test_persistent_checkout_credentials_are_rejected(self) -> None:
+        workflow = self.write_workflow(
+            self.safe_workflow().replace("persist-credentials: false", "persist-credentials: true")
+        )
+        with self.assertRaises(compose_validator.ValidationError):
+            compose_validator.validate_workflow(workflow)
+
 
 class ComposeSecretBindingTests(unittest.TestCase):
     def test_complete_file_bindings_pass(self) -> None:
@@ -229,12 +291,37 @@ class ComposeSecretBindingTests(unittest.TestCase):
         with self.assertRaises(compose_validator.ValidationError):
             compose_validator.validate_backend(backend_document(environment=False))
 
+    def test_long_form_secret_with_wrong_target_fails(self) -> None:
+        backend = backend_document()
+        services = backend["services"]
+        assert isinstance(services, dict)
+        api = services["api"]
+        assert isinstance(api, dict)
+        api["secrets"] = [
+            {"source": "breero_database_url", "target": "wrong_database_url"},
+            "breero_redis_url",
+            "breero_jwt_access_secret",
+            "breero_jwt_refresh_secret",
+        ]
+        with self.assertRaises(compose_validator.ValidationError):
+            compose_validator.validate_backend(backend)
+
+    def test_postgres_secret_with_wrong_target_fails(self) -> None:
+        backend = backend_document()
+        services = backend["services"]
+        assert isinstance(services, dict)
+        postgres = services["postgres"]
+        assert isinstance(postgres, dict)
+        postgres["secrets"] = [
+            {"source": "breero_postgres_password", "target": "not_the_password"}
+        ]
+        with self.assertRaises(compose_validator.ValidationError):
+            compose_validator.validate_backend(backend)
+
 
 class RuntimeEvidenceTests(unittest.TestCase):
-    def runtime_args(self) -> argparse.Namespace:  # type: ignore[name-defined]
-        from argparse import Namespace
-
-        return Namespace(
+    def runtime_args(self) -> argparse.Namespace:
+        return argparse.Namespace(
             expected_api_image=API_IMAGE,
             expected_frontend_image=WEB_IMAGE,
             expected_private_network="breero_private_runtime",
@@ -281,6 +368,13 @@ class RuntimeEvidenceTests(unittest.TestCase):
     def test_reversed_caddy_routes_fail(self) -> None:
         with self.assertRaises(runtime_validator.EvidenceError):
             runtime_validator.validate_caddy_routes(caddy_document(reverse=True), self.runtime_args())
+
+    def test_contradictory_nested_host_matchers_fail(self) -> None:
+        with self.assertRaises(runtime_validator.EvidenceError):
+            runtime_validator.validate_caddy_routes(
+                contradictory_caddy_document(),
+                self.runtime_args(),
+            )
 
     def test_expected_caddy_route_associations_pass(self) -> None:
         runtime_validator.validate_caddy_routes(caddy_document(), self.runtime_args())
