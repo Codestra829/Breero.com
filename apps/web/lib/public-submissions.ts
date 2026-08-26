@@ -45,7 +45,11 @@ function canonicalize(value: unknown): unknown {
 }
 
 export function stableSerialize(value: unknown): string {
-  return JSON.stringify(canonicalize(value));
+  const serialized = JSON.stringify(canonicalize(value));
+  if (serialized === undefined) {
+    throw new TypeError("Submission payload must be JSON serializable.");
+  }
+  return serialized;
 }
 
 export function prepareSubmissionAttempt(
