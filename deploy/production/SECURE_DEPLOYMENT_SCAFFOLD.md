@@ -40,6 +40,8 @@ The frontend candidate is:
 deploy/frontend/docker-compose.frontend.yml
 ```
 
+The frontend Dockerfile on current `main` still contains the retired `auth.codestra.agency` issuer. PR #46 contains the canonical `https://auth.codestra.co/realms/codestra` repair and must be independently reviewed and merged before a frontend production image is certified. This scaffold does not hide, duplicate or prematurely merge that repair.
+
 A candidate path is not runtime authority. Runtime authority exists only after the read-only host evidence below passes and the exact hashes, network names, Caddy routes and image digests are independently reviewed.
 
 ## CI-only validation
@@ -79,7 +81,7 @@ The verifier never sources the input. It allowlists every key and rejects duplic
 - absolute readable repository, Compose, Caddy and environment paths;
 - exact SHA-256 values for the candidate backend/frontend Compose and Caddy configuration;
 - non-world-readable environment files;
-- successful `docker compose config --quiet` rendering;
+- successful migration-profile and frontend `docker compose config --quiet` rendering;
 - exact immutable API and frontend image digests in rendered Compose;
 - existing internal private network and approved external edge networks;
 - valid/adaptable Caddy configuration containing the expected web/API hosts and upstreams;
@@ -102,20 +104,22 @@ Capture that output in the protected change record. Do not change `LIVE_MUTATION
 1. Merge and verify the required path-aware `quality` gate.
 2. Resolve every stacked-branch conflict against exact current bases.
 3. Obtain independent review and protected merges in dependency order.
-4. Select/retire the competing Compose authority through review.
-5. Complete worker and scheduler heartbeat/health evidence.
-6. Build API/frontend once in trusted CI and publish immutable digests with SBOM, provenance and scan evidence.
-7. Run the read-only runtime-path verifier on the approved host.
-8. Prove current DNS, TLS, Caddy routes, private networks, disk/capacity and public-port posture.
-9. Create and restore a dated backup in an isolated target.
-10. Deploy the exact candidate digests to isolated staging.
-11. Pass browser/API/UAT, migration, restart, recovery and rollback tests.
-12. Use a separate protected production change with a canary and abort thresholds.
+4. Merge the canonical frontend issuer repair from PR #46.
+5. Select/retire the competing Compose authority through review.
+6. Complete worker and scheduler heartbeat/health evidence.
+7. Build API/frontend once in trusted CI and publish immutable digests with SBOM, provenance and scan evidence.
+8. Run the read-only runtime-path verifier on the approved host.
+9. Prove current DNS, TLS, Caddy routes, private networks, disk/capacity and public-port posture.
+10. Create and restore a dated backup in an isolated target.
+11. Deploy the exact candidate digests to isolated staging.
+12. Pass browser/API/UAT, migration, restart, recovery and rollback tests.
+13. Use a separate protected production change with a canary and abort thresholds.
 ```
 
 ## Mandatory unresolved gates
 
 ```text
+FRONTEND_KEYCLOAK_ISSUER=BLOCKED_BY_PR_46
 CANONICAL_PRODUCTION_COMPOSE=CANDIDATE_NOT_CERTIFIED
 WORKER_HEALTHCHECK=UNVERIFIED
 SCHEDULER_HEALTHCHECK=UNVERIFIED
