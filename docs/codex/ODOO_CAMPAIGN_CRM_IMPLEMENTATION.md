@@ -402,7 +402,7 @@ approved minimized/redacted payload
 
 ## 14.1 Scope resolution before acceptance
 
-Inbound flow:
+Target inbound flow after the compatibility rollout:
 
 ```text
 verify service identity/signature
@@ -413,6 +413,38 @@ persist accepted row with first-class scope
 acknowledge
 process asynchronously
 ```
+
+This ordering is not activated against the current BREERO producer until the following staged acknowledgment rollout completes.
+
+## 14.2 Acknowledgment compatibility rollout
+
+### Stage A — preserve the deployed synchronous contract
+
+- Extend the existing `odoo-addons/breero_crm` module and preserve the `breero.sync.event` model and `process_breero_event` method.
+- Preserve the current producer contract in `apps/api/app/integrations/odoo.py`: successful delivery returns a truthy target `odoo_record_id` (and `odoo_model` where available) only after the target projection exists.
+- Do not return an inbox record ID as `odoo_record_id`; that would falsely mark an inbox row as the delivered business projection.
+- Stage A remains the rollback-compatible behavior until both sides support Stage B.
+
+### Stage B — separately review queued acknowledgment support
+
+Introduce a separately reviewed producer contract that can explicitly accept:
+
+```json
+{
+  "accepted": true,
+  "queued": true,
+  "inbox_id": "provider-scoped-inbox-id",
+  "target_record_id": null
+}
+```
+
+The BREERO producer must validate this shape deliberately; absence of a target record must remain `ODOO_INVALID_ACK` for legacy or ambiguous responses. A queued acknowledgment records durable acceptance only and must never be stored as a delivered projection. Delivery state distinguishes at least `QUEUED`, `PROJECTED`, `REJECTED`, `FAILED_RETRYABLE`, and `FAILED_TERMINAL`, with correlation and reconciliation from inbox ID to the eventual target model/record.
+
+Mandatory compatibility tests cover legacy synchronous success, explicit queued acceptance, malformed/ambiguous acknowledgment rejection, queued-not-delivered accounting, later projection correlation, duplicate delivery, retry, and rollback to the Stage A producer/consumer pair.
+
+### Stage C — staging-verified activation
+
+Activate asynchronous acknowledgment only after the separately reviewed BREERO producer and Odoo consumer versions are deployed together in isolated staging. Prove synchronous rollback compatibility, queued/projected reconciliation, duplicate safety, outage recovery, and no false delivered projection before activation. Production activation requires an explicit reviewed change and must retain Stage A rollback artifacts throughout the transition.
 
 An unknown or conflicting tenant/company/campaign mapping is denied or placed in a dedicated restricted quarantine state. It is not accepted as a globally visible unscoped campaign event.
 
