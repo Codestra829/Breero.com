@@ -94,7 +94,7 @@ def secret_mounts(value: Any) -> dict[str, str]:
                 add(definition.get("source", source), definition.get("target"))
             else:
                 raise ValidationError("Secret mount mapping contains an unsupported value")
-    elif value not in {None, []}:
+    elif value is not None:
         raise ValidationError("Service secrets must be a list or mapping")
     return mounts
 
