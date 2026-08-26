@@ -16,24 +16,21 @@ BASE_CONTACT = {
     "message": "This is a valid consent-contract test message.",
     "source_url": "https://breero.com/contact",
     "transactional_contact_allowed": True,
+    "policy_version": DEFAULT_CONSENT_POLICY_VERSION,
 }
 
 
-def test_optional_channel_consent_requires_policy_version() -> None:
+def test_required_contact_permission_requires_policy_version() -> None:
+    payload = dict(BASE_CONTACT)
+    payload.pop("policy_version")
+
     with pytest.raises(ValidationError, match="policy version"):
-        ContactCreate(
-            **BASE_CONTACT,
-            marketing_email_consent=True,
-        )
+        ContactCreate(**payload)
 
 
-def test_optional_channel_consent_rejects_unknown_policy_version() -> None:
+def test_consent_rejects_unknown_policy_version() -> None:
     with pytest.raises(ValidationError, match="not supported"):
-        ContactCreate(
-            **BASE_CONTACT,
-            transactional_sms_consent=True,
-            policy_version="unknown-policy",
-        )
+        ContactCreate(**{**BASE_CONTACT, "policy_version": "unknown-policy"})
 
 
 def test_channel_specific_consent_accepts_supported_version_without_trusting_client_text() -> None:
@@ -43,7 +40,6 @@ def test_channel_specific_consent_accepts_supported_version_without_trusting_cli
         transactional_sms_consent=True,
         marketing_email_consent=True,
         marketing_sms_consent=True,
-        policy_version=DEFAULT_CONSENT_POLICY_VERSION,
         consent_disclosures={
             "transactional_sms": "Client-supplied evidence retained separately by the service."
         },
@@ -51,6 +47,7 @@ def test_channel_specific_consent_accepts_supported_version_without_trusting_cli
 
     disclosures = canonical_disclosures(
         {
+            "transactional_contact_allowed": contact.transactional_contact_allowed,
             "transactional_email_consent": contact.transactional_email_consent,
             "transactional_sms_consent": contact.transactional_sms_consent,
             "marketing_email_consent": contact.marketing_email_consent,
@@ -60,11 +57,15 @@ def test_channel_specific_consent_accepts_supported_version_without_trusting_cli
     )
 
     assert set(disclosures) == {
+        "transactional_contact",
         "transactional_email",
         "transactional_sms",
         "marketing_email",
         "marketing_sms",
     }
+    assert disclosures["transactional_contact"].startswith(
+        "I agree that BREERO may contact me"
+    )
     assert disclosures["transactional_sms"].startswith(
         "I agree to receive recurring automated appointment"
     )
@@ -77,7 +78,7 @@ def test_legacy_aggregate_consent_flags_are_rejected() -> None:
             ContactCreate(**BASE_CONTACT, **{flag: True})
 
 
-def test_no_optional_channel_consent_does_not_require_disclosures() -> None:
+def test_no_optional_channel_consent_does_not_require_client_disclosures() -> None:
     contact = ContactCreate(**BASE_CONTACT)
 
     assert contact.consent_disclosures == {}
