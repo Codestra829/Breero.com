@@ -17,29 +17,48 @@ from app.integrations.contracts import (
 )
 from app.integrations.email import (
     EmailGateway as CompatibilityEmailGateway,
+)
+from app.integrations.email import (
     FakeEmailGateway,
 )
 from app.integrations.event_envelope import build_event_envelope
 from app.integrations.geocoding import (
     FakeGeocodingAdapter,
+)
+from app.integrations.geocoding import (
     GeocodedAddress as CompatibilityGeocodedAddress,
+)
+from app.integrations.geocoding import (
     GeocodingGateway as CompatibilityGeocodingGateway,
 )
 from app.integrations.middleware import (
     MiddlewareAdapter,
+)
+from app.integrations.middleware import (
     OdooDeliveryError as MiddlewareDeliveryError,
+)
+from app.integrations.middleware import (
     OdooResult as MiddlewareDeliveryResult,
 )
 from app.integrations.odoo import OdooAdapter, OdooDeliveryError, OdooResult
 from app.integrations.payouts import (
     FakePayoutGateway,
+)
+from app.integrations.payouts import (
     IntegrationNotConfigured as CompatibilityNotConfigured,
+)
+from app.integrations.payouts import (
     PayoutGateway as CompatibilityPayoutGateway,
+)
+from app.integrations.payouts import (
     TransferResult as CompatibilityTransferResult,
 )
-from app.integrations.sms import FakeSmsGateway, SmsGateway as CompatibilitySmsGateway
+from app.integrations.sms import FakeSmsGateway
+from app.integrations.sms import SmsGateway as CompatibilitySmsGateway
 from app.integrations.stripe import (
     PaymentProvider as CompatibilityPaymentProvider,
+)
+from app.integrations.stripe import (
     StripeAdapter,
 )
 
