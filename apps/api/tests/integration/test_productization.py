@@ -22,6 +22,7 @@ from app.domains.professional_leads.models import (
     ProfessionalLead,
 )
 from app.domains.professional_leads.service import ProfessionalLeadService
+from app.domains.public_submissions.consent import DEFAULT_CONSENT_POLICY_VERSION
 from app.domains.public_submissions.models import DownstreamStatus, PublicSubmission, SubmissionType
 from app.domains.public_submissions.schemas import (
     ContactCreate,
@@ -83,6 +84,7 @@ async def test_public_forms_are_atomic_idempotent_and_pending_configuration(monk
             contact_preference="email",
             source_url="https://staging.breero.com/book",
             transactional_contact_allowed=True,
+            policy_version=DEFAULT_CONSENT_POLICY_VERSION,
         )
         accepted = await submissions.accept(
             SubmissionType.SERVICE_REQUEST, service_data, f"service-{marker}", "192.0.2.10"
@@ -103,6 +105,11 @@ async def test_public_forms_are_atomic_idempotent_and_pending_configuration(monk
         assert row.payload["transactional_contact_allowed"] is True
         assert row.payload["consent_recorded_by"] == "breero_api"
         assert row.payload["consent_timestamp"]
+        assert row.payload["consent_source"] == "breero_public_api"
+        assert row.payload["policy_version"] == DEFAULT_CONSENT_POLICY_VERSION
+        assert row.payload["consent_disclosures"]["transactional_contact"].startswith(
+            "I agree that BREERO may contact me"
+        )
         assert row.payload["provider_assigned"] is False
         assert row.payload["appointment_confirmed"] is False
         assert row.payload["payment_required"] is False
@@ -132,6 +139,7 @@ async def test_public_forms_are_atomic_idempotent_and_pending_configuration(monk
             message="This is a test-only contact request.",
             source_url="https://staging.breero.com/contact",
             transactional_contact_allowed=True,
+            policy_version=DEFAULT_CONSENT_POLICY_VERSION,
         )
         provider = ProviderInterestCreate(
             business_name="Test Provider LLC",
@@ -144,6 +152,7 @@ async def test_public_forms_are_atomic_idempotent_and_pending_configuration(monk
             postal_code="77433",
             source_url="https://staging.breero.com/partners",
             transactional_contact_allowed=True,
+            policy_version=DEFAULT_CONSENT_POLICY_VERSION,
         )
         await submissions.accept(SubmissionType.CONTACT, contact, f"contact-{marker}", "192.0.2.11")
         await submissions.accept(
