@@ -18,6 +18,14 @@ on:
     paths:
       - "deploy/frontend/**"
       - ".github/workflows/frontend-docker-gates.yml"
+      - "apps/web/**"
+      - "packages/api-client/**"
+      - "packages/types/**"
+      - "packages/ui/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
 
 permissions:
   contents: read
