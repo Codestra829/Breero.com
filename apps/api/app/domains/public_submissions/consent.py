@@ -2,7 +2,8 @@ from collections.abc import Mapping
 
 DEFAULT_CONSENT_POLICY_VERSION = "2026-08-13-request-only"
 
-CHANNEL_CONSENT_FLAGS = {
+CONSENT_FLAGS = {
+    "transactional_contact_allowed": "transactional_contact",
     "transactional_email_consent": "transactional_email",
     "transactional_sms_consent": "transactional_sms",
     "marketing_email_consent": "marketing_email",
@@ -11,6 +12,10 @@ CHANNEL_CONSENT_FLAGS = {
 
 CONSENT_DISCLOSURES_BY_POLICY: dict[str, dict[str, str]] = {
     DEFAULT_CONSENT_POLICY_VERSION: {
+        "transactional_contact": (
+            "I agree that BREERO may contact me about this request. "
+            "I understand this is not a confirmed appointment."
+        ),
         "transactional_email": (
             "I agree to receive appointment and service-status email from BREERO."
         ),
@@ -42,6 +47,6 @@ def canonical_disclosures(
         raise ValueError(f"Unsupported consent policy version: {policy_version}")
     return {
         disclosure_key: policy[disclosure_key]
-        for flag, disclosure_key in CHANNEL_CONSENT_FLAGS.items()
+        for flag, disclosure_key in CONSENT_FLAGS.items()
         if consent_flags.get(flag, False)
     }
