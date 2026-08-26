@@ -1,0 +1,42 @@
+name: Normalize PR 38 architecture document
+
+on:
+  push:
+    branches:
+      - automation/normalize-pr38-doc
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: be/marketplace-v2-p0-api-foundation
+          fetch-depth: 0
+      - name: Remove trailing whitespace and push the focused repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("docs/codex/MARKETPLACE_V2_DOMAIN_STAGING_AND_TESTING_IMPLEMENTATION.md")
+          original = path.read_text()
+          normalized = "\n".join(line.rstrip(" \t") for line in original.splitlines())
+          if original.endswith("\n"):
+              normalized += "\n"
+          path.write_text(normalized)
+          PY
+          git diff --check
+          if git diff --quiet; then
+            echo "No whitespace repair required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/codex/MARKETPLACE_V2_DOMAIN_STAGING_AND_TESTING_IMPLEMENTATION.md
+          git commit -m "style(docs): remove trailing whitespace"
+          git push origin HEAD:be/marketplace-v2-p0-api-foundation
