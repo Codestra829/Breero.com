@@ -7,13 +7,9 @@ from pydantic import AnyHttpUrl, BaseModel, EmailStr, Field, field_validator, mo
 
 from app.domains.common.us import US_STATES_AND_DC
 
+from .consent import CHANNEL_CONSENT_FLAGS, CONSENT_DISCLOSURES_BY_POLICY
+
 SERVICE_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-CONSENT_DISCLOSURE_REQUIREMENTS = {
-    "transactional_email_consent": "transactional_email",
-    "transactional_sms_consent": "transactional_sms",
-    "marketing_email_consent": "marketing_email",
-    "marketing_sms_consent": "marketing_sms",
-}
 LEGACY_CONSENT_FLAGS = ("marketing_consent", "sms_consent", "email_consent")
 
 
@@ -60,20 +56,12 @@ class TrackingFields(BaseModel):
                 "Legacy aggregate consent flags are not accepted; use the channel-specific flags"
             )
 
-        missing_disclosures = [
-            disclosure_key
-            for flag, disclosure_key in CONSENT_DISCLOSURE_REQUIREMENTS.items()
-            if getattr(self, flag) and disclosure_key not in self.consent_disclosures
-        ]
-        if missing_disclosures:
-            raise ValueError(
-                "Consent disclosure evidence is required for: "
-                + ", ".join(sorted(missing_disclosures))
-            )
-
-        if any(getattr(self, flag) for flag in CONSENT_DISCLOSURE_REQUIREMENTS):
-            if not self.policy_version or not self.policy_version.strip():
+        if any(getattr(self, flag) for flag in CHANNEL_CONSENT_FLAGS):
+            policy_version = (self.policy_version or "").strip()
+            if not policy_version:
                 raise ValueError("A policy version is required for channel consent")
+            if policy_version not in CONSENT_DISCLOSURES_BY_POLICY:
+                raise ValueError("The supplied consent policy version is not supported")
         return self
 
 
