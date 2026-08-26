@@ -10,10 +10,12 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from typing import Any, Final, cast
 
 from fastapi import FastAPI
+from fastapi import routing as fastapi_routing
 from fastapi.routing import APIRoute
 
 OPENAPI_METHODS: Final[frozenset[str]] = frozenset(
@@ -531,8 +533,7 @@ POLICY_RULES: Final[tuple[EndpointPolicyRule, ...]] = (
         tenant_scope="tenant-and-legal-entity",
         record_policy="provider-context-and-purchased-record",
         capability_gate=(
-            "settings.paid_leads_enabled && settings.payments_enabled && "
-            "settings.stripe_enabled"
+            "settings.paid_leads_enabled && settings.payments_enabled && settings.stripe_enabled"
         ),
         write_idempotency_key_policy="required-for-purchase; required-target-for-dispute",
         write_request_hash_policy="required-for-purchase; required-target-for-dispute",
@@ -594,6 +595,14 @@ def _expand_policy(rule: EndpointPolicyRule, route: APIRoute, method: str) -> En
     )
 
 
+def iter_api_route_contexts(app: FastAPI) -> Iterator[Any]:
+    """Yield FastAPI's effective APIRoute contexts, including nested routers."""
+
+    for route_context in fastapi_routing.iter_route_contexts(app.routes):
+        if isinstance(route_context.original_route, APIRoute):
+            yield route_context
+
+
 def build_endpoint_policies(app: FastAPI) -> tuple[EndpointPolicy, ...]:
     """Expand and validate the policy for every mounted runtime operation."""
 
@@ -601,8 +610,8 @@ def build_endpoint_policies(app: FastAPI) -> tuple[EndpointPolicy, ...]:
     unmatched: list[str] = []
     ambiguous: list[str] = []
 
-    for route in app.routes:
-        if not isinstance(route, APIRoute) or route.path in DOCUMENTATION_PATHS:
+    for route in iter_api_route_contexts(app):
+        if route.path in DOCUMENTATION_PATHS:
             continue
         for method in sorted((route.methods or set()) & OPENAPI_METHODS):
             matches = _matching_rules(method, route.path)
@@ -641,7 +650,11 @@ def endpoint_registry_document(app: FastAPI) -> dict[str, Any]:
 
 
 def install_endpoint_registry(app: FastAPI) -> dict[str, Any]:
-    """Attach policies to OpenAPI operations and store the canonical registry."""
+    """Install a version-resilient OpenAPI policy overlay and store the registry."""
+
+    existing = getattr(app.state, "endpoint_registry", None)
+    if existing is not None:
+        return cast(dict[str, Any], existing)
 
     document = endpoint_registry_document(app)
     policies_by_path: dict[str, dict[str, dict[str, object]]] = {}
@@ -655,17 +668,30 @@ def install_endpoint_registry(app: FastAPI) -> dict[str, Any]:
             if key not in {"path", "method", "operation_id"}
         }
 
-    for route in app.routes:
-        if not isinstance(route, APIRoute):
-            continue
-        route_policies = policies_by_path.get(route.path)
-        if not route_policies:
-            continue
-        route.openapi_extra = {
-            **(route.openapi_extra or {}),
-            "x-breero-policy": route_policies,
-        }
+    original_openapi = app.openapi
 
+    def openapi_with_policy() -> dict[str, Any]:
+        schema = original_openapi()
+        paths = schema.get("paths")
+        if not isinstance(paths, dict):
+            raise RuntimeError("OpenAPI schema is missing its paths object")
+
+        for path, method_policies in policies_by_path.items():
+            path_item = paths.get(path)
+            if not isinstance(path_item, dict):
+                raise RuntimeError(f"OpenAPI is missing registered path {path}")
+            for method in method_policies:
+                operation = path_item.get(method.lower())
+                if not isinstance(operation, dict):
+                    raise RuntimeError(f"OpenAPI is missing registered operation {method} {path}")
+                operation["x-breero-policy"] = method_policies
+
+        schema["x-breero-endpoint-registry-digest"] = document["digest"]
+        app.openapi_schema = schema
+        return schema
+
+    app.openapi = openapi_with_policy  # type: ignore[method-assign]
+    app.openapi_schema = None
     app.state.endpoint_registry = document
     return document
 
