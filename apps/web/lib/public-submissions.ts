@@ -66,24 +66,54 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function fieldMap(value: unknown): Record<string, string[]> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const fields: Record<string, string[]> = {};
+  for (const [key, rawMessages] of Object.entries(value as Record<string, unknown>)) {
+    const messages = Array.isArray(rawMessages)
+      ? rawMessages.map(stringValue).filter((item): item is string => item !== undefined)
+      : [stringValue(rawMessages)].filter((item): item is string => item !== undefined);
+    if (messages.length) fields[key] = messages;
+  }
+  return Object.keys(fields).length ? fields : undefined;
+}
+
+function fastApiValidationFields(value: unknown): Record<string, string[]> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const fields: Record<string, string[]> = {};
+  for (const item of value.slice(0, 20)) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const record = item as Record<string, unknown>;
+    const location = Array.isArray(record.loc)
+      ? record.loc
+          .filter((part) => typeof part === "string" || typeof part === "number")
+          .filter((part) => part !== "body")
+          .map(String)
+          .join(".")
+      : "";
+    const field = location || "form";
+    const message = stringValue(record.msg) ?? "Invalid value";
+    (fields[field] ??= []).push(message);
+  }
+  return Object.keys(fields).length ? fields : undefined;
+}
+
 function errorEnvelope(body: unknown): {
   code?: string;
   message?: string;
   fields?: Record<string, string[]>;
 } {
-  if (!body || typeof body !== "object") return {};
+  if (!body || typeof body !== "object" || Array.isArray(body)) return {};
   const record = body as Record<string, unknown>;
-  const nested = record.error && typeof record.error === "object"
+  const nested = record.error && typeof record.error === "object" && !Array.isArray(record.error)
     ? record.error as Record<string, unknown>
     : undefined;
-  const detail = record.detail && typeof record.detail === "object"
+  const detail = record.detail && typeof record.detail === "object" && !Array.isArray(record.detail)
     ? record.detail as Record<string, unknown>
     : undefined;
 
-  const fieldsValue = record.fields ?? nested?.fields ?? detail?.fields;
-  const fields = fieldsValue && typeof fieldsValue === "object"
-    ? fieldsValue as Record<string, string[]>
-    : undefined;
+  const fields = fieldMap(record.fields ?? nested?.fields ?? detail?.fields)
+    ?? fastApiValidationFields(record.detail);
 
   return {
     code: stringValue(record.code) ?? stringValue(nested?.code) ?? stringValue(detail?.code),
