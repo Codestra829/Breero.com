@@ -12,11 +12,7 @@ from app.core.errors import DomainError
 from app.domains.catalog.models import Service
 from app.domains.common.outbox import EventStatus, IntegrationEvent
 
-from .consent import (
-    CHANNEL_CONSENT_FLAGS,
-    DEFAULT_CONSENT_POLICY_VERSION,
-    canonical_disclosures,
-)
+from .consent import CONSENT_FLAGS, canonical_disclosures
 from .models import DownstreamStatus, PublicSubmission, SubmissionType
 from .schemas import SubmissionAccepted, TrackingFields
 
@@ -65,8 +61,6 @@ class PublicSubmissionService:
 
         payload["service_id"] = str(service.id)
         payload["service_slug"] = service.slug
-        # Public intake is a request. It is never an appointment, provider assignment,
-        # price acceptance, or payment record.
         payload.update(
             {
                 "request_status": "REQUESTED",
@@ -131,15 +125,15 @@ class PublicSubmissionService:
 
         now = datetime.now(UTC)
         payload = dict(client_payload)
-        policy_version = payload.get("policy_version") or DEFAULT_CONSENT_POLICY_VERSION
-        consent_flags = {
-            flag: bool(payload.get(flag)) for flag in CHANNEL_CONSENT_FLAGS
-        }
-        client_disclosures = dict(payload.get("consent_disclosures") or {})
+        policy_version = str(payload["policy_version"])
+        consent_flags = {flag: bool(payload.get(flag)) for flag in CONSENT_FLAGS}
         payload["client_consent_timestamp"] = payload.get("consent_timestamp")
-        payload["client_consent_disclosures"] = client_disclosures
+        payload["client_consent_source"] = payload.get("consent_source")
+        payload["client_consent_disclosures"] = dict(
+            payload.get("consent_disclosures") or {}
+        )
         payload["consent_timestamp"] = now.isoformat()
-        payload["consent_source"] = payload.get("consent_source") or "breero_public_api"
+        payload["consent_source"] = "breero_public_api"
         payload["policy_version"] = policy_version
         payload["consent_disclosures"] = canonical_disclosures(
             consent_flags,
@@ -171,8 +165,6 @@ class PublicSubmissionService:
         )
 
         try:
-            # The savepoint contains only the unique idempotency claim. A duplicate
-            # concurrent insert does not roll back unrelated work in the outer session.
             async with self.session.begin_nested():
                 self.session.add(submission)
                 await self.session.flush()
