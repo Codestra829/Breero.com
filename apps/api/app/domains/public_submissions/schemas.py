@@ -1,13 +1,20 @@
 import re
 import uuid
 from datetime import date, datetime
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
-from pydantic import AnyHttpUrl, BaseModel, EmailStr, Field, field_validator
+from pydantic import AnyHttpUrl, BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.domains.common.us import US_STATES_AND_DC
 
 SERVICE_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+CONSENT_DISCLOSURE_REQUIREMENTS = {
+    "transactional_email_consent": "transactional_email",
+    "transactional_sms_consent": "transactional_sms",
+    "marketing_email_consent": "marketing_email",
+    "marketing_sms_consent": "marketing_sms",
+}
+LEGACY_CONSENT_FLAGS = ("marketing_consent", "sms_consent", "email_consent")
 
 
 class TrackingFields(BaseModel):
@@ -44,6 +51,30 @@ class TrackingFields(BaseModel):
             if not disclosure.strip() or len(disclosure) > 2000:
                 raise ValueError("Consent disclosure text must contain 1 to 2000 characters")
         return value
+
+    @model_validator(mode="after")
+    def require_versioned_consent_evidence(self) -> Self:
+        enabled_legacy = [flag for flag in LEGACY_CONSENT_FLAGS if getattr(self, flag)]
+        if enabled_legacy:
+            raise ValueError(
+                "Legacy aggregate consent flags are not accepted; use the channel-specific flags"
+            )
+
+        missing_disclosures = [
+            disclosure_key
+            for flag, disclosure_key in CONSENT_DISCLOSURE_REQUIREMENTS.items()
+            if getattr(self, flag) and disclosure_key not in self.consent_disclosures
+        ]
+        if missing_disclosures:
+            raise ValueError(
+                "Consent disclosure evidence is required for: "
+                + ", ".join(sorted(missing_disclosures))
+            )
+
+        if any(getattr(self, flag) for flag in CONSENT_DISCLOSURE_REQUIREMENTS):
+            if not self.policy_version or not self.policy_version.strip():
+                raise ValueError("A policy version is required for channel consent")
+        return self
 
 
 class ServiceRequestCreate(TrackingFields):
