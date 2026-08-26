@@ -1,1819 +1,618 @@
-# Odoo Campaign CRM — Production Implementation Mission
+# BREERO Odoo 19 Campaign CRM — Production Implementation Contract
 
-## Objective
+## Status
 
-Implement a production-grade campaign CRM in the existing Odoo codebase.
+Binding implementation contract for the BREERO campaign CRM projection and operational workspace.
 
-This CRM is a **projection and operational workspace**.
-
-It is not the source of truth for marketplace requests, matching, quotes, bookings, jobs, reviews, payments, or provider eligibility.
-
-The authoritative application remains external to Odoo.
-
-Odoo owns:
+This document replaces the earlier parallel-addon mission layout. The implementation must extend the Odoo 19 addon and integration contract already present in the accepted BREERO repository.
 
 ```text
-Campaign CRM
-Agent workspace
-Supervisor workspace
-Campaign memberships
-Agent queues
-Activities
-Dispositions
-Inbox
-Sent
-Compose
-Campaign mailboxes
-CRM projections
-Campaign reporting
-Escalations
-Integration inbox/outbox
-Integration mappings
-Odoo record-level security
-
+ODOO_TARGET=19
+EXISTING_ADDON=odoo-addons/breero_crm
+EXISTING_ADDON_VERSION=19.0.1.0.0
+EXISTING_INBOUND_MODEL=breero.sync.event
+PARALLEL_REPLACEMENT_TREE=FORBIDDEN
+EXTERNAL_SENDS_ENABLED=false
+TELEPHONY_WRITE_ENABLED=false
+AUTOMATIC_WORKFLOW_EXECUTION=false
+PRODUCTION_READY=NO
 ```
 
----
+Companion platform, upgrade, mail-safety, multi-company, and activation requirements are in `ODOO_CAMPAIGN_CRM_PLATFORM_AND_REVIEW_GATES.md`.
 
-# 1. Git strategy
+# 1. Objective
 
-Create:
+Extend the existing Odoo codebase into a modern campaign CRM for:
 
 ```text
-crm/odoo-campaign-core
-crm/odoo-campaign-security
-crm/odoo-agent-workspace
-crm/odoo-supervisor-workspace
-crm/odoo-mailbox
-crm/odoo-integration
-crm/odoo-reporting
-crm/odoo-provider-recruitment
-
+campaign setup
+campaign-scoped agents and supervisors
+lead/customer workspace
+call dispositions and after-call workflow
+callback scheduling
+appointments and reminders
+activities and notes
+inbound/outbound mailbox projection
+approved email/SMS/telephony requests through middleware
+operational queues and escalations
+quality/compliance controls
+reporting
+BREERO projection and command links
 ```
 
-Keep one implementation area per PR.
+Odoo is a projection and operational workspace. It is not the authoritative marketplace database.
 
-Recommended merge order:
+# 2. Existing module compatibility is mandatory
+
+The accepted repository already contains:
 
 ```text
-Campaign Core
-    ↓
-Security
-    ↓
-Integration
-    ↓
-Agent Workspace
-    ↓
-Mailbox
-    ↓
-Supervisor Workspace
-    ↓
-Reporting
-    ↓
-Provider Recruitment
-
+odoo-addons/breero_crm/
+├── __manifest__.py            # Odoo 19 module, version 19.0.1.0.0
+├── models/breero_sync_event.py
+├── models/breero_crm_case.py
+├── models/crm_lead.py
+├── models/res_partner.py
+├── security/
+├── data/
+├── views/
+└── tests/
 ```
 
-Do not create one large multi-module PR.
-
----
-
-# 2. Odoo addon structure
-
-Create or normalize:
+BREERO API integration already delivers to the model contract:
 
 ```text
-addons/
-
-breero_crm_core/
-breero_campaign/
-breero_agent_security/
-breero_agent_workspace/
-breero_supervisor_workspace/
-breero_mailbox/
-breero_integration/
-breero_compliance/
-breero_reporting/
-breero_provider_recruitment/
-
+breero.sync.event
 ```
 
-Optional later:
+Therefore implementation must:
+
+- extend `odoo-addons/breero_crm` in place for the first production increment;
+- preserve the module technical name `breero_crm`;
+- preserve existing model names, external IDs, mappings, views, security groups, scheduled jobs, and inbound delivery behavior unless a reviewed migration explicitly changes them;
+- upgrade the manifest version according to Odoo 19 versioning policy;
+- use migration scripts/hooks for schema or semantic changes;
+- prove clean install and upgrade from `19.0.1.0.0`;
+- preserve rollback/forward-fix compatibility with the currently accepted BREERO API delivery contract.
+
+## 2.1 Future module split
+
+A later split into dependent addons is allowed only through a staged compatibility plan:
 
 ```text
-breero_callcenter/
-breero_support/
-
+1. new addon depends on breero_crm
+2. current breero.sync.event remains available
+3. data/XML IDs are migrated without duplication
+4. producer and consumer compatibility is tested
+5. old and new versions can coexist during rollout if required
+6. all producers are switched and verified
+7. removal happens only in a separate reviewed release
 ```
 
----
+Do not create a disconnected `addons/` tree that bypasses the existing deployment artifact.
 
-# 3. Standard Odoo modules
+# 3. System-of-record boundary
 
-Use existing Odoo modules where appropriate:
+BREERO PostgreSQL/PostGIS remains authoritative for:
 
 ```text
-contacts
-crm
-mail
-calendar
-
+ProjectRequest
+matching
+Opportunity
+LeadConnection
+Conversation authority
+Quote
+Booking
+Job
+Review
+Dispute
+provider eligibility
+capability state
+payment/refund/earning/payout state
 ```
 
-Optional:
+Odoo owns only its campaign CRM workflow, projections, activities, notes, agent/supervisor assignments, approved mailbox projection, integration inbox/outbox, mappings, and local operational reporting.
+
+Odoo never writes directly to BREERO business tables. A requested marketplace mutation uses an authenticated allowlisted BREERO command/API and returns through normal BREERO authorization, record policy, capability, idempotency, audit, and outbox handling.
+
+# 4. Tenant, company, and campaign authority
+
+Every campaign-scoped business record carries first-class scope:
 
 ```text
-helpdesk
-documents
-
-```
-
-Do not make Odoo Field Service authoritative if the core application already owns Job execution.
-
----
-
-# 4. Core campaign model
-
-Create:
-
-```text
-breero.campaign
-
-```
-
-Fields:
-
-```text
-name
-code
-
-tenant_id
 company_id
-
-campaign_type
-status
-
-primary_domain
-
-crm_team_id
-
-supervisor_ids
-allowed_agent_ids
-
-start_date
-end_date
-
-timezone
-
-email_enabled
-sms_enabled
-phone_enabled
-
-inbound_enabled
-outbound_enabled
-
-safe_mode
-
-max_daily_contacts
-
-external_campaign_id
-
-active
-
+breero_tenant_id or authoritative tenant mapping
+campaign_id
 ```
 
-Campaign types:
+Where legal entities differ from Odoo companies, persist the authoritative external legal-entity identifier or mapping as well.
+
+Scope is not inferred solely from payload text, a CRM team, current UI company, user context, or a related lead after the fact.
+
+# 5. Core Odoo models
+
+Extend the existing addon with reviewed models or extensions for:
 
 ```text
-CUSTOMER_ACQUISITION
-CUSTOMER_SUPPORT
-SERVICE_REQUEST
-PROVIDER_RECRUITMENT
-PROVIDER_SUPPORT
-RETENTION
-FOLLOW_UP
-
+breero.crm.campaign
+breero.crm.campaign.membership
+breero.crm.membership.history
+breero.crm.mailbox
+breero.crm.disposition
+breero.crm.callback
+breero.crm.appointment
+breero.crm.integration.mapping
+breero.crm.integration.inbox
+breero.crm.integration.outbox
+breero.crm.delivery
+breero.crm.operational.exception
+breero.crm.access.audit
 ```
 
----
+Technical names may be adjusted to fit existing accepted names, but ownership and constraints below are binding.
 
-# 5. Tenant model
+# 6. Campaign membership is a security authority
 
-Create or extend:
+A campaign membership grants campaign-scoped role and assignment authority. Duplicate authoritative memberships are forbidden.
 
-```text
-breero.tenant
-
-```
-
-Fields:
-
-```text
-name
-code
-
-company_id
-
-external_tenant_id
-
-active
-
-```
-
-Every campaign-scoped custom record must carry tenant/company context where applicable.
-
----
-
-# 6. Campaign membership
-
-Create:
-
-```text
-breero.campaign.agent
-
-```
-
-Fields:
+Required fields:
 
 ```text
 campaign_id
 user_id
-
-agent_role
-status
-
-assigned_at
-removed_at
-
-daily_limit
-
-mailbox_identity_id
-
-can_compose_email
-can_send_sms
-can_call
-can_reassign
-can_export
-
-```
-
-Do not infer campaign access merely from generic CRM team membership.
-
-Campaign membership is the security authority.
-
----
-
-# 7. Extend CRM lead
-
-Extend:
-
-```text
-crm.lead
-
-```
-
-Add:
-
-```text
-tenant_id
 company_id
-
-campaign_id
-
-external_record_type
-external_record_id
-
-external_customer_id
-external_provider_id
-
-project_request_id
-lead_connection_id
-quote_id
-booking_id
-job_id
-
-source_system
-
-contact_access_level
-
-marketplace_status
-
-integration_status
-
-last_sync_at
-
-assigned_agent_id
-supervisor_id
-
-disposition_code
-disposition_note
-
-do_not_contact
-consent_status
-
+tenant mapping
+role
+active
+started_at
+ended_at
+created_by
+updated_by
 ```
 
-External IDs must be indexed where appropriate.
+## 6.1 Uniqueness rule
 
-Do not create duplicate CRM leads for the same authoritative record.
-
----
-
-# 8. CRM state versus authoritative state
-
-CRM stages are local operational workflow.
-
-Recommended stages:
+Use one authoritative membership row per campaign and user:
 
 ```text
-NEW
-ASSIGNED
-ATTEMPTING_CONTACT
-CONTACTED
-FOLLOW_UP
-QUALIFIED
-WAITING_CUSTOMER
-WAITING_PROVIDER
-ESCALATED
-CLOSED_WON
-CLOSED_LOST
-
+UNIQUE (campaign_id, user_id)
 ```
 
-Authoritative marketplace status is a separate read-only projection:
+Activation, deactivation, role changes, and assignment changes update that row through audited commands.
+
+Historical periods belong in an append-only membership-history/audit model, not duplicate current membership rows.
+
+This prevents imports, retries, or concurrent administration from creating two rows where one is inactive and another silently keeps access active.
+
+## 6.2 Immediate revocation
+
+Removing or deactivating a membership must immediately deny:
 
 ```text
-REQUEST_SUBMITTED
-MATCHING
-MATCHED
-QUOTING
-BOOKED
-JOB_IN_PROGRESS
-JOB_COMPLETED
-
+campaign leads/cases
+mailboxes and messages
+activities/callbacks/appointments
+attachments and chatter
+search/name lookup
+exports and reports
+queues and dashboards
+integration retry/replay actions
 ```
 
-Agent may change:
+Cache/session behavior must not preserve access beyond the approved revocation window.
+
+# 7. Roles and separation of duty
+
+Initial campaign roles:
 
 ```text
-CRM stage
-disposition
-follow-up
-notes
-activity
-
+agent
+closer
+supervisor
+quality
+support
+campaign_admin
+integration_service
 ```
 
-Agent may not directly change:
+Role name alone is insufficient. Access requires active company/tenant/campaign membership and record scope.
 
-```text
-marketplace request state
-quote state
-booking state
-job state
-provider eligibility
-payment state
+Representative boundaries:
 
-```
+- agents see only assigned or approved shared-queue records in their campaign;
+- closers see only campaigns and queues assigned to them;
+- supervisors see supervised campaign scope, not every tenant/company;
+- quality sees recordings/evidence only under approved QA policy;
+- support sees minimum fields required for an assigned case;
+- campaign admins cannot read raw integration secrets;
+- integration service accounts cannot inherit interactive agent/admin access;
+- finance/trust/marketplace authority is not implied by CRM roles.
 
----
+# 8. Security implementation
 
-# 9. Contact visibility
-
-Add:
-
-```text
-contact_access_level
-
-```
-
-Allowed:
-
-```text
-NONE
-MASKED
-AUTHORIZED
-
-```
-
-Projection behavior:
-
-```text
-NONE
-→ no direct contact data
-
-MASKED
-→ masked email/phone
-→ general location only
-
-AUTHORIZED
-→ full approved contact information
-
-```
-
-The CRM must never infer authorization.
-
-It receives contact-access state from the authoritative platform.
-
----
-
-# 10. Security groups
-
-Create:
-
-```text
-group_campaign_agent
-
-group_campaign_supervisor
-
-group_campaign_ops
-
-group_campaign_admin
-
-group_campaign_mail_supervisor
-
-group_trust_safety
-
-group_finance
-
-group_integration_operator
-
-```
-
-Do not create one all-powerful Campaign Manager role.
-
-Permissions must be composable.
-
----
-
-# 11. Agent security
-
-Campaign Agent may:
-
-```text
-read/write own assigned leads
-
-read unassigned campaign queue only if campaign policy permits
-
-create/update approved notes
-
-create activities
-
-set approved dispositions
-
-schedule follow-up
-
-read own Inbox/Sent
-
-compose through own campaign mailbox
-
-escalate a record
-
-```
-
-Campaign Agent may not:
-
-```text
-read unrelated campaign records
-
-read other tenant records
-
-read another agent's private mailbox
-
-read another agent's private lead by default
-
-see unauthorized customer PII
-
-approve provider credentials
-
-suspend providers
-
-approve refunds
-
-approve payouts
-
-change feature flags
-
-read integration secrets
-
-manage users/roles
-
-```
-
----
-
-# 12. Supervisor security
-
-Supervisor may:
-
-```text
-read all records in supervised campaigns
-
-view agent queues
-
-reassign leads within supervised campaign
-
-view campaign performance
-
-view escalations
-
-review agent activities
-
-acknowledge/resolve campaign operational exceptions
-
-```
-
-Supervisor may not automatically:
-
-```text
-access unrelated campaigns
-
-access another tenant
-
-approve finance operations
-
-verify credentials
-
-change system configuration
-
-read integration secrets
-
-read all private mailbox content
-
-```
-
-Mailbox supervision requires separate permission:
-
-```text
-campaign.mail.supervise
-
-```
-
-Every supervised mailbox access must be audited.
-
----
-
-# 13. Ops role
-
-Campaign/Ops Manager may:
-
-```text
-operate multiple explicitly assigned campaigns
-
-see queue health
-
-manage escalations
-
-view integration failures
-
-view CRM/customer/provider operational projections
-
-```
-
-Ops does not automatically get:
-
-```text
-finance
-trust/safety
-system admin
-secret access
-
-```
-
----
-
-# 14. Trust & Safety
-
-Trust & Safety may access:
-
-```text
-complaints
-
-provider compliance projections
-
-suspension workflows
-
-credential-review projections
-
-disputes
-
-```
-
-Trust & Safety does not automatically get:
-
-```text
-campaign send permissions
-
-finance
-
-global system configuration
-
-```
-
----
-
-# 15. Finance
-
-Finance is separate.
-
-Finance may access:
-
-```text
-billing
-
-refund workflows
-
-payout workflows
-
-financial reports
-
-```
-
-Finance should not automatically receive unrelated campaign CRM or mailbox access.
-
----
-
-# 16. Campaign Admin
-
-Campaign Admin may:
-
-```text
-create/edit campaigns
-
-manage campaign membership
-
-manage dispositions
-
-manage mailbox assignments
-
-manage integration mappings
-
-configure campaign limits
-
-```
-
-Campaign Admin does not see raw credentials/secrets in normal screens.
-
----
-
-# 17. System Admin
-
-System Admin owns:
-
-```text
-technical module configuration
-
-system-wide Odoo configuration
-
-security configuration
-
-deployment/module administration
-
-```
-
-Secrets still remain in approved external secret storage.
-
----
-
-# 18. Record rules
-
-Every campaign-scoped model must have real Odoo record rules.
-
-Do not rely on menu hiding.
-
-Agent CRM lead domain concept:
-
-```text
-tenant belongs to agent tenant
-AND
-campaign belongs to allowed campaigns
-AND
-record assigned to current agent
-OR
-record unassigned and campaign permits queue access
-
-```
-
-Supervisor:
-
-```text
-tenant allowed
-AND
-campaign in supervised campaigns
-
-```
-
-Other tenant/campaign records must be invisible.
-
----
-
-# 19. Model access rules
-
-Implement both:
+For every model, implement both:
 
 ```text
 ir.model.access.csv
-+
-ir.rule record rules
-
+AND ir.rule record rules
 ```
 
-`ir.model.access.csv` determines model capability.
-
-`ir.rule` determines record visibility.
-
-Both are required.
-
----
-
-# 20. Agent workspace
-
-Build:
+Access decision:
 
 ```text
-My Workspace
-
+model permission
+AND active company/tenant context
+AND active campaign membership
+AND role-specific record scope
+= ALLOW
 ```
 
-Dashboard:
+Rules cover forms, lists, kanban, search, name lookup, chatter, activities, attachments, exports, reports, dashboards, scheduled actions, and RPC/API access.
+
+Avoid broad `sudo()`. Any elevation is narrowly scoped, documented, audited, and tested.
+
+# 9. CRM lead/case projection
+
+Extend current `crm.lead`, `res.partner`, and `breero.crm.case` projection behavior rather than creating duplicate customer/lead universes.
+
+Projection records include stable external identity and version fields:
 
 ```text
-My Queue
-Inbox
-Sent
-Compose
-Follow-ups
-Escalations
-
-```
-
-Summary cards:
-
-```text
-New Leads
-Follow-ups Today
-Overdue
-Unread Messages
-Escalations
-
-```
-
-Queue columns:
-
-```text
-reference
-campaign
-customer
-service
-CRM stage
-marketplace state
-last activity
-next action
-age
-
-```
-
----
-
-# 21. Lead workspace
-
-Lead page layout:
-
-```text
-HEADER
-Reference
-Campaign
-CRM stage
-Marketplace state
-
-LEFT
-Customer
-Authorized contact
-Consent/suppression
-Location
-
-RIGHT
-Request summary
-Provider/match summary
-Quote status
-Booking/job status
-
-CENTER
-Activity timeline
-
-BOTTOM
-Notes
-Chatter
-Compose
-Follow-up
-Disposition
-Escalate
-
-```
-
-Authoritative status fields are read-only.
-
----
-
-# 22. Dispositions
-
-Create:
-
-```text
-breero.disposition
-
-```
-
-Fields:
-
-```text
-code
-name
-campaign_type
-active
-
-requires_note
-requires_followup
-closes_record
-
-suppression_action
-escalation_action
-
-```
-
-Examples:
-
-```text
-CONTACTED
-NO_ANSWER
-CALL_BACK
-NOT_INTERESTED
-DUPLICATE
-WRONG_NUMBER
-QUALIFIED
-BOOKED
-ESCALATED
-DO_NOT_CONTACT
-
-```
-
-Dispositions can create approved activities/events.
-
-They cannot bypass core-platform policy.
-
----
-
-# 23. Activities
-
-Use Odoo activities for:
-
-```text
-call back
-
-email follow-up
-
-document requested
-
-supervisor review
-
-customer follow-up
-
-provider follow-up
-
-```
-
-Activity state is Odoo-owned.
-
-Marketplace state is not.
-
----
-
-# 24. Mailbox module
-
-Create:
-
-```text
-breero.mailbox.identity
-breero.mail.thread
-breero.mail.message
-breero.mail.delivery
-
-```
-
-Mailbox identity:
-
-```text
-tenant_id
+breero_tenant_id
 campaign_id
-user_id
-
-email_address
-
-status
-
-external_provider_identity
-
-created_at
-disabled_at
-
-```
-
-Never expose raw SMTP credentials.
-
----
-
-# 25. Inbox
-
-Agent Inbox shows:
-
-```text
-sender
-
-campaign
-
-linked CRM lead
-
-subject
-
-received time
-
-unread
-
-delivery/security status
-
-```
-
-Only messages routed to the agent/campaign are visible.
-
----
-
-# 26. Sent
-
-Agent Sent shows:
-
-```text
-recipient
-
-campaign
-
-CRM lead
-
-subject
-
-sent time
-
-delivery state
-
-```
-
-Delivery state:
-
-```text
-PENDING
-SENT
-DELIVERED
-BOUNCED
-FAILED
-SUPPRESSED
-
-```
-
----
-
-# 27. Compose
-
-Compose fields:
-
-```text
-From
-
-To
-
-Subject
-
-Message
-
-Attachments where approved
-
-```
-
-Before Send validate:
-
-```text
-active agent
-
-active campaign membership
-
-mailbox active
-
-recipient authorized
-
-contact access
-
-consent
-
-suppression
-
-campaign send enabled
-
-safe-mode policy
-
-daily limits
-
-rate limits
-
-```
-
----
-
-# 28. Email routing
-
-Outbound:
-
-```text
-Odoo Compose
-    ↓
-Odoo Outbox
-    ↓
-Middleware/Control Plane
-    ↓
-Email Provider
-
-```
-
-Inbound:
-
-```text
-Email Provider
-    ↓
-Policy / malware / tenant validation
-    ↓
-Middleware
-    ↓
-Odoo Inbox
-
-```
-
----
-
-# 29. Supervisor workspace
-
-Build:
-
-```text
-Campaign Dashboard
-Agent Queues
-Assignment/Reassignment
-SLA Risk
-Escalations
-Delivery Health
-
-```
-
-Dashboard metrics:
-
-```text
-Active Agents
-New Leads
-Assigned
-Unassigned
-Contacted
-Follow-ups
-Overdue
-Escalated
-SLA %
-
-```
-
-Agent table:
-
-```text
-Agent
-Queue
-Contacted
-Follow-up
-Overdue
-SLA
-
-```
-
----
-
-# 30. Reporting
-
-Agent personal metrics:
-
-```text
-assigned
-
-contacted
-
-follow-up
-
-closed
-
-response time
-
-SLA
-
-```
-
-Supervisor metrics:
-
-```text
-campaign volume
-
-queue size
-
-agent capacity
-
-contact rate
-
-conversion
-
-response time
-
-SLA
-
-escalations
-
-```
-
-Integration metrics:
-
-```text
-email delivery
-
-SMS delivery
-
-sync backlog
-
-failed projections
-
-```
-
----
-
-# 31. Integration mapping
-
-Create:
-
-```text
-breero.integration.mapping
-
-```
-
-Fields:
-
-```text
-external_system
-
-external_type
-external_id
-
-odoo_model
-odoo_record_id
-
-tenant_id
-campaign_id
-
+source_system
+external_aggregate_type
+external_aggregate_id
 external_version
-
-last_sync_at
-
+last_event_id
+last_synced_at
+contact_access_state
+projection_status
 ```
 
-Unique mapping prevents duplicate records.
+Updates are idempotent and reject/park stale external versions according to policy.
 
----
+Odoo stage changes are operational workflow only. They do not become authoritative BREERO marketplace state.
 
-# 32. Integration inbox
+# 10. Agent workspace
 
-Create:
+Provide a clean Odoo 19 workspace with:
 
 ```text
-breero.integration.inbox
-
+My queue
+Today’s callbacks
+Appointments
+Open conversations
+Needs disposition
+Escalations
+Recently contacted
+Customer/case context
+Approved contact channels
+Notes and activities
 ```
 
-Fields:
+The workspace must remain usable with keyboard navigation and standard Odoo accessibility behavior. It must not expose fields outside the user’s scope.
+
+# 11. After-call disposition workflow
+
+After a completed telephony event, create an after-call disposition wizard/activity when policy requires it.
+
+Required disposition data:
 
 ```text
-provider
+campaign
+lead/case
+agent
+call external ID
+outcome
+reason
+notes
+next action
+callback requested
+callback time/timezone
+appointment requested
+consent/suppression changes where authorized
+```
 
+Rules:
+
+- the wizard never changes authoritative BREERO marketplace state directly;
+- incomplete required dispositions remain visible in the agent/supervisor queue;
+- duplicate telephony callbacks do not create duplicate disposition work;
+- write access is limited to the call’s assigned campaign/agent or authorized supervisor;
+- QA/supervisor corrections are audited, not silently overwritten.
+
+# 12. Callback and appointment scheduling
+
+When a customer requests a callback or appointment:
+
+```text
+create/update campaign-scoped callback or appointment
+create Odoo activity for assigned agent/queue
+record customer timezone and normalized UTC time
+link source call/message/case
+emit approved notification intent only when channel policy permits
+```
+
+Reminder policy may include:
+
+```text
+30 minutes before → agent reminder
+15 minutes before → preparation reminder and approved customer/agent notification
+```
+
+The exact timings are configurable per campaign. Missing channel authorization fails closed; the internal activity still remains visible.
+
+Concurrent edits use version/conflict handling so two agents do not silently overwrite the same callback.
+
+# 13. Mailbox and communication projection
+
+Mailbox records are campaign and company scoped. They contain approved identities and routing metadata, not raw provider credentials.
+
+Required controls:
+
+```text
+active mailbox
+campaign membership
+company/tenant scope
+purpose
+recipient/contact authorization
+consent where required
+suppression/do-not-contact
+safe mode
+per-agent permission
+daily/rate limits
+middleware/provider readiness
+```
+
+All must pass before a send request can be emitted.
+
+Odoo templates, `mail.thread`, `mail.mail`, automated actions, scheduled actions, aliases, catchall, bounce, and reply routing must be inventoried so no indirect path bypasses the approved middleware/outbox.
+
+# 14. Integration inbox
+
+Extend the existing `breero.sync.event` contract or stage a compatible successor. Accepted integration records must persist validated first-class scope before they enter campaign processing.
+
+Required fields/relations include:
+
+```text
+provider/source
 external_event_id
-
 event_type
-
-aggregate_type
-aggregate_id
-
 schema_version
-
-payload
-
-request_hash
-
+request/body hash
+authentication result
+company_id
+breero_tenant_id or tenant mapping
+campaign_id when campaign-scoped
+legal_entity mapping where applicable
+aggregate type/id/version
 status
-
+attempt_count
+claimed_by
+claim_token
+lease_expires_at
+next_attempt_at
 received_at
 processed_at
-
-error_code
-
 correlation_id
-
-```
-
-Unique:
-
-```text
-(provider, external_event_id)
-
-```
-
----
-
-# 33. Integration outbox
-
-Create:
-
-```text
-breero.integration.outbox
-
-```
-
-Fields:
-
-```text
-event_type
-
-aggregate_type
-aggregate_id
-
-payload
-
-idempotency_key
-
-status
-
-attempt_count
-max_attempts
-
-next_attempt_at
-
-lease_owner
-lease_until
-
-correlation_id
-
 last_error_code
-
-created_at
-delivered_at
-
+approved minimized/redacted payload
 ```
 
-States:
+## 14.1 Scope resolution before acceptance
+
+Inbound flow:
 
 ```text
-PENDING_CONFIGURATION
-PENDING
-PROCESSING
-RETRYABLE
-DELIVERED
-FAILED_TERMINAL
-
+verify service identity/signature
+parse the minimal envelope
+validate tenant/company/campaign identifiers
+resolve active mappings
+persist accepted row with first-class scope
+acknowledge
+process asynchronously
 ```
 
----
+An unknown or conflicting tenant/company/campaign mapping is denied or placed in a dedicated restricted quarantine state. It is not accepted as a globally visible unscoped campaign event.
 
-# 34. Inbound projection flow
+Record rules use the first-class scope columns. They do not parse an opaque payload to decide access.
+
+Unique provider/event identity and claim-token-safe worker processing prevent duplicate business effects.
+
+# 15. Integration outbox and deliveries
+
+Outbox records also persist:
 
 ```text
-Authoritative Platform Event
-        ↓
-Middleware
-        ↓
-Authenticated Odoo Endpoint
-        ↓
-Integration Inbox
-        ↓
-Worker
-        ↓
-Mapping Lookup
-        ↓
-Create/Update Odoo Projection
-
+company_id
+breero_tenant_id or tenant mapping
+campaign_id when campaign-scoped
+purpose
+destination/event or command type
+aggregate identity/version
+idempotency key
+correlation/causation
+status/attempts
+claim ownership/lease
+next attempt
+terminal error
 ```
 
-Do not perform long projection work synchronously in callback endpoint.
+The outbox may request only allowlisted BREERO/middleware operations. It does not store raw secrets and does not create an alternative authoritative marketplace command path.
 
----
+Every claim receives a fresh token; stale workers cannot finalize a newer claim. Disabled external channels park safely without false delivery.
 
-# 35. Outbound command flow
+# 16. Integration mappings
 
-Example agent requests cancellation:
+Mappings are explicit and versioned:
 
 ```text
-Agent clicks Request Cancellation
-        ↓
-Odoo local transaction
-        ↓
-Odoo Outbox command
-        ↓
-Middleware
-        ↓
-Authoritative API
-        ↓
-Domain Command
-        ↓
-Policy
-        ↓
-Success/Reject
-        ↓
-Authoritative event
-        ↓
-Odoo projection updated
-
+BREERO tenant ↔ Odoo company
+BREERO campaign ↔ Odoo campaign
+BREERO user/agent ↔ res.users
+BREERO aggregate ↔ Odoo projection
+provider/mailbox identity ↔ approved campaign channel
 ```
 
-Odoo never assumes success before authoritative response/event.
+Ambiguous mappings fail closed. Administrative changes require permission, reason, audit, and reconciliation.
 
----
+# 17. Operational exceptions and reconciliation
 
-# 36. Supported outbound commands
-
-Initially allowlist only commands genuinely needed.
-
-Examples:
+Create visible exceptions for:
 
 ```text
-request_followup
-
-request_cancellation
-
-support_escalation
-
-customer_contact_attempt
-
-provider_contact_attempt
-
-```
-
-Do not expose generic arbitrary resource mutation.
-
----
-
-# 37. Odoo webhook/API security
-
-Require:
-
-```text
-service authentication
-
-tenant authorization
-
-campaign authorization where applicable
-
-idempotency
-
-correlation ID
-
-request-size limit
-
-content type
-
-timestamp/replay protection for signed callbacks
-
-audit
-
-```
-
-No secrets in payload logs.
-
----
-
-# 38. PII
-
-Fields should have explicit visibility rules.
-
-Classification:
-
-```text
-PUBLIC
-INTERNAL
-MASKED
-SENSITIVE
-RESTRICTED
-
-```
-
-Customer phone/email normally:
-
-```text
-MASKED
-
-```
-
-until authorized.
-
-Sensitive documents should usually remain in the authoritative platform and be referenced, not replicated into Odoo.
-
----
-
-# 39. Compliance module
-
-Track projection of:
-
-```text
-communication preferences
-
-consent
-
-suppression
-
-do-not-contact
-
-transactional/marketing distinction
-
-```
-
-Campaign action must fail when the relevant channel/purpose is suppressed.
-
----
-
-# 40. Shared queues
-
-Support:
-
-```text
-support@
-billing@
-
-```
-
-Routing:
-
-```text
-support@
-→ support queue
-
-billing@
-→ finance queue
-
-```
-
-Do not route `billing@` to ordinary campaign agents.
-
----
-
-# 41. Disabled agent lifecycle
-
-When agent becomes disabled or loses campaign membership:
-
-```text
-campaign access removed
-
-mailbox disabled
-
-new sends denied
-
-queue reassigned according to policy
-
-historical audit retained
-
-```
-
-Do not delete history.
-
----
-
-# 42. Campaign removal lifecycle
-
-When an agent is removed:
-
-```text
-membership = INACTIVE
-
-mailbox disabled
-
-assigned records requeued/reassigned
-
-future messages routed according to fallback policy
-
-```
-
-Historical notes/messages remain.
-
----
-
-# 43. Integration failure UI
-
-Create an Integration Operations screen.
-
-Show:
-
-```text
-event
-
-resource
-
-status
-
-attempts
-
-last error code
-
-next retry
-
-correlation ID
-
-```
-
-Actions:
-
-```text
-Retry
-Cancel where valid
-Open linked record
-
-```
-
-Only:
-
-```text
-group_integration_operator
-
-```
-
-or Admin may operate retries.
-
----
-
-# 44. Negative authorization tests
-
-Mandatory:
-
-```text
-Agent A cannot read Agent B private lead
-
-Agent A cannot access Campaign B
-
-Agent A cannot access Tenant B
-
-Agent cannot access unauthorized full PII
-
-Agent cannot read another agent mailbox
-
-Supervisor cannot access unrelated campaign
-
-Supervisor cannot access other tenant
-
-Supervisor cannot approve finance
-
-Supervisor cannot inspect secret configuration
-
-Finance cannot automatically access unrelated CRM
-
-Removed agent cannot read campaign records
-
-Disabled mailbox cannot send
-
-Do-not-contact record cannot be sent through prohibited channel
-
-```
-
----
-
-# 45. Integration reliability tests
-
-Test:
-
-```text
-duplicate inbound event
-
-out-of-order event
-
-stale external version
-
-middleware offline
-
-provider timeout
-
-retry
-
-stale lease
-
-failed terminal
-
-manual retry
-
+unknown tenant/campaign
+stale projection version
 mapping conflict
-
-unknown aggregate
-
-unknown campaign
-
-wrong tenant
-
-invalid service identity
-
+duplicate conflict
+terminal inbox/outbox failure
+mailbox disabled
+suppression/consent block
+provider outage
+callback/appointment ownership conflict
+record-rule inconsistency
 ```
 
-No duplicate CRM projections.
+Authorized operators may acknowledge, assign, note, retry/replay where safe, and resolve with reason. Retry/replay retains tenant/campaign scope and idempotency.
 
----
+Scheduled reconciliation compares BREERO projection/version state with Odoo mappings without making Odoo authoritative.
 
-# 46. Module upgrade testing
+# 18. Data classification
 
-For every custom Odoo module:
+Contact data uses explicit access state:
 
 ```text
-install clean
-
-upgrade from current version
-
-uninstall where safe
-
-record rules
-
-ACLs
-
-views
-
-menus
-
-scheduled actions
-
-integration migrations
-
+NONE
+MASKED
+AUTHORIZED
 ```
 
-Run against a disposable Odoo/PostgreSQL environment.
+Precise phone, email, address, access instructions, recordings, attachments, credentials, and financial information require approved purpose and field-level policy.
 
-Do not test upgrade on production.
+Raw credential, payment, identity, and job-evidence documents remain outside Odoo by default. Chatter, notes, payloads, logs, exports, and reports must not become unrestricted PII storage.
 
----
+# 19. External communication defaults
 
-# 47. Staging
-
-Deploy Odoo modules to staging first.
-
-Verify:
+Until a separate activation change is reviewed and approved:
 
 ```text
-module upgrade
-
-record rules
-
-campaign membership
-
-agent workspace
-
-supervisor workspace
-
-inbox
-
-sent
-
-compose
-
-projection sync
-
-outbox
-
-inbox
-
-middleware auth
-
-negative authorization
-
+outbound_email=false
+outbound_sms=false
+telephony_write=false
+automatic_workflow_execution=false
+marketing_send=false
 ```
 
-Use safe email/SMS recipients only.
+An installed module, active mailbox record, template, campaign flag, or successful staging projection does not activate a channel.
 
----
+Each channel/purpose activation identifies exact module versions, campaign/tenant scope, middleware/provider configuration, consent/suppression policy, canary recipients, limits, monitoring, abort thresholds, disable procedure, and authorizing owner.
 
-# 48. Production feature gates
+# 20. Reporting
 
-Default:
+Campaign reporting may include:
 
 ```text
-outbound_email = false
-
-outbound_sms = false
-
-telephony_write = false
-
-automatic_workflow_execution = false
-
+queue age
+contact attempts
+callback SLA
+appointment adherence
+disposition completion
+agent/supervisor workload
+inbox/outbox health
+terminal failures
+suppression blocks
+projection lag
 ```
 
-Enable independently after certification.
+Reports obey the same company/tenant/campaign record rules as operational records and do not expose unrestricted PII.
 
-CRM read/projection functionality can be enabled separately from external sends.
+# 21. Upgrade and migration sequence
 
----
-
-# 49. Required evidence
-
-Every implementation PR should report:
+Implementation order:
 
 ```text
-SOURCE_SHA
+1. extend existing breero_crm manifest/models
+2. add migrations and stable external IDs
+3. add membership uniqueness/history
+4. add company/tenant/campaign first-class scope
+5. update ACLs and record rules
+6. upgrade existing breero.sync.event compatibility
+7. add inbox/outbox lease/idempotency behavior
+8. add agent/supervisor workspace
+9. add disposition/callback/appointment workflow
+10. add mailbox UI with all outbound channels disabled
+11. add reporting and reconciliation
+12. stage in isolated Odoo 19
+13. separately review each channel activation
+```
 
-MODULES_CHANGED
+Before upgrade:
 
-MIGRATIONS
+- backup the Odoo database and filestore;
+- test clean install and upgrade from `19.0.1.0.0`;
+- inventory current XML IDs/models/cron/actions/security;
+- prove existing BREERO deliveries still resolve `breero.sync.event`;
+- document rollback or forward-fix boundary.
 
-ODOO_INSTALL_TEST
+# 22. Mandatory tests
 
-ODOO_UPGRADE_TEST
+At minimum:
 
+```text
+clean Odoo 19 install
+upgrade from breero_crm 19.0.1.0.0
+existing breero.sync.event delivery compatibility
+one membership row per campaign/user enforced
+concurrent duplicate membership rejected
+membership deactivation immediately revokes access
+agent denied other agent private lead/mailbox
+agent denied other campaign and tenant
+supervisor denied unrelated campaign/tenant
+record rules cover form/list/search/chatter/activity/attachment/export/report
+unknown tenant/company/campaign event denied or restricted quarantine
+accepted inbox row always has validated first-class scope
+inbox/outbox record rules use scope columns
+integration duplicate event has one projection effect
+stale projection version parked
+stale claim cannot finalize newer claim
+invalid service identity denied
+disabled mailbox/channel cannot send
+suppression/do-not-contact blocks prohibited purpose
+staging safe-recipient containment
+automated action/template cannot bypass middleware policy
+callback/appointment timezone and duplicate handling
+reminder scheduling without unauthorized send
+backup/restore/upgrade smoke
+```
+
+# 23. Pull-request evidence
+
+Every implementation PR reports:
+
+```text
+BASE_MAIN_SHA
+FINAL_SHA
+ODOO_EDITION_AND_BUILD
+ODOO_IMAGE_DIGEST
+MODULE_VERSION_BEFORE
+MODULE_VERSION_AFTER
+EXISTING_MODELS_AND_XML_IDS_PRESERVED_OR_MIGRATED
+CLEAN_INSTALL
+UPGRADE_RESULT
+DATABASE_AND_FILESTORE_BACKUP_EVIDENCE
 ACL_TESTS
-
 RECORD_RULE_TESTS
-
-AGENT_TESTS
-
-SUPERVISOR_TESTS
-
-MAILBOX_TESTS
-
-INTEGRATION_INBOX_TESTS
-
-INTEGRATION_OUTBOX_TESTS
-
-NEGATIVE_AUTH_TESTS
-
+MEMBERSHIP_UNIQUENESS_TESTS
+TENANT_CAMPAIGN_SCOPE_TESTS
+INTEGRATION_COMPATIBILITY_TESTS
+MAIL_SAFETY_TESTS
 STAGING_STATUS
-
-EXTERNAL_SENDS_ENABLED
-
-BLOCKERS
-
+ROLLBACK_OR_FORWARD_FIX_BOUNDARY
+EXTERNAL_SENDS_ENABLED=false
+TELEPHONY_WRITE_ENABLED=false
+AUTOMATIC_WORKFLOW_EXECUTION=false
+UNRESOLVED_RISKS
 ```
 
----
-
-# 50. Final Definition of Done
-
-Campaign CRM is production-ready only when:
-
-```text
-campaign model complete
-
-campaign membership complete
-
-agent record rules complete
-
-supervisor record rules complete
-
-tenant isolation complete
-
-contact masking complete
-
-CRM projection complete
-
-agent workspace complete
-
-supervisor workspace complete
-
-dispositions complete
-
-activities complete
-
-Inbox complete
-
-Sent complete
-
-Compose complete
-
-mailbox lifecycle complete
-
-Odoo integration inbox complete
-
-Odoo integration outbox complete
-
-integration mappings complete
-
-middleware authentication complete
-
-compliance checks complete
-
-audit complete
-
-integration failure UI complete
-
-negative authorization tests complete
-
-staging upgrade complete
-
-staging agent/supervisor E2E complete
-
-outbound channels remain gated until approved
-
-```
-
-Do not merge or enable external sends merely because module installation succeeds.
+Documentation completion alone does not install, upgrade, deploy, send, call, or activate anything.
