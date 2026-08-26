@@ -1,10 +1,9 @@
-from fastapi.routing import APIRoute
-
 from app.api.policy_registry import (
     DOCUMENTATION_PATHS,
     OPENAPI_METHODS,
     POLICY_RULES,
     get_endpoint_registry,
+    iter_api_route_contexts,
 )
 from app.main import app
 
@@ -34,8 +33,8 @@ REQUIRED_POLICY_FIELDS = {
 
 def _runtime_operations() -> set[tuple[str, str]]:
     operations: set[tuple[str, str]] = set()
-    for route in app.routes:
-        if not isinstance(route, APIRoute) or route.path in DOCUMENTATION_PATHS:
+    for route in iter_api_route_contexts(app):
+        if route.path in DOCUMENTATION_PATHS:
             continue
         for method in (route.methods or set()) & OPENAPI_METHODS:
             operations.add((method, route.path))
@@ -50,14 +49,17 @@ def test_every_runtime_operation_has_one_complete_policy() -> None:
 
     assert registered == _runtime_operations()
     assert len(registered) == len(endpoints)
+    assert len(registered) >= 60
     assert str(document["digest"]).startswith("sha256:")
+    assert ("GET", "/api/v1/public/capabilities") in registered
+    assert ("POST", "/api/v1/service-requests") in registered
+    assert ("GET", "/api/v2/capabilities") in registered
+    assert ("GET", "/health/ready") in registered
 
     for entry in endpoints:
         assert REQUIRED_POLICY_FIELDS == set(entry)
         for field in REQUIRED_POLICY_FIELDS - {"request_schema", "response_schema"}:
-            assert str(entry[field]).strip(), (
-                f"{entry['method']} {entry['path']} has empty {field}"
-            )
+            assert str(entry[field]).strip(), f"{entry['method']} {entry['path']} has empty {field}"
 
 
 def test_policy_rule_names_are_unique_and_explicit() -> None:
@@ -74,6 +76,7 @@ def test_policy_rule_names_are_unique_and_explicit() -> None:
 def test_openapi_operations_embed_the_registry_policy() -> None:
     document = get_endpoint_registry(app)
     schema = app.openapi()
+    assert schema["x-breero-endpoint-registry-digest"] == document["digest"]
 
     for entry in document["endpoints"]:
         operation = schema["paths"][entry["path"]][entry["method"].lower()]
