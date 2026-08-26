@@ -30,6 +30,8 @@ function value(data: FormData, key: string) {
 export function PublicIntakeForm({ kind }: { kind: FormKind }) {
   const [services, setServices] = useState<Service[]>(kind === "service" ? fallbackServices : []);
   const [catalogError, setCatalogError] = useState(false);
+  const [catalogEmpty, setCatalogEmpty] = useState(false);
+  const [capabilitiesError, setCapabilitiesError] = useState(false);
   const [capabilities, setCapabilities] = useState<PublicCapabilities | null>(null);
   const [state, setState] = useState<"idle" | "sending" | "accepted" | "unserviceable" | "error">("idle");
 
@@ -42,7 +44,7 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
       })
       .then(setCapabilities)
       .catch((error: unknown) => {
-        if ((error as { name?: string }).name !== "AbortError") setCatalogError(true);
+        if ((error as { name?: string }).name !== "AbortError") setCapabilitiesError(true);
       });
     if (kind !== "service") return () => controller.abort();
     fetch("/api/services", { signal: controller.signal })
@@ -53,7 +55,10 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
       .then((items) => {
         const cleaned = cleanServices(items);
         if (cleaned.length) setServices(cleaned);
-        else setCatalogError(true);
+        else {
+          setServices([]);
+          setCatalogEmpty(true);
+        }
       })
       .catch((error: unknown) => {
         if ((error as { name?: string }).name !== "AbortError") setCatalogError(true);
@@ -193,6 +198,8 @@ export function PublicIntakeForm({ kind }: { kind: FormKind }) {
         <>
           <label>Service<select name="service_slug" required defaultValue=""><option value="" disabled>Select a service</option>{services.map((service) => <option key={service.slug} value={service.slug}>{service.name}</option>)}</select></label>
           {catalogError && <p className="mk-intake__notice" role="status">We could not refresh the live catalog, so the standard service list is shown. You can still send your request.</p>}
+          {catalogEmpty && <p role="alert">No services are currently accepting requests. Please check back later or contact support@breero.com.</p>}
+          {capabilitiesError && <p role="alert">Request availability could not be verified. Please retry or contact support@breero.com.</p>}
           <label>Street address<input name="address_line1" required autoComplete="street-address" /></label>
           <label>City<input name="city" required autoComplete="address-level2" /></label>
           <label>State or district<select name="state" required autoComplete="address-level1"><option value="">Select state</option>{["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map((code) => <option key={code} value={code}>{code}</option>)}</select></label>

@@ -71,4 +71,28 @@ describe("marketing system", () => {
     expect(screen.getByRole("button", { name: "Send request" })).toBeEnabled();
   });
 
+  it("does not offer fallback services after an authoritative empty catalog response", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(
+      url.includes("capabilities") ? { request_intake: true } : [],
+    ), { status: 200 }))));
+
+    render(<PublicIntakeForm kind="service" />);
+
+    await waitFor(() => expect(screen.getByText(/no services are currently accepting requests/i)).toBeInTheDocument());
+    expect(screen.queryByRole("option", { name: "Roofing" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send request" })).toBeDisabled();
+  });
+
+  it("reports capability failures separately and keeps submission disabled", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("capabilities")
+      ? Promise.reject(new Error("capabilities unavailable"))
+      : Promise.resolve(new Response(JSON.stringify([{ id: "service-1", slug: "plumbing", name: "Plumbing", is_active: true }]), { status: 200 }))));
+
+    render(<PublicIntakeForm kind="service" />);
+
+    await waitFor(() => expect(screen.getByText(/request availability could not be verified/i)).toBeInTheDocument());
+    expect(screen.queryByText(/standard service list is shown/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send request" })).toBeDisabled();
+  });
+
 });
