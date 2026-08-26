@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import date, datetime
 from typing import Any, Literal
@@ -5,6 +6,8 @@ from typing import Any, Literal
 from pydantic import AnyHttpUrl, BaseModel, EmailStr, Field, field_validator
 
 from app.domains.common.us import US_STATES_AND_DC
+
+SERVICE_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 class TrackingFields(BaseModel):
@@ -16,7 +19,7 @@ class TrackingFields(BaseModel):
     utm_term: str | None = Field(default=None, max_length=120)
     language: str | None = Field(default=None, max_length=16)
     customer_timezone: str | None = Field(default=None, max_length=64)
-    transactional_contact_allowed: bool = True
+    transactional_contact_allowed: bool = False
     transactional_email_consent: bool = False
     transactional_sms_consent: bool = False
     marketing_email_consent: bool = False
@@ -30,13 +33,25 @@ class TrackingFields(BaseModel):
     policy_version: str | None = Field(default=None, max_length=40)
     company: str = Field(default="", max_length=0, exclude=True)
 
+    @field_validator("consent_disclosures")
+    @classmethod
+    def bounded_consent_disclosures(cls, value: dict[str, str]) -> dict[str, str]:
+        if len(value) > 10:
+            raise ValueError("At most 10 consent disclosures may be supplied")
+        for key, disclosure in value.items():
+            if not key or len(key) > 80:
+                raise ValueError("Consent disclosure keys must contain 1 to 80 characters")
+            if not disclosure.strip() or len(disclosure) > 2000:
+                raise ValueError("Consent disclosure text must contain 1 to 2000 characters")
+        return value
+
 
 class ServiceRequestCreate(TrackingFields):
     name: str = Field(min_length=2, max_length=160)
     email: EmailStr
     phone: str = Field(min_length=7, max_length=40)
     service_id: uuid.UUID | None = None
-    service_slug: str | None = Field(default=None, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    service_slug: str | None = Field(default=None, pattern=SERVICE_SLUG_PATTERN.pattern)
     service_description: str = Field(min_length=5, max_length=4000)
     address_line1: str = Field(min_length=3, max_length=240)
     city: str = Field(min_length=2, max_length=120)
@@ -58,7 +73,15 @@ class ContactCreate(TrackingFields):
     name: str = Field(min_length=2, max_length=160)
     email: EmailStr
     phone: str | None = Field(default=None, min_length=7, max_length=40)
-    category: Literal["booking_help", "service_issue", "billing", "general", "business", "privacy_request", "provider_question"]
+    category: Literal[
+        "booking_help",
+        "service_issue",
+        "billing",
+        "general",
+        "business",
+        "privacy_request",
+        "provider_question",
+    ]
     subject: str = Field(min_length=3, max_length=200)
     message: str = Field(min_length=10, max_length=5000)
 
@@ -75,6 +98,23 @@ class ProviderInterestCreate(TrackingFields):
     postal_code: str = Field(pattern=r"^\d{5}(?:-\d{4})?$")
     license_details: str | None = Field(default=None, max_length=1000)
     notes: str | None = Field(default=None, max_length=3000)
+
+    @field_validator("state")
+    @classmethod
+    def supported_us_state(cls, value: str) -> str:
+        if value not in US_STATES_AND_DC:
+            raise ValueError("Provider interest requires a U.S. state or Washington, D.C.")
+        return value
+
+    @field_validator("service_categories")
+    @classmethod
+    def valid_unique_service_categories(cls, value: list[str]) -> list[str]:
+        normalized = [item.strip().lower() for item in value]
+        if any(not SERVICE_SLUG_PATTERN.fullmatch(item) for item in normalized):
+            raise ValueError("Service categories must use lowercase service slugs")
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("Service categories must be unique")
+        return normalized
 
 
 class SubmissionAccepted(BaseModel):
