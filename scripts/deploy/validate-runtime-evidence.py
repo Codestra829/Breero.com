@@ -8,7 +8,7 @@ import json
 import os
 import stat
 import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from typing import Any
 
 
@@ -122,60 +122,59 @@ def validate_compose_bindings(
     return sorted(set(verified_paths))
 
 
-def iter_route_objects(value: Any) -> Iterable[dict[str, Any]]:
-    if isinstance(value, dict):
-        if isinstance(value.get("match"), list) and isinstance(value.get("handle"), list):
-            yield value
-        for child in value.values():
-            yield from iter_route_objects(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from iter_route_objects(child)
+def route_allows_host(route: Mapping[str, Any], host: str) -> bool:
+    """Return whether at least one route matcher alternative can match host."""
 
-
-def route_hosts(route: Mapping[str, Any]) -> set[str]:
-    hosts: set[str] = set()
     matchers = route.get("match")
-    if not isinstance(matchers, list):
-        return hosts
+    if matchers is None or matchers == []:
+        return True
+    require(isinstance(matchers, list), "Caddy route match must be a list")
     for matcher in matchers:
-        if not isinstance(matcher, dict):
-            continue
+        require(isinstance(matcher, dict), "Caddy route matcher must be an object")
         configured_hosts = matcher.get("host")
-        if isinstance(configured_hosts, list):
-            hosts.update(str(host) for host in configured_hosts if isinstance(host, str))
-    return hosts
+        if configured_hosts is None:
+            return True
+        require(isinstance(configured_hosts, list), "Caddy host matcher must be a list")
+        if host in {item for item in configured_hosts if isinstance(item, str)}:
+            return True
+    return False
 
 
-def reverse_proxy_upstreams(value: Any) -> set[str]:
-    upstreams: set[str] = set()
-    if isinstance(value, dict):
-        if value.get("handler") == "reverse_proxy":
-            configured = value.get("upstreams")
-            if isinstance(configured, list):
-                for upstream in configured:
-                    if isinstance(upstream, dict) and isinstance(upstream.get("dial"), str):
-                        upstreams.add(upstream["dial"])
-        for child in value.values():
-            upstreams.update(reverse_proxy_upstreams(child))
-    elif isinstance(value, list):
-        for child in value:
-            upstreams.update(reverse_proxy_upstreams(child))
-    return upstreams
+def upstreams_for_host(value: Any, host: str) -> set[str]:
+    """Collect only proxies reachable through compatible nested host predicates."""
+
+    if isinstance(value, list):
+        result: set[str] = set()
+        for item in value:
+            result.update(upstreams_for_host(item, host))
+        return result
+
+    if not isinstance(value, dict):
+        return set()
+
+    if value.get("handler") == "reverse_proxy":
+        configured = value.get("upstreams")
+        require(isinstance(configured, list), "Caddy reverse_proxy upstreams must be a list")
+        return {
+            upstream["dial"]
+            for upstream in configured
+            if isinstance(upstream, dict) and isinstance(upstream.get("dial"), str)
+        }
+
+    if "handle" in value:
+        if not route_allows_host(value, host):
+            return set()
+        return upstreams_for_host(value.get("handle"), host)
+
+    result: set[str] = set()
+    for child in value.values():
+        result.update(upstreams_for_host(child, host))
+    return result
 
 
 def validate_caddy_routes(caddy: Mapping[str, Any], args: argparse.Namespace) -> None:
-    host_upstreams: dict[str, set[str]] = {}
-    for route in iter_route_objects(caddy):
-        hosts = route_hosts(route)
-        if not hosts:
-            continue
-        upstreams = reverse_proxy_upstreams(route.get("handle"))
-        for host in hosts:
-            host_upstreams.setdefault(host, set()).update(upstreams)
-
-    web_upstreams = host_upstreams.get(args.expected_web_host, set())
-    api_upstreams = host_upstreams.get(args.expected_api_host, set())
+    web_upstreams = upstreams_for_host(caddy, args.expected_web_host)
+    api_upstreams = upstreams_for_host(caddy, args.expected_api_host)
     require(
         args.expected_web_upstream in web_upstreams,
         "adapted Caddy routes do not bind the approved web host to the approved web upstream",
