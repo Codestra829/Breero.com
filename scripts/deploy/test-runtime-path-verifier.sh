@@ -116,9 +116,6 @@ if grep -Eq '(^|[;&|[:space:]])(rm|mv|cp|touch|mkdir|chmod|chown)([;&|[:space:]]
   exit 1
 fi
 
-# Build a fully synthetic host in a temporary directory. Only read-only verifier
-# operations run against it; Docker, Caddy, hostname and listener inspection are
-# mocked so no local or remote runtime can be changed by this test.
 mock_root="$fixture/mock-host"
 repo="$mock_root/repository"
 mock_bin="$mock_root/bin"
@@ -135,7 +132,9 @@ mkdir -p \
 printf 'backend-compose\n' >"$repo/docker-compose.production.yml"
 printf 'frontend-compose\n' >"$repo/deploy/frontend/docker-compose.frontend.yml"
 printf 'legacy-compose\n' >"$repo/deploy/production/docker-compose.backend.yml"
+cp "$root/scripts/deploy/verify-runtime-paths.sh" "$repo/scripts/deploy/verify-runtime-paths.sh"
 cp "$root/scripts/deploy/validate-runtime-evidence.py" "$repo/scripts/deploy/validate-runtime-evidence.py"
+chmod +x "$repo/scripts/deploy/verify-runtime-paths.sh" "$repo/scripts/deploy/validate-runtime-evidence.py"
 printf 'breero.com { reverse_proxy web:3000 }\napi.breero.com { reverse_proxy api:8000 }\n' \
   >"$mock_root/etc/caddy/Caddyfile"
 printf 'APP_ENV=production\n' >"$mock_root/etc/breero/backend.env"
@@ -233,6 +232,7 @@ git -C "$repo" config user.email runtime-verifier-test@example.invalid
 git -C "$repo" add .
 git -C "$repo" commit -qm fixture
 repo_sha="$(git -C "$repo" rev-parse HEAD)"
+host_verifier="$repo/scripts/deploy/verify-runtime-paths.sh"
 
 cat >"$mock_bin/hostname" <<'EOF'
 #!/usr/bin/env bash
@@ -304,14 +304,16 @@ EXPECTED_WEB_UPSTREAM=web:3000
 EXPECTED_API_UPSTREAM=api:8000
 EOF
 
-host_output="$(
+run_host_verifier() {
   env \
     PATH="$mock_bin:$PATH" \
     MOCK_BACKEND_JSON="$backend_json" \
     MOCK_FRONTEND_JSON="$frontend_json" \
     MOCK_CADDY_JSON="$caddy_json" \
-    "$verifier" --config "$host_config" --mode host-read-only
-)"
+    "$@"
+}
+
+host_output="$(run_host_verifier "$host_verifier" --config "$host_config" --mode host-read-only)"
 grep -Fxq 'COMPOSE_RUNTIME_BINDING=PASS' <<<"$host_output"
 grep -Fxq 'CADDY_HOST_UPSTREAM_BINDING=PASS' <<<"$host_output"
 grep -Fxq 'RUNTIME_PATHS_VERIFIED=YES' <<<"$host_output"
@@ -324,7 +326,15 @@ expect_failure ss-enumeration-failure \
     MOCK_FRONTEND_JSON="$frontend_json" \
     MOCK_CADDY_JSON="$caddy_json" \
     MOCK_SS_FAIL=1 \
-    "$verifier" --config "$host_config" --mode host-read-only
+    "$host_verifier" --config "$host_config" --mode host-read-only
+
+validator_relative="scripts/deploy/validate-runtime-evidence.py"
+git -C "$repo" update-index --skip-worktree "$validator_relative"
+printf '\n# modified despite skip-worktree\n' >>"$repo/$validator_relative"
+expect_failure skip-worktree-validator-mutation \
+  run_host_verifier "$host_verifier" --config "$host_config" --mode host-read-only
+git -C "$repo" update-index --no-skip-worktree "$validator_relative"
+git -C "$repo" checkout -- "$validator_relative"
 
 echo 'RUNTIME_PATH_VERIFIER_TESTS=PASS'
 echo 'LIVE_SERVER_CHANGED=NO'
