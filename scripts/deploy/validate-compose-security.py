@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 DIGEST_IMAGE = re.compile(r"^[^\s]+@sha256:[0-9a-f]{64}$")
+PINNED_ACTION = re.compile(r"^[0-9a-f]{40}$")
 
 
 class ValidationError(RuntimeError):
@@ -208,6 +209,7 @@ def validate_workflow(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     require("pull_request_target:" not in text, "Deployment preflight must not use pull_request_target")
     require("contents: read" in text, "Deployment preflight must use read-only repository permissions")
+    require("persist-credentials: false" in text, "Checkout credentials must not persist")
     forbidden = (
         "secrets.",
         "id-token: write",
@@ -226,6 +228,15 @@ def validate_workflow(path: Path) -> None:
     )
     for token in forbidden:
         require(token not in text, f"Deployment preflight contains forbidden live-action token: {token}")
+
+    references = re.findall(r"^\s*-\s+uses:\s+([^\s#]+)", text, flags=re.MULTILINE)
+    require(bool(references), "Deployment preflight must declare reviewed actions explicitly")
+    for reference in references:
+        if reference.startswith("./"):
+            continue
+        action, separator, revision = reference.rpartition("@")
+        require(bool(action) and separator == "@", f"Action reference is invalid: {reference}")
+        require(PINNED_ACTION.fullmatch(revision) is not None, f"Action must be pinned to a 40-character commit: {reference}")
 
 
 def parse_args() -> argparse.Namespace:
