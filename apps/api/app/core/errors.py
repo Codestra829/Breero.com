@@ -1,8 +1,10 @@
 from collections.abc import Mapping
+from decimal import Decimal
 from http import HTTPStatus
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exception_handlers import (
     http_exception_handler,
     request_validation_exception_handler,
@@ -63,14 +65,21 @@ def _v2_error(
     fields: Mapping[str, Any] | None = None,
     headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
-    return JSONResponse(
-        status_code=status_code,
-        content={
+    # Decimal values commonly represent money and measurements. Encode them as
+    # strings so structured error feedback remains exact across JSON and
+    # JavaScript clients instead of silently rounding through IEEE-754 floats.
+    content = jsonable_encoder(
+        {
             "code": code,
             "message": message,
             "correlation_id": _correlation_id(request),
             "fields": dict(fields) if fields is not None else None,
         },
+        custom_encoder={Decimal: str},
+    )
+    return JSONResponse(
+        status_code=status_code,
+        content=content,
         headers=_v2_response_headers(request, headers),
     )
 
