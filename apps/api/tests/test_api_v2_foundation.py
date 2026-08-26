@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from starlette.middleware.cors import CORSMiddleware
 
 from app.main import app
 
@@ -39,6 +40,23 @@ def _temporary_route(
     finally:
         app.router.routes.remove(route)
         app.openapi_schema = None
+
+
+@contextmanager
+def _approved_breero_origin() -> Iterator[str]:
+    client = TestClient(app, raise_server_exceptions=False)
+    client.get("/health/live")  # Build the middleware stack before inspection.
+    middleware = app.middleware_stack
+    while middleware is not None and not isinstance(middleware, CORSMiddleware):
+        middleware = getattr(middleware, "app", None)
+    assert isinstance(middleware, CORSMiddleware)
+    origin = "https://breero.com"
+    original = list(middleware.allow_origins)
+    middleware.allow_origins = [*original, origin]
+    try:
+        yield origin
+    finally:
+        middleware.allow_origins = original
 
 
 def test_v2_capabilities_reuse_the_v1_authority() -> None:
@@ -138,6 +156,43 @@ def test_v2_unhandled_exceptions_use_the_stable_error_contract() -> None:
     assert response.headers["x-request-id"] == request_id
     assert response.headers["x-correlation-id"] == correlation_id
     assert response.headers["x-content-type-options"] == "nosniff"
+
+
+def test_v2_unhandled_error_preserves_the_approved_breero_cors_policy() -> None:
+    async def unexpected_failure() -> None:
+        raise RuntimeError("must not be disclosed")
+
+    with _temporary_route(
+        "/api/v2/_test/cors-unhandled",
+        unexpected_failure,
+        methods=["GET"],
+    ), _approved_breero_origin() as origin:
+        client = TestClient(app, raise_server_exceptions=False)
+        allowed = client.get(
+            "/api/v2/_test/cors-unhandled",
+            headers={"Origin": origin, "X-Correlation-ID": "cors-allowed"},
+        )
+        denied = client.get(
+            "/api/v2/_test/cors-unhandled",
+            headers={"Origin": "https://attacker.example"},
+        )
+        preflight = client.options(
+            "/api/v2/capabilities",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "X-Correlation-ID",
+            },
+        )
+
+    assert allowed.status_code == 500
+    assert allowed.headers["access-control-allow-origin"] == origin
+    assert allowed.headers["x-correlation-id"] == "cors-allowed"
+    assert allowed.json()["code"] == "INTERNAL_SERVER_ERROR"
+    assert "must not be disclosed" not in allowed.text
+    assert "access-control-allow-origin" not in denied.headers
+    assert preflight.status_code == 200
+    assert preflight.headers["access-control-allow-origin"] == origin
 
 
 def test_v1_missing_routes_keep_the_existing_fastapi_contract() -> None:

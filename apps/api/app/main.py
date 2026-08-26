@@ -23,13 +23,6 @@ EXPECTED_SCHEMA_REVISION = "017_provider_credentials"
 TRACE_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 logger = structlog.get_logger()
 app = FastAPI(title=settings.app_name, version="2.0.0")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 install_error_handlers(app)
 app.include_router(api_v1_router, prefix=settings.api_v1_prefix)
 app.include_router(api_v2_router, prefix="/api/v2")
@@ -79,6 +72,18 @@ async def request_context(request: Request, call_next):
         duration=duration_ms,
     )
     return response
+
+
+# Register CORS after the unexpected-error boundary so Starlette keeps CORS as
+# the outer middleware. Synthesized V2 failures must traverse the same explicit
+# origin policy as successful responses and handled errors.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health", tags=["health"])
