@@ -242,10 +242,15 @@ cat >"$mock_bin/docker" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ ${1:-} == compose ]]; then
-  case " $* " in
-    *" docker-compose.frontend.yml "*) cat "$MOCK_FRONTEND_JSON" ;;
-    *) cat "$MOCK_BACKEND_JSON" ;;
-  esac
+  for argument in "$@"; do
+    case "$argument" in
+      */docker-compose.frontend.yml|docker-compose.frontend.yml)
+        cat "$MOCK_FRONTEND_JSON"
+        exit 0
+        ;;
+    esac
+  done
+  cat "$MOCK_BACKEND_JSON"
   exit 0
 fi
 if [[ ${1:-} == network && ${2:-} == inspect ]]; then
