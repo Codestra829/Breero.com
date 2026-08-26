@@ -30,13 +30,24 @@ jobs:
           from app.main import app
 
           target = "/api/v1/public/capabilities"
+          document = get_endpoint_registry(app)
           print(f"CACHE_BEFORE={app.openapi_schema is not None}")
-          print(f"REGISTRY_DIGEST={get_endpoint_registry(app)['digest']}")
+          print(f"REGISTRY_DIGEST={document['digest']}")
+          print("REGISTRY_TARGETS=" + repr([
+              entry for entry in document["endpoints"] if "capabilities" in entry["path"]
+          ]))
+          print(f"ROUTE_COUNT={len(app.routes)}")
           for route in app.routes:
-              if isinstance(route, APIRoute) and route.path == target:
-                  print(f"ROUTE_METHODS={sorted(route.methods or set())}")
-                  print(f"ROUTE_EXTRA={route.openapi_extra!r}")
-                  print(f"ROUTE_ID={id(route)}")
+              path = getattr(route, "path", "")
+              if "capabilities" not in path:
+                  continue
+              print(f"ROUTE_PATH={path!r}")
+              print(f"ROUTE_TYPE={type(route)!r}")
+              print(f"ROUTE_TYPE_MODULE={type(route).__module__}")
+              print(f"ROUTE_IS_API={isinstance(route, APIRoute)}")
+              print(f"ROUTE_METHODS={sorted(getattr(route, 'methods', set()) or set())}")
+              print(f"ROUTE_EXTRA={getattr(route, 'openapi_extra', None)!r}")
+              print(f"ROUTE_ID={id(route)}")
           schema = app.openapi()
           operation = schema["paths"][target]["get"]
           print(f"CACHE_AFTER={app.openapi_schema is not None}")
