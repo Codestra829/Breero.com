@@ -146,16 +146,14 @@ test("request-service submission remains pending manual dispatch", async ({ page
   });
 });
 
-test("catalog failure keeps manual request recovery visible", async ({ page }) => {
+test("catalog failure keeps submission fail-closed", async ({ page }) => {
   await mockCapabilities(page);
   await page.route("**/api/services", (route) => route.fulfill({ status: 503 }));
   await page.goto("/request-service");
   await expect(
     page.getByText("Live services are unavailable right now. Your form has not been submitted."),
   ).toBeVisible();
-  await expect(
-    page.getByText(/not an appointment, provider assignment, final price or payment confirmation/i),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Request service" })).toBeDisabled();
 });
 
 test("disabled request-intake capability keeps submission fail-closed", async ({ page }) => {
