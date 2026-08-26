@@ -12,6 +12,7 @@ write_config() {
 VERIFICATION_STATE=UNVERIFIED
 LIVE_MUTATION_ALLOWED=false
 EXPECTED_HOSTNAME=UNVERIFIED
+EXPECTED_REPOSITORY_SHA=UNVERIFIED
 REPOSITORY_ROOT=$fixture/repository
 BACKEND_COMPOSE_PATH=$fixture/repository/docker-compose.production.yml
 FRONTEND_COMPOSE_PATH=$fixture/repository/deploy/frontend/docker-compose.frontend.yml
@@ -65,6 +66,16 @@ mutation="$fixture/mutation.env"
 write_config "$mutation"
 sed -i 's/^LIVE_MUTATION_ALLOWED=false$/LIVE_MUTATION_ALLOWED=true/' "$mutation"
 expect_failure mutation-enabled "$verifier" --config "$mutation" --mode syntax
+
+invalid_sha="$fixture/invalid-sha.env"
+write_config "$invalid_sha"
+sed -i 's/^EXPECTED_REPOSITORY_SHA=UNVERIFIED$/EXPECTED_REPOSITORY_SHA=main/' "$invalid_sha"
+expect_failure invalid-repository-sha "$verifier" --config "$invalid_sha" --mode syntax
+
+mutable_image="$fixture/mutable-image.env"
+write_config "$mutable_image"
+sed -i 's#^EXPECTED_API_IMAGE=UNVERIFIED$#EXPECTED_API_IMAGE=ghcr.io/example/breero-api:latest#' "$mutable_image"
+expect_failure mutable-image "$verifier" --config "$mutable_image" --mode syntax
 
 unready="$fixture/unready.env"
 write_config "$unready"
