@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       APP_ENV: test
-      DATABASE_URL: sqlite+aiosqlite:///./diagnostic.db
+      DATABASE_URL: postgresql+psycopg://breero:breero@localhost:5432/breero
       REDIS_URL: redis://localhost:6379/0
     steps:
       - uses: actions/checkout@v4
