@@ -75,7 +75,7 @@ quote.read
 quote.create
 quote.revise
 quote.send
-quote.decide
+quote.accept
 
 conversation.read
 conversation.send
@@ -126,13 +126,15 @@ admin.audit.read
 admin.releases.manage
 ```
 
+`quote.accept` is the canonical customer quote-decision permission across the authorization matrix, API contract registry, implementation package, tests, seeds, and admin surfaces. It covers the authorized accept/decline decision command unless a later reviewed ADR deliberately separates those actions. Do not introduce `quote.decide` in parallel.
+
 Permission names authorize an action class only. Record policy and capability checks still apply.
 
 ## Role and resource matrix
 
 | Actor | Allowed scope | Representative allowed actions | Explicit denials / separation of duty |
 |---|---|---|---|
-| Customer | Own customer identity and own lifecycle records | Create/update/submit/cancel own ProjectRequest; read own quote/booking/job; decide own quote; send in own authorized conversation; create review only after verified eligible completion; create/read own dispute | No other customer records; no provider-private data; no matching internals; no assignment; no credential, finance, feature, integration, or admin authority |
+| Customer | Own customer identity and own lifecycle records | Create/update/submit/cancel own ProjectRequest; read own quote/booking/job; accept or decline own quote; send in own authorized conversation; create review only after verified eligible completion; create/read own dispute | No other customer records; no provider-private data; no matching internals; no assignment; no credential, finance, feature, integration, or admin authority |
 | Provider Owner | Active provider organizations for which the user has an active owner membership | Manage provider profile, members, workers, services, areas, availability, credentials submission, opportunities, quotes, provider-side jobs and responses when separately permitted | Cannot self-verify credentials, suspend providers, approve payouts/refunds, view unmatched customer PII, access another provider, or activate capabilities |
 | Provider Manager | Active provider organizations explicitly assigned through membership | Same resource families as Provider Owner but limited to granted permissions and assigned organization scope | Ownership role is not implied; no membership administration, finance, credential verification, suspension, or other-provider access unless separately granted |
 | Worker | Own worker profile plus jobs currently assigned through an eligible provider relationship | Read assigned jobs, manage own availability, submit own credentials, perform approved job transitions/evidence actions | No unassigned jobs, unmatched customer PII, provider administration, quote authority, matching, credential verification, finance, or capability authority |
@@ -173,7 +175,7 @@ Permission names authorize an action class only. Record policy and capability ch
 
 - provider quote access requires provider membership plus relationship to the exact opportunity/LeadConnection;
 - customer quote access requires ownership through the exact request/connection;
-- only the quote author/provider side may create or revise; only the owning customer may decide;
+- only the quote author/provider side may create or revise; only the owning customer with `quote.accept` may accept or decline;
 - messaging requires the messaging capability, an active authorized conversation, and record policy;
 - email/SMS transport never grants conversation authority.
 
