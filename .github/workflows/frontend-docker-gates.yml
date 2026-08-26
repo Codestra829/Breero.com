@@ -3,6 +3,7 @@ name: Frontend Docker gates
 on:
   pull_request:
     paths:
+      - ".dockerignore"
       - "deploy/frontend/**"
       - ".github/workflows/frontend-docker-gates.yml"
       - "apps/web/**"
@@ -16,6 +17,7 @@ on:
   push:
     branches: [main]
     paths:
+      - ".dockerignore"
       - "deploy/frontend/**"
       - ".github/workflows/frontend-docker-gates.yml"
       - "apps/web/**"
@@ -83,4 +85,11 @@ jobs:
         run: |
           set -euo pipefail
           test "$(docker image inspect breero-web:ci --format '{{.Config.User}}')" = 'breero'
-          test -n "$(docker image inspect breero-web:ci --format '{{json .Config.Healthcheck.Test}}')"
+          healthcheck_command="$(docker image inspect breero-web:ci --format '{{index .Config.Healthcheck.Test 0}}')"
+          case "$healthcheck_command" in
+            CMD|CMD-SHELL) ;;
+            *)
+              echo "::error::Expected an active CMD or CMD-SHELL healthcheck, found '$healthcheck_command'."
+              exit 1
+              ;;
+          esac
