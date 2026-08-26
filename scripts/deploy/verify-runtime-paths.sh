@@ -206,8 +206,8 @@ if ! frontend_json="$(
   fail "frontend Compose rendering failed"
 fi
 
-# `caddy validate` provisions modules and may have side effects. `caddy adapt`
-# only parses/adapts the Caddyfile and is the permitted read-only evidence step.
+# Provisioning-oriented validation is intentionally excluded here. Parse-only
+# adaptation is the permitted read-only evidence step for the approved Caddyfile.
 if ! adapted_caddy="$(caddy adapt --adapter caddyfile --config "${cfg[CADDY_CONFIG_PATH]}" 2>/dev/null)"; then
   fail "Caddy configuration adaptation failed"
 fi
