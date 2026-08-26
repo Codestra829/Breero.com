@@ -42,19 +42,22 @@ deploy/frontend/docker-compose.frontend.yml
 
 The frontend Dockerfile on current `main` still contains the retired `auth.codestra.agency` issuer. PR #46 contains the canonical `https://auth.codestra.co/realms/codestra` repair and must be independently reviewed and merged before a frontend production image is certified. This scaffold does not hide, duplicate or prematurely merge that repair.
 
-A candidate path is not runtime authority. Runtime authority exists only after the read-only host evidence below passes and the exact hashes, network names, Caddy routes and image digests are independently reviewed.
+A candidate path is not runtime authority. Runtime authority exists only after the read-only host evidence below passes and the exact Git SHA, hashes, network names, Caddy routes and image digests are independently reviewed.
 
 ## CI-only validation
 
 `.github/workflows/deployment-preflight.yml`:
 
 - uses `contents: read` only;
+- pins every external action to an exact commit;
+- disables persisted checkout credentials;
 - receives no SSH key, registry write token or production environment;
 - never uses `pull_request_target`;
 - renders Compose with temporary non-secret fixtures;
 - rejects mutable application image tags;
 - rejects published host ports, privileged mode, host namespaces, device mappings and Docker socket mounts;
 - requires the expected private/edge networks, healthchecks, hardening controls and file-backed secrets;
+- verifies application secret mounts plus PostgreSQL password-file and Redis ACL-file consumption;
 - validates the read-only runtime verifier and path-classification tests;
 - records that the live server remains unchanged.
 
@@ -71,17 +74,20 @@ scripts/deploy/verify-runtime-paths.sh \
 VERIFICATION_STATE=READY_FOR_READ_ONLY_VERIFICATION
 LIVE_MUTATION_ALLOWED=false
 # Supply every remaining key from runtime-paths.example.env using the actual,
-# independently checked host paths, SHA-256 values, image digests and networks.
+# independently checked host paths, SHA values, image digests and networks.
 EOF
 ```
 
 The verifier never sources the input. It allowlists every key and rejects duplicate or unknown fields. In host-read-only mode it checks:
 
 - approved hostname;
-- absolute readable repository, Compose, Caddy and environment paths;
+- exact clean Git checkout SHA;
+- repository-contained backend, frontend and legacy Compose paths after real-path resolution;
+- absolute readable repository, Caddy and environment paths;
 - exact SHA-256 values for the candidate backend/frontend Compose and Caddy configuration;
 - non-world-readable environment files;
 - successful migration-profile and frontend `docker compose config --quiet` rendering;
+- every rendered file-backed secret path exists, is readable and is not world-accessible;
 - exact immutable API and frontend image digests in rendered Compose;
 - existing internal private network and approved external edge networks;
 - valid/adaptable Caddy configuration containing the expected web/API hosts and upstreams;
