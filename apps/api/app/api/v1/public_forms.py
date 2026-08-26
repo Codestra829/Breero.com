@@ -1,7 +1,7 @@
 from typing import Annotated
 
 import redis.asyncio as redis
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, Request, status
 from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -56,12 +56,10 @@ async def enforce_rate_limit(request: Request) -> str:
 
     count, ttl = int(result[0]), max(int(result[1]), 1)
     if count > RATE_LIMIT_MAX_REQUESTS:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "code": "RATE_LIMITED",
-                "message": "Too many submissions; try again shortly",
-            },
+        raise DomainError(
+            "RATE_LIMITED",
+            "Too many submissions; try again shortly",
+            status.HTTP_429_TOO_MANY_REQUESTS,
             headers={"Retry-After": str(ttl)},
         )
     return source
