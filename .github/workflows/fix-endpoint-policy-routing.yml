@@ -16,15 +16,23 @@ jobs:
       DATABASE_URL: postgresql+psycopg://breero:breero@localhost:5432/breero
       REDIS_URL: redis://localhost:6379/0
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out endpoint-registry branch
+        uses: actions/checkout@v4
         with:
           ref: refactor/api-router-registry
           fetch-depth: 0
+      - name: Check out maintenance script
+        uses: actions/checkout@v4
+        with:
+          ref: automation/fix-endpoint-policy-routing
+          path: .maintenance
+          sparse-checkout: scripts/maintenance/fix_endpoint_policy_routing.py
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Patch registry for FastAPI lazy included routers
-        run: python scripts/maintenance/fix_endpoint_policy_routing.py
+        run: python .maintenance/scripts/maintenance/fix_endpoint_policy_routing.py
       - name: Verify focused registry repair
         shell: bash
         run: |
