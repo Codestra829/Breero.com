@@ -34,13 +34,41 @@ def names(value: Any) -> set[str]:
     if isinstance(value, dict):
         return set(value)
     if isinstance(value, list):
-        return {str(item) for item in value}
+        return {str(item) for item in value if isinstance(item, str)}
     return set()
 
 
+def secret_sources(value: Any) -> set[str]:
+    if isinstance(value, dict):
+        return set(value)
+    sources: set[str] = set()
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, str):
+                sources.add(item)
+            elif isinstance(item, dict) and isinstance(item.get("source"), str):
+                sources.add(item["source"])
+    return sources
+
+
+def environment_map(value: Any) -> dict[str, str | None]:
+    if isinstance(value, dict):
+        return {str(key): None if item is None else str(item) for key, item in value.items()}
+    environment: dict[str, str | None] = {}
+    if isinstance(value, list):
+        for item in value:
+            if not isinstance(item, str):
+                continue
+            key, separator, configured = item.partition("=")
+            environment[key] = configured if separator else None
+    return environment
+
+
 def assert_digest(image: Any, service: str) -> None:
-    require(isinstance(image, str) and DIGEST_IMAGE.fullmatch(image) is not None,
-            f"{service} must use an immutable image digest")
+    require(
+        isinstance(image, str) and DIGEST_IMAGE.fullmatch(image) is not None,
+        f"{service} must use an immutable image digest",
+    )
 
 
 def assert_no_dangerous_runtime(service_name: str, service: dict[str, Any]) -> None:
@@ -79,17 +107,27 @@ def validate_backend(document: dict[str, Any]) -> list[str]:
         require(isinstance(raw, dict), f"Backend service {name} must be an object")
         assert_no_dangerous_runtime(name, raw)
 
+    required_app_secrets = {
+        "breero_database_url",
+        "breero_redis_url",
+        "breero_jwt_access_secret",
+        "breero_jwt_refresh_secret",
+    }
     for name in ("migrate", "api", "worker", "scheduler"):
         assert_hardened_application(name, services[name])
+        missing_secrets = sorted(required_app_secrets - secret_sources(services[name].get("secrets")))
+        require(not missing_secrets, f"{name} is missing file-backed application secrets: {', '.join(missing_secrets)}")
 
     require(bool(services["api"].get("healthcheck")), "api must define a healthcheck")
     require(
         {"breero_private", "caddy_shared"} <= names(services["api"].get("networks")),
-        "api must join only the private application plane and approved Caddy edge",
+        "api must join the private application plane and approved Caddy edge",
     )
     for name in ("worker", "scheduler", "migrate", "postgres", "redis"):
-        require("breero_private" in names(services[name].get("networks")),
-                f"{name} must join the private network")
+        require(
+            "breero_private" in names(services[name].get("networks")),
+            f"{name} must join the private network",
+        )
 
     for name in ("postgres", "redis"):
         assert_digest(services[name].get("image"), name)
@@ -101,17 +139,43 @@ def validate_backend(document: dict[str, Any]) -> list[str]:
         )
         require(bool(services[name].get("healthcheck")), f"{name} must define a healthcheck")
 
+    postgres_environment = environment_map(services["postgres"].get("environment"))
+    require(
+        postgres_environment.get("POSTGRES_PASSWORD_FILE") == "/run/secrets/breero_postgres_password",
+        "postgres must consume its file-backed password through POSTGRES_PASSWORD_FILE",
+    )
+    require(
+        "breero_postgres_password" in secret_sources(services["postgres"].get("secrets")),
+        "postgres must mount breero_postgres_password",
+    )
+
+    redis_command = json.dumps(services["redis"].get("command", []), sort_keys=True)
+    require(
+        "/run/secrets/breero_redis_acl" in redis_command,
+        "redis must consume the mounted ACL file",
+    )
+    require(
+        "breero_redis_acl" in secret_sources(services["redis"].get("secrets")),
+        "redis must mount breero_redis_acl",
+    )
+
     networks = document.get("networks") or {}
-    require(networks.get("breero_private", {}).get("internal") is True,
-            "breero_private must be internal")
-    require(networks.get("caddy_shared", {}).get("external") is True,
-            "caddy_shared must be externally provisioned")
+    require(
+        networks.get("breero_private", {}).get("internal") is True,
+        "breero_private must be internal",
+    )
+    require(
+        networks.get("caddy_shared", {}).get("external") is True,
+        "caddy_shared must be externally provisioned",
+    )
 
     secrets = document.get("secrets") or {}
     require(bool(secrets), "Backend Compose must use file-backed secrets")
     for name, definition in secrets.items():
-        require(isinstance(definition, dict) and bool(definition.get("file")),
-                f"Secret {name} must be file-backed")
+        require(
+            isinstance(definition, dict) and bool(definition.get("file")),
+            f"Secret {name} must be file-backed",
+        )
 
     warnings: list[str] = []
     if not services["worker"].get("healthcheck"):
@@ -127,13 +191,17 @@ def validate_frontend(document: dict[str, Any]) -> None:
     web = services["web"]
     assert_no_dangerous_runtime("web", web)
     assert_hardened_application("web", web)
-    require(str(web.get("user", "")).split(":", 1)[0] not in {"", "0", "root"},
-            "web must declare a non-root runtime user")
+    require(
+        str(web.get("user", "")).split(":", 1)[0] not in {"", "0", "root"},
+        "web must declare a non-root runtime user",
+    )
     require(bool(web.get("healthcheck")), "web must define a healthcheck")
     require("frontend" in names(web.get("networks")), "web must join the frontend edge network")
     networks = document.get("networks") or {}
-    require(networks.get("frontend", {}).get("external") is True,
-            "frontend network must be externally provisioned")
+    require(
+        networks.get("frontend", {}).get("external") is True,
+        "frontend network must be externally provisioned",
+    )
 
 
 def validate_workflow(path: Path) -> None:
