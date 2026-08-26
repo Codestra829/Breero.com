@@ -55,23 +55,48 @@ def load_json(path: Path) -> dict[str, Any]:
 
 def names(value: Any) -> set[str]:
     if isinstance(value, dict):
-        return set(value)
+        return {str(name) for name in value}
     if isinstance(value, list):
         return {str(item) for item in value if isinstance(item, str)}
     return set()
 
 
-def secret_sources(value: Any) -> set[str]:
-    if isinstance(value, dict):
-        return set(value)
-    sources: set[str] = set()
+def _secret_target(source: str, target: Any = None) -> str:
+    configured = source if target in {None, ""} else str(target)
+    return configured if configured.startswith("/") else f"/run/secrets/{configured}"
+
+
+def secret_mounts(value: Any) -> dict[str, str]:
+    """Return rendered secret source -> effective in-container target path."""
+
+    mounts: dict[str, str] = {}
+
+    def add(source: Any, target: Any = None) -> None:
+        require(isinstance(source, str) and bool(source), "Secret source must be a non-empty string")
+        require(source not in mounts, f"Duplicate secret mount source: {source}")
+        mounts[source] = _secret_target(source, target)
+
     if isinstance(value, list):
         for item in value:
             if isinstance(item, str):
-                sources.add(item)
-            elif isinstance(item, dict) and isinstance(item.get("source"), str):
-                sources.add(item["source"])
-    return sources
+                add(item)
+            elif isinstance(item, dict):
+                add(item.get("source"), item.get("target"))
+            else:
+                raise ValidationError("Secret mounts must use short or long Compose syntax")
+    elif isinstance(value, dict):
+        for source, definition in value.items():
+            if definition is None:
+                add(source)
+            elif isinstance(definition, str):
+                add(source, definition)
+            elif isinstance(definition, dict):
+                add(definition.get("source", source), definition.get("target"))
+            else:
+                raise ValidationError("Secret mount mapping contains an unsupported value")
+    elif value not in {None, []}:
+        raise ValidationError("Service secrets must be a list or mapping")
+    return mounts
 
 
 def environment_map(value: Any) -> dict[str, str | None]:
@@ -119,6 +144,19 @@ def assert_hardened_application(service_name: str, service: dict[str, Any]) -> N
     assert_digest(service.get("image"), service_name)
 
 
+def require_secret_target(
+    service_name: str,
+    mounts: dict[str, str],
+    source: str,
+    expected_path: str,
+) -> None:
+    require(source in mounts, f"{service_name} must mount secret {source}")
+    require(
+        mounts[source] == expected_path,
+        f"{service_name} must mount {source} at {expected_path}",
+    )
+
+
 def validate_backend(document: dict[str, Any]) -> list[str]:
     services = document.get("services") or {}
     require(isinstance(services, dict), "Backend Compose must define services")
@@ -130,18 +168,14 @@ def validate_backend(document: dict[str, Any]) -> list[str]:
         require(isinstance(raw, dict), f"Backend service {name} must be an object")
         assert_no_dangerous_runtime(name, raw)
 
-    required_app_secrets = {
-        "breero_database_url",
-        "breero_redis_url",
-        "breero_jwt_access_secret",
-        "breero_jwt_refresh_secret",
-    }
     for name in ("migrate", "api", "worker", "scheduler"):
-        assert_hardened_application(name, services[name])
-        missing_secrets = sorted(required_app_secrets - secret_sources(services[name].get("secrets")))
-        require(not missing_secrets, f"{name} is missing file-backed application secrets: {', '.join(missing_secrets)}")
-        environment = environment_map(services[name].get("environment"))
+        service = services[name]
+        assert_hardened_application(name, service)
+        mounts = secret_mounts(service.get("secrets"))
+        environment = environment_map(service.get("environment"))
         for variable, expected_path in APP_SECRET_BINDINGS.items():
+            source = expected_path.rsplit("/", 1)[-1]
+            require_secret_target(name, mounts, source, expected_path)
             require(
                 environment.get(variable) == expected_path,
                 f"{name} must bind {variable} to {expected_path}",
@@ -173,9 +207,11 @@ def validate_backend(document: dict[str, Any]) -> list[str]:
         postgres_environment.get("POSTGRES_PASSWORD_FILE") == "/run/secrets/breero_postgres_password",
         "postgres must consume its file-backed password through POSTGRES_PASSWORD_FILE",
     )
-    require(
-        "breero_postgres_password" in secret_sources(services["postgres"].get("secrets")),
-        "postgres must mount breero_postgres_password",
+    require_secret_target(
+        "postgres",
+        secret_mounts(services["postgres"].get("secrets")),
+        "breero_postgres_password",
+        "/run/secrets/breero_postgres_password",
     )
 
     redis_command = json.dumps(services["redis"].get("command", []), sort_keys=True)
@@ -183,23 +219,28 @@ def validate_backend(document: dict[str, Any]) -> list[str]:
         "/run/secrets/breero_redis_acl" in redis_command,
         "redis must consume the mounted ACL file",
     )
-    require(
-        "breero_redis_acl" in secret_sources(services["redis"].get("secrets")),
-        "redis must mount breero_redis_acl",
+    require_secret_target(
+        "redis",
+        secret_mounts(services["redis"].get("secrets")),
+        "breero_redis_acl",
+        "/run/secrets/breero_redis_acl",
     )
 
     networks = document.get("networks") or {}
+    require(isinstance(networks, dict), "Backend Compose networks must be an object")
     require(
-        networks.get("breero_private", {}).get("internal") is True,
+        isinstance(networks.get("breero_private"), dict)
+        and networks["breero_private"].get("internal") is True,
         "breero_private must be internal",
     )
     require(
-        networks.get("caddy_shared", {}).get("external") is True,
+        isinstance(networks.get("caddy_shared"), dict)
+        and networks["caddy_shared"].get("external") is True,
         "caddy_shared must be externally provisioned",
     )
 
     secrets = document.get("secrets") or {}
-    require(bool(secrets), "Backend Compose must use file-backed secrets")
+    require(isinstance(secrets, dict) and bool(secrets), "Backend Compose must use file-backed secrets")
     for name, definition in secrets.items():
         require(
             isinstance(definition, dict) and bool(definition.get("file")),
@@ -216,8 +257,10 @@ def validate_backend(document: dict[str, Any]) -> list[str]:
 
 def validate_frontend(document: dict[str, Any]) -> None:
     services = document.get("services") or {}
+    require(isinstance(services, dict), "Frontend Compose services must be an object")
     require(set(services) == {"web"}, "Frontend Compose must contain only the web service")
     web = services["web"]
+    require(isinstance(web, dict), "Frontend web service must be an object")
     assert_no_dangerous_runtime("web", web)
     assert_hardened_application("web", web)
     require(
@@ -228,77 +271,126 @@ def validate_frontend(document: dict[str, Any]) -> None:
     require("frontend" in names(web.get("networks")), "web must join the frontend edge network")
     networks = document.get("networks") or {}
     require(
-        networks.get("frontend", {}).get("external") is True,
+        isinstance(networks, dict)
+        and isinstance(networks.get("frontend"), dict)
+        and networks["frontend"].get("external") is True,
         "frontend network must be externally provisioned",
     )
 
 
-def leading_spaces(line: str) -> int:
-    prefix = line[: len(line) - len(line.lstrip(" \t"))]
-    require("\t" not in prefix, "Workflow indentation must not contain tabs")
-    return len(prefix)
+def load_workflow(path: Path) -> dict[str, Any]:
+    try:
+        import yaml
+    except ImportError as exc:  # pragma: no cover - execution-environment guard
+        raise ValidationError("PyYAML is required for fail-closed workflow validation") from exc
+
+    class UniqueBaseLoader(yaml.BaseLoader):
+        pass
+
+    def construct_unique_mapping(loader: Any, node: Any, deep: bool = False) -> dict[str, Any]:
+        mapping: dict[str, Any] = {}
+        for key_node, value_node in node.value:
+            key = loader.construct_object(key_node, deep=deep)
+            require(isinstance(key, str), "Workflow mapping keys must be strings")
+            require(key not in mapping, f"Duplicate workflow mapping key: {key}")
+            mapping[key] = loader.construct_object(value_node, deep=deep)
+        return mapping
+
+    UniqueBaseLoader.add_constructor(
+        yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+        construct_unique_mapping,
+    )
+    try:
+        document = yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueBaseLoader)
+    except (OSError, yaml.YAMLError) as exc:
+        raise ValidationError(f"Unable to parse workflow YAML {path}: {exc}") from exc
+    require(isinstance(document, dict), "Deployment workflow must be a YAML mapping")
+    return document
 
 
-def validate_permissions(text: str) -> None:
-    lines = text.splitlines()
-    blocks: list[tuple[int, dict[str, str]]] = []
-    index = 0
-    while index < len(lines):
-        line = lines[index]
-        stripped = line.lstrip(" \t")
-        if not re.match(r"^permissions\s*:", stripped):
-            index += 1
-            continue
+def validate_permission_mapping(value: Any, label: str, *, require_contents: bool) -> None:
+    require(isinstance(value, dict), f"{label} permissions must use a mapping")
+    if require_contents:
+        require(value.get("contents") == "read", "Top-level contents permission must be read")
+    for raw_scope, raw_access in value.items():
+        scope = str(raw_scope)
+        access = str(raw_access)
+        require(scope in PERMISSION_SCOPES, f"Unknown workflow permission scope: {scope}")
+        require(access in {"read", "none"}, f"{label} permission {scope} must be read or none")
+        require(not (scope == "id-token" and access != "none"), "id-token must remain none")
 
-        indent = leading_spaces(line)
-        require(
-            re.fullmatch(r"permissions\s*:\s*(?:#.*)?", stripped) is not None,
-            "Workflow permissions must use an explicit block mapping",
-        )
-        entries: dict[str, str] = {}
-        child_indent: int | None = None
-        cursor = index + 1
-        while cursor < len(lines):
-            candidate = lines[cursor]
-            candidate_stripped = candidate.lstrip(" \t")
-            if not candidate_stripped or candidate_stripped.startswith("#"):
-                cursor += 1
-                continue
-            candidate_indent = leading_spaces(candidate)
-            if candidate_indent <= indent:
-                break
-            if child_indent is None:
-                child_indent = candidate_indent
-                require(child_indent == indent + 2, "Workflow permissions must use one explicit mapping level")
-            require(candidate_indent == child_indent, "Nested or ambiguous workflow permissions are forbidden")
-            match = re.fullmatch(
-                r"([a-z][a-z-]*):\s*(read|none)\s*(?:#.*)?",
-                candidate_stripped,
+
+def validate_permissions(document: dict[str, Any]) -> None:
+    require("permissions" in document, "Workflow must declare top-level permissions")
+    validate_permission_mapping(document["permissions"], "Top-level", require_contents=True)
+    jobs = document.get("jobs")
+    require(isinstance(jobs, dict) and bool(jobs), "Workflow must declare jobs")
+    for job_name, raw_job in jobs.items():
+        require(isinstance(raw_job, dict), f"Workflow job {job_name} must be a mapping")
+        if "permissions" in raw_job:
+            validate_permission_mapping(
+                raw_job["permissions"],
+                f"Job {job_name}",
+                require_contents=False,
             )
-            require(match is not None, "Every workflow permission must be explicitly read or none")
-            scope, access = match.groups()
-            require(scope in PERMISSION_SCOPES, f"Unknown workflow permission scope: {scope}")
-            require(scope not in entries, f"Duplicate workflow permission scope: {scope}")
-            require(not (scope == "id-token" and access != "none"), "id-token must remain none")
-            entries[scope] = access
-            cursor += 1
 
-        require(bool(entries), "Workflow permissions block must not be empty")
-        blocks.append((indent, entries))
-        index = cursor
 
-    top_level = [entries for indent, entries in blocks if indent == 0]
-    require(len(top_level) == 1, "Workflow must contain exactly one top-level permissions block")
-    require(top_level[0].get("contents") == "read", "Top-level contents permission must be read")
-    for _, entries in blocks:
-        require(all(access in {"read", "none"} for access in entries.values()), "Workflow permissions must be read-only")
+def validate_action_reference(reference: Any, label: str) -> str:
+    require(isinstance(reference, str) and bool(reference), f"{label} uses must be a string")
+    if reference.startswith("./"):
+        return reference
+    action, separator, revision = reference.rpartition("@")
+    require(bool(action) and separator == "@", f"Action reference is invalid: {reference}")
+    require(
+        PINNED_ACTION.fullmatch(revision) is not None,
+        f"Action must be pinned to a 40-character commit: {reference}",
+    )
+    return reference
+
+
+def validate_actions(document: dict[str, Any]) -> None:
+    jobs = document.get("jobs")
+    require(isinstance(jobs, dict), "Workflow jobs must be a mapping")
+    references: list[str] = []
+    checkout_count = 0
+    for job_name, raw_job in jobs.items():
+        require(isinstance(raw_job, dict), f"Workflow job {job_name} must be a mapping")
+        if "uses" in raw_job:
+            references.append(validate_action_reference(raw_job["uses"], f"job {job_name}"))
+        steps = raw_job.get("steps", [])
+        require(isinstance(steps, list), f"Workflow job {job_name} steps must be a list")
+        for index, raw_step in enumerate(steps):
+            require(isinstance(raw_step, dict), f"Workflow job {job_name} step {index} must be a mapping")
+            if "uses" not in raw_step:
+                continue
+            reference = validate_action_reference(raw_step["uses"], f"job {job_name} step {index}")
+            references.append(reference)
+            if reference.startswith("actions/checkout@"):
+                checkout_count += 1
+                configured = raw_step.get("with")
+                require(isinstance(configured, dict), "Checkout must declare an explicit with mapping")
+                require(
+                    str(configured.get("persist-credentials", "")).lower() == "false",
+                    "Checkout credentials must not persist",
+                )
+    require(bool(references), "Deployment preflight must declare reviewed actions explicitly")
+    require(checkout_count > 0, "Deployment preflight must use a pinned non-persistent checkout")
 
 
 def validate_workflow(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
-    require("pull_request_target:" not in text, "Deployment preflight must not use pull_request_target")
-    require("persist-credentials: false" in text, "Checkout credentials must not persist")
-    validate_permissions(text)
+    document = load_workflow(path)
+
+    triggers = document.get("on")
+    if isinstance(triggers, dict):
+        require("pull_request_target" not in triggers, "Deployment preflight must not use pull_request_target")
+    elif isinstance(triggers, list):
+        require("pull_request_target" not in triggers, "Deployment preflight must not use pull_request_target")
+    elif isinstance(triggers, str):
+        require(triggers != "pull_request_target", "Deployment preflight must not use pull_request_target")
+
+    validate_permissions(document)
+    validate_actions(document)
 
     forbidden = (
         "secrets.",
@@ -314,15 +406,6 @@ def validate_workflow(path: Path) -> None:
     )
     for token in forbidden:
         require(token not in text, f"Deployment preflight contains forbidden live-action token: {token}")
-
-    references = re.findall(r"^\s*(?:-\s+)?uses:\s+([^\s#]+)", text, flags=re.MULTILINE)
-    require(bool(references), "Deployment preflight must declare reviewed actions explicitly")
-    for reference in references:
-        if reference.startswith("./"):
-            continue
-        action, separator, revision = reference.rpartition("@")
-        require(bool(action) and separator == "@", f"Action reference is invalid: {reference}")
-        require(PINNED_ACTION.fullmatch(revision) is not None, f"Action must be pinned to a 40-character commit: {reference}")
 
 
 def parse_args() -> argparse.Namespace:
