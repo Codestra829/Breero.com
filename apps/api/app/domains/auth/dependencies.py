@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.session import get_db
+from app.domains.auth.access_service import AccessService
 from app.domains.auth.models import IdentityLink, User, UserRole
 from app.domains.auth.repository import UserRepository
 from app.domains.auth.security import decode_access_token
@@ -104,6 +105,23 @@ def require_roles(*roles: UserRole) -> Callable:
         if user.role not in roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
+            )
+        return user
+
+    return dependency
+
+
+def require_any_permission(*permissions: str) -> Callable:
+    async def dependency(
+        user: Annotated[User, Depends(current_user)],
+        session: Annotated[AsyncSession, Depends(get_db)],
+    ) -> User:
+        context = await AccessService(session).context(user)
+        effective = set(context.permissions)
+        if "*" not in effective and not effective.intersection(permissions):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
             )
         return user
 
