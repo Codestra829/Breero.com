@@ -6,7 +6,6 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from app.api.v1.router import api_router
 from app.domains.auth.models import (
     AccessAssignment,
     AccessProfile,
@@ -26,35 +25,29 @@ from app.domains.auth.schemas import (
     UserRead,
 )
 from app.domains.common.outbox import AuditLog, EventStatus, IntegrationEvent
-
-
-def route_contract() -> set[tuple[str, str]]:
-    return {
-        (route.path, method)
-        for route in api_router.routes
-        for method in getattr(route, "methods", set())
-    }
+from app.main import app
 
 
 def test_first_completion_api_routes_are_registered() -> None:
-    routes = route_contract()
+    paths = app.openapi()["paths"]
     required = {
-        ("/auth/register/client", "POST"),
-        ("/auth/register", "POST"),
-        ("/auth/login", "POST"),
-        ("/auth/logout", "POST"),
-        ("/auth/refresh", "POST"),
-        ("/auth/me", "GET"),
-        ("/auth/password/set", "POST"),
-        ("/auth/password/change", "POST"),
-        ("/auth/password/forgot", "POST"),
-        ("/auth/password/reset", "POST"),
-        ("/auth/email/verify", "POST"),
-        ("/auth/email/resend", "POST"),
-        ("/admin/users", "POST"),
+        "/api/v1/auth/register/client": {"post"},
+        "/api/v1/auth/register": {"post"},
+        "/api/v1/auth/login": {"post"},
+        "/api/v1/auth/logout": {"post"},
+        "/api/v1/auth/refresh": {"post"},
+        "/api/v1/auth/me": {"get"},
+        "/api/v1/auth/password/set": {"post"},
+        "/api/v1/auth/password/change": {"post"},
+        "/api/v1/auth/password/forgot": {"post"},
+        "/api/v1/auth/password/reset": {"post"},
+        "/api/v1/auth/email/verify": {"post"},
+        "/api/v1/auth/email/resend": {"post"},
+        "/api/v1/admin/users": {"post"},
     }
-    assert required.issubset(routes)
-    assert all(path != "/admin/register" for path, _method in routes)
+    for path, methods in required.items():
+        assert methods <= set(paths[path])
+    assert "/api/v1/admin/register" not in paths
 
 
 def test_internal_provisioning_role_contract_is_closed() -> None:
