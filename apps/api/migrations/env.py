@@ -18,6 +18,7 @@ from app.domains.jobs import models as job_models  # noqa: F401
 from app.domains.payments import models as payment_models  # noqa: F401
 from app.domains.professional_leads import models as professional_lead_models  # noqa: F401
 from app.domains.public_submissions import models as public_submission_models  # noqa: F401
+from app.domains.tenant_email import models as tenant_email_models  # noqa: F401
 from app.domains.workforce import models as workforce_models  # noqa: F401
 
 config = context.config
@@ -69,7 +70,6 @@ def do_run_migrations(connection) -> None:
             )
         ).scalars()
     )
-    # End the catalog-read transaction before Alembic owns the migration transaction.
     connection.commit()
     context.configure(
         connection=connection,
