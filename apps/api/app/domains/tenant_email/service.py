@@ -38,7 +38,7 @@ class TenantEmailService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def _assert_scope(self, user: User, brand_key: str, vendor_id: uuid.UUID | None) -> None:
+    async def assert_scope(self, user: User, brand_key: str, vendor_id: uuid.UUID | None) -> None:
         context = await AccessService(self.session).context(user, brand_key)
         if "*" in context.permissions:
             return
@@ -55,6 +55,12 @@ class TenantEmailService:
             ):
                 return
         raise HTTPException(403, "Tenant scope is not authorized")
+
+    @staticmethod
+    def expected_secret_prefix(brand_key: str, vendor_id: uuid.UUID | None) -> str:
+        if vendor_id is not None:
+            return f"breero-email/vendor/{vendor_id}/"
+        return f"breero-email/brand/{brand_key}/"
 
     @staticmethod
     def _credential_read(record: EmailCredential) -> EmailCredentialRead:
@@ -74,7 +80,7 @@ class TenantEmailService:
         )
 
     async def create_domain(self, data: EmailDomainCreate, user: User) -> EmailDomain:
-        await self._assert_scope(user, data.brand_key, data.vendor_id)
+        await self.assert_scope(user, data.brand_key, data.vendor_id)
         record = EmailDomain(
             brand_key=data.brand_key,
             vendor_id=data.vendor_id,
@@ -99,7 +105,7 @@ class TenantEmailService:
         allowed: list[EmailDomain] = []
         for row in rows:
             try:
-                await self._assert_scope(user, row.brand_key, row.vendor_id)
+                await self.assert_scope(user, row.brand_key, row.vendor_id)
                 allowed.append(row)
             except HTTPException:
                 continue
@@ -109,14 +115,14 @@ class TenantEmailService:
         record = await self.session.get(EmailDomain, domain_id)
         if not record:
             raise HTTPException(404, "Email domain not found")
-        await self._assert_scope(user, record.brand_key, record.vendor_id)
+        await self.assert_scope(user, record.brand_key, record.vendor_id)
         record.verification_status = "VERIFIED" if verified else "PENDING"
         await self.session.commit()
         await self.session.refresh(record)
         return record
 
     async def create_sender(self, data: EmailSenderCreate, user: User) -> EmailSender:
-        await self._assert_scope(user, data.brand_key, data.vendor_id)
+        await self.assert_scope(user, data.brand_key, data.vendor_id)
         domain = await self.session.get(EmailDomain, data.domain_id)
         if not domain:
             raise HTTPException(404, "Email domain not found")
@@ -146,14 +152,17 @@ class TenantEmailService:
         allowed: list[EmailSender] = []
         for row in rows:
             try:
-                await self._assert_scope(user, row.brand_key, row.vendor_id)
+                await self.assert_scope(user, row.brand_key, row.vendor_id)
                 allowed.append(row)
             except HTTPException:
                 continue
         return allowed
 
     async def create_credential(self, data: EmailCredentialCreate, user: User) -> EmailCredentialRead:
-        await self._assert_scope(user, data.brand_key, data.vendor_id)
+        await self.assert_scope(user, data.brand_key, data.vendor_id)
+        expected_prefix = self.expected_secret_prefix(data.brand_key, data.vendor_id)
+        if not data.secret_ref.startswith(expected_prefix):
+            raise HTTPException(400, f"Credential secret reference must start with {expected_prefix}")
         record = EmailCredential(
             brand_key=data.brand_key,
             vendor_id=data.vendor_id,
@@ -183,14 +192,14 @@ class TenantEmailService:
         allowed: list[EmailCredentialRead] = []
         for row in rows:
             try:
-                await self._assert_scope(user, row.brand_key, row.vendor_id)
+                await self.assert_scope(user, row.brand_key, row.vendor_id)
                 allowed.append(self._credential_read(row))
             except HTTPException:
                 continue
         return allowed
 
     async def compose(self, data: EmailComposeRequest, user: User) -> EmailMessageRead:
-        await self._assert_scope(user, data.brand_key, data.vendor_id)
+        await self.assert_scope(user, data.brand_key, data.vendor_id)
         existing = await self.session.scalar(
             select(EmailMessage).where(EmailMessage.idempotency_key == data.idempotency_key)
         )
@@ -268,5 +277,5 @@ class TenantEmailService:
         message = await self.session.get(EmailMessage, message_id)
         if not message:
             raise HTTPException(404, "Email message not found")
-        await self._assert_scope(user, message.brand_key, message.vendor_id)
+        await self.assert_scope(user, message.brand_key, message.vendor_id)
         return message
