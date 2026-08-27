@@ -7,8 +7,57 @@ from pydantic import ValidationError
 
 from app.api.v1 import auth
 from app.domains.auth.access_service import DASHBOARD_BY_ROLE, DEFAULT_ACCESS, DEFAULT_PERMISSIONS
-from app.domains.auth.models import AccessRole, Department, TenantScope, UserRole
+from app.domains.auth.dependencies import _keycloak_user
+from app.domains.auth.models import AccessRole, Department, TenantScope, User, UserRole
 from app.domains.auth.schemas import AccessAssignmentInput, AccessProfileUpdate
+
+
+class FakeIdentitySession:
+    def __init__(self) -> None:
+        self.commits = 0
+        self.rollbacks = 0
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+    async def rollback(self) -> None:
+        self.rollbacks += 1
+
+
+class FakeIdentityRepository:
+    def __init__(self, user: User) -> None:
+        self.user = user
+        self.subject_identity = None
+        self.user_identity = None
+        self.added_identity = None
+        self.email_lookups = 0
+
+    async def identity_by_subject(self, _brand: str, _issuer: str, _subject: str):
+        return self.subject_identity
+
+    async def identity_by_user_issuer(self, _brand: str, _issuer: str, _user_id: uuid.UUID):
+        return self.user_identity
+
+    async def by_email(self, email: str):
+        self.email_lookups += 1
+        return self.user if email == self.user.email else None
+
+    async def by_id(self, user_id: uuid.UUID):
+        return self.user if user_id == self.user.id else None
+
+    async def add_identity(self, identity):
+        self.added_identity = identity
+        return identity
+
+
+def keycloak_claims(*, email: str = "person@example.com", subject: str = "kc-subject") -> dict:
+    return {
+        "sub": subject,
+        "iss": "https://auth.codestra.co/realms/codestra",
+        "email": email,
+        "email_verified": True,
+        "realm_access": {"roles": ["breero_customer"]},
+    }
 
 
 def test_every_coarse_user_role_has_default_portal_access() -> None:
@@ -86,3 +135,73 @@ def test_local_credentials_are_disabled_when_keycloak_is_authoritative(monkeypat
         auth.local_auth_only()
     assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
     assert "identity provider" in str(exc_info.value.detail)
+
+
+@pytest.mark.asyncio
+async def test_keycloak_first_login_links_verified_subject_to_provisioned_user() -> None:
+    user = User(
+        id=uuid.uuid4(),
+        email="person@example.com",
+        password_hash="disabled",
+        full_name="Person",
+        role=UserRole.customer,
+        is_active=True,
+        email_verified=True,
+    )
+    repository = FakeIdentityRepository(user)
+    session = FakeIdentitySession()
+
+    resolved = await _keycloak_user(keycloak_claims(), repository, session)  # type: ignore[arg-type]
+
+    assert resolved is user
+    assert repository.added_identity is not None
+    assert repository.added_identity.user_id == user.id
+    assert repository.added_identity.subject == "kc-subject"
+    assert session.commits == 1
+
+
+@pytest.mark.asyncio
+async def test_keycloak_linked_subject_remains_authoritative_after_email_change() -> None:
+    user = User(
+        id=uuid.uuid4(),
+        email="person@example.com",
+        password_hash="disabled",
+        full_name="Person",
+        role=UserRole.customer,
+        is_active=True,
+        email_verified=True,
+    )
+    repository = FakeIdentityRepository(user)
+    repository.subject_identity = SimpleNamespace(user_id=user.id)
+    session = FakeIdentitySession()
+
+    resolved = await _keycloak_user(
+        keycloak_claims(email="new-address@example.com"), repository, session  # type: ignore[arg-type]
+    )
+
+    assert resolved is user
+    assert repository.email_lookups == 0
+    assert session.commits == 0
+
+
+@pytest.mark.asyncio
+async def test_keycloak_rejects_new_subject_when_user_already_has_identity() -> None:
+    user = User(
+        id=uuid.uuid4(),
+        email="person@example.com",
+        password_hash="disabled",
+        full_name="Person",
+        role=UserRole.customer,
+        is_active=True,
+        email_verified=True,
+    )
+    repository = FakeIdentityRepository(user)
+    repository.user_identity = SimpleNamespace(user_id=user.id, subject="different-subject")
+    session = FakeIdentitySession()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _keycloak_user(keycloak_claims(), repository, session)  # type: ignore[arg-type]
+
+    assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
+    assert "Identity does not match" in str(exc_info.value.detail)
+    assert session.commits == 0
