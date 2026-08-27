@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +16,43 @@ class UserRole(enum.StrEnum):
     operations = "operations"
     finance = "finance"
     admin = "admin"
+
+
+class AccessRole(enum.StrEnum):
+    customer = "customer"
+    vendor_admin = "vendor_admin"
+    technician = "technician"
+    operations = "operations"
+    ops_manager = "ops_manager"
+    support = "support"
+    finance = "finance"
+    quality = "quality"
+    trust_safety = "trust_safety"
+    sales = "sales"
+    marketing = "marketing"
+    admin = "admin"
+    superadmin = "superadmin"
+
+
+class Department(enum.StrEnum):
+    customer = "customer"
+    provider = "provider"
+    field_service = "field_service"
+    dispatch = "dispatch"
+    customer_support = "customer_support"
+    vendor_success = "vendor_success"
+    finance = "finance"
+    quality = "quality"
+    trust_safety = "trust_safety"
+    sales = "sales"
+    marketing = "marketing"
+    administration = "administration"
+
+
+class TenantScope(enum.StrEnum):
+    global_ = "global"
+    brand = "brand"
+    vendor = "vendor"
 
 
 class User(Base):
@@ -76,3 +113,78 @@ class EmailVerificationToken(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class IdentityLink(Base):
+    __tablename__ = "identity_links"
+    __table_args__ = (
+        UniqueConstraint("brand_key", "issuer", "subject", name="uq_identity_link_subject"),
+        UniqueConstraint("brand_key", "issuer", "user_id", name="uq_identity_link_user_issuer"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    brand_key: Mapped[str] = mapped_column(String(64), default="breero")
+    issuer: Mapped[str] = mapped_column(String(512))
+    subject: Mapped[str] = mapped_column(String(255))
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AccessAssignment(Base):
+    __tablename__ = "access_assignments"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "brand_key", "role_key", "department", name="uq_access_assignment_role_department"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    brand_key: Mapped[str] = mapped_column(String(64), default="breero")
+    role_key: Mapped[str] = mapped_column(String(64))
+    department: Mapped[str] = mapped_column(String(64), index=True)
+    tenant_scope: Mapped[str] = mapped_column(String(32), default=TenantScope.brand.value)
+    vendor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("vendors.id", ondelete="CASCADE"), index=True
+    )
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class RolePermission(Base):
+    __tablename__ = "role_permissions"
+    __table_args__ = (UniqueConstraint("role_key", "permission", name="uq_role_permission"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    role_key: Mapped[str] = mapped_column(String(64), index=True)
+    permission: Mapped[str] = mapped_column(String(128))
+    allow: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class UserPermission(Base):
+    __tablename__ = "user_permissions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "brand_key", "permission", name="uq_user_permission"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    brand_key: Mapped[str] = mapped_column(String(64), default="breero")
+    permission: Mapped[str] = mapped_column(String(128))
+    allow: Mapped[bool] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
