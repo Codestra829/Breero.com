@@ -4,6 +4,7 @@ import "@breero/ui/styles.css";
 import "./globals.css";
 import "./marketplace.css";
 import "./brand.css";
+import "./enterprise-design-system.css";
 import { AppShell } from "@/components/app-shell";
 
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-br-sans", display: "swap" });
