@@ -31,7 +31,7 @@ export function SiteHeader() {
       </nav>
       <div className="site-header__actions">
         <Link className="header-signin" href="/account"><UserIcon size={18} />Sign in</Link>
-        <Link className="br-button br-button--primary br-button--sm header-book" href="/booking" data-cta="header-book">Book a service <ArrowRightIcon size={17} /></Link>
+        <Link className="br-button br-button--primary br-button--sm header-book" href="/request-service" data-cta="header-request-service">Request service <ArrowRightIcon size={17} /></Link>
         <IconButton className="mobile-menu-button" label={open ? "Close menu" : "Open menu"} aria-expanded={open} aria-controls="mobile-navigation" onClick={() => setOpen(!open)}>{open ? <CloseIcon /> : <MenuIcon />}</IconButton>
       </div>
     </div>
@@ -40,8 +40,8 @@ export function SiteHeader() {
         {links.map((link) => <Link key={link.href} href={link.href} aria-current={pathname === link.href ? "page" : undefined} onClick={() => setOpen(false)}>{link.label}<ArrowRightIcon size={18} /></Link>)}
         <Link href="/account" onClick={() => setOpen(false)}><UserIcon size={19} />Sign in</Link>
       </nav>
-      <Link className="br-button br-button--primary br-button--lg br-button--full" href="/booking" onClick={() => setOpen(false)} data-cta="mobile-book">Book a service <ArrowRightIcon /></Link>
-      <p><ShieldIcon size={17} />Verified professionals. Clear booking.</p>
+      <Link className="br-button br-button--primary br-button--lg br-button--full" href="/request-service" onClick={() => setOpen(false)} data-cta="mobile-request-service">Request service <ArrowRightIcon /></Link>
+      <p><ShieldIcon size={17} />Provider eligibility and availability are confirmed before assignment.</p>
     </div>}
   </header>;
 }
