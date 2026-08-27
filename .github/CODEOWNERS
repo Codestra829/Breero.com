@@ -15,3 +15,4 @@
 /apps/web/components/brand/ @appolon1908-hue
 /scripts/check-design-system.mjs @appolon1908-hue
 /.github/workflows/design-system.yml @appolon1908-hue
+/.github/workflows/quality.yml @appolon1908-hue
