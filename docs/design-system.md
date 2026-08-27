@@ -2,7 +2,9 @@
 
 Status: **binding frontend governance**
 
-This layer keeps BREERO's approved identity and applies the disciplined visual behavior associated with high-end aerospace and Fortune 500 sites: restrained motion, high contrast, deliberate spacing, precise geometry, strong typography, and one CTA hierarchy. It does **not** copy SpaceX, Starlink, or any third-party logo, asset, font, page composition, or proprietary artwork.
+This layer keeps BREERO's approved identity and applies disciplined Fortune 500 visual behavior: restrained motion, high contrast, deliberate spacing, precise geometry, strong typography, one CTA hierarchy, and truthful product state. It does **not** copy Angi, SpaceX, Starlink, or any third-party logo, asset, font, page composition, proprietary artwork, or marketing claim.
+
+The companion `docs/marketplace-experience-system.md` is the binding interaction and marketplace-state authority.
 
 ## Brand authority
 
@@ -51,7 +53,10 @@ Required interaction rules:
 - compact CTA: 44px minimum;
 - large CTA: 54px;
 - small corporate radius, never decorative pills for ordinary CTAs;
-- keyboard-visible focus and reduced-motion support.
+- keyboard-visible focus and reduced-motion support;
+- CTA language must match authoritative request, quote, booking, assignment, payment, review, messaging and capability state.
+
+The accepted global shell is request-first. The primary global action is **Request service**, not an unsupported instant-booking promise.
 
 ## Header
 
@@ -61,7 +66,7 @@ The global header is the application shell authority:
 - dark navy high-trust shell;
 - BREERO logo left;
 - centered desktop navigation where space allows;
-- account + primary CTA right;
+- account + truthful primary CTA right;
 - accessible mobile navigation;
 - no page-local replacement headers.
 
@@ -69,11 +74,11 @@ The global header is the application shell authority:
 
 The global footer contains:
 
-- final conversion section;
+- final request-service conversion section;
 - BREERO positioning and legal identity;
 - services, company, support, privacy/communications, and professional navigation;
 - legal/privacy/accessibility links;
-- no fake metrics, reviews, service availability, or guarantees.
+- no fake metrics, reviews, service availability, provider assignment, pricing, or guarantees.
 
 ## Layout and spacing
 
@@ -86,9 +91,101 @@ Use the existing container and an 8px-derived spacing rhythm.
 - avoid heavy black shadows and excessive gradients;
 - animation must be functional, restrained, and removable through reduced-motion.
 
+## Marketplace primitives
+
+`@breero/ui` owns the shared marketplace patterns:
+
+```text
+MarketplaceServiceCard
+PricingModeBadge
+ProviderTrustCard
+TrustBadge
+CapacitySignal
+ProjectStatusTimeline
+MarketplaceStatePanel
+```
+
+Use them for new or materially edited service, provider, customer, worker, dispatch, support, trust, quality, finance and administration experiences.
+
+The components display authoritative facts; they do not perform scheduling, eligibility, matching, assignment, payment, verification, or state transitions.
+
+### Pricing modes
+
+```text
+INSTANT_BOOKABLE
+QUOTE_REQUIRED
+REQUEST_ONLY
+```
+
+Do not infer a pricing mode from frontend copy or route shape.
+
+### Trust facts
+
+```text
+IDENTITY
+BUSINESS
+LICENSE
+INSURANCE
+BACKGROUND SCREENING
+SERVICE QUALIFICATION
+```
+
+Trust facts use distinct verified, pending, expired, or not-required states. Do not replace them with a vague universal verified badge.
+
+### Capacity states
+
+```text
+AVAILABLE
+LIMITED
+DISPATCHER REVIEW
+UNAVAILABLE
+```
+
+Capacity display must come from the authoritative scheduling/capacity service or an explicit dispatcher-review state.
+
+### Complete data states
+
+Every changed data surface deliberately handles:
+
+```text
+LOADING
+EMPTY
+ERROR
+RESTRICTED
+DISABLED
+SUCCESS
+```
+
+Blank pages, fake cards, perpetual spinners, and silent failures are not acceptable.
+
 ## Page inheritance
 
-`RootLayout -> AppShell -> SiteHeader + main + SiteFooter` is the required shell. New public pages automatically inherit the same header, footer, typography, focus rules, CTA primitives, and enterprise layer. Page-local parallel shells are prohibited.
+`RootLayout -> AppShell -> SiteHeader + main + SiteFooter` is the required shell. New public pages automatically inherit the same header, footer, typography, focus rules, CTA primitives, marketplace stylesheet, and enterprise layer. Page-local parallel shells are prohibited.
+
+Department and account applications may use protected workspace shells, but they must reuse the same tokens, UI package, state vocabulary, trust evidence, lifecycle status and accessibility rules.
+
+## Search, forms, drawers and lists
+
+- production lists use server-side search, filter, sort and pagination;
+- forms preserve recoverable input and use backend validation/correlation evidence;
+- unchanged retries retain the same idempotency identity where required;
+- drawers and dialogs have focus management, accessible titles and safe stale-record behavior;
+- buttons must have real actions, documented routes, or an explicit disabled/overview-only explanation;
+- protected capability absence is never hidden behind a fake success state.
+
+## Responsive and accessibility baseline
+
+Validate at 320, 375, 390, 430, 768, 1024 and 1440+ CSS pixels.
+
+Required checks include:
+
+- keyboard operation and visible focus;
+- screen-reader labels, status announcements and heading order;
+- accessible forms, errors, dialogs, drawers and timelines;
+- status not communicated by color alone;
+- reduced motion;
+- reflow and 200% zoom;
+- Chromium, Firefox and WebKit.
 
 ## Design drift guard
 
@@ -106,13 +203,14 @@ The guard checks changed code and fails on newly introduced design drift includi
 - new CSS systems outside approved central style files;
 - arbitrary Tailwind-style values and palette utilities;
 - decorative full-pill geometry in ordinary page/component changes;
-- root layout losing the enterprise layer;
+- root layout losing the shared marketplace or enterprise layer;
 - AppShell losing the shared header/footer;
-- header losing the shared BREERO logo;
+- header losing the shared BREERO logo or truthful request CTA;
+- shared marketplace primitives, stylesheet, tests or authority disappearing;
 - required governance files disappearing.
 
 The guard intentionally evaluates **added lines in the complete comparison range**, not just the final commit, so a violation cannot be hidden by a later unrelated commit.
 
 ## Exceptions
 
-A genuine design-system change must be made in the approved central style authorities and reviewed as a design-system change. Do not bypass the guard in a page file. If a new token is required, add it centrally, document it, and use the token everywhere else.
+A genuine design-system change must be made in the approved central style authorities and reviewed as a design-system change. Do not bypass the guard in a page file. If a new token or marketplace pattern is required, add it centrally, document it, test it, and use it everywhere else.
