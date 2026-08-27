@@ -50,7 +50,7 @@ p {
   min-height: 50px;
   border-radius: var(--br-radius-sm);
   padding-inline: 1.25rem;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 800;
   letter-spacing: var(--br-enterprise-tracking);
   line-height: 1;
@@ -60,7 +60,7 @@ p {
 .br-button--sm {
   min-height: 44px;
   padding-inline: 1rem;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
 }
 
 .br-button--lg {
@@ -121,7 +121,7 @@ p {
 .desktop-nav a,
 .header-signin {
   color: var(--br-enterprise-text-soft);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 750;
   letter-spacing: var(--br-enterprise-tracking);
   text-transform: uppercase;
@@ -160,12 +160,14 @@ p {
 .mobile-nav nav a {
   border-bottom-color: var(--br-enterprise-line);
   color: var(--br-enterprise-text);
+  font-size: 0.875rem;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 
 .mobile-nav p {
   color: var(--br-enterprise-muted);
+  font-size: 0.875rem;
 }
 
 .enterprise-footer-cta {
@@ -182,7 +184,7 @@ p {
 .enterprise-footer-cta__eyebrow {
   margin: 0 0 0.9rem;
   color: #8fb9ff;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 850;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -244,13 +246,13 @@ p {
 }
 
 .footer__links h2 {
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   letter-spacing: 0.12em;
 }
 
 .footer__links a,
 .footer__legal {
-  font-size: 0.78rem;
+  font-size: 0.875rem;
 }
 
 .footer__links a {
