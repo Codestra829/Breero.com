@@ -68,7 +68,7 @@ async def login_mode() -> dict[str, str]:
     response_model=TokenResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def register_client(
+async def register(
     data: RegisterRequest,
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db)],
