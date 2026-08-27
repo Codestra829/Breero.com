@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.domains.auth.models import (
     AccessAssignment,
+    AccessProfile,
     AccessRole,
     Department,
     RolePermission,
@@ -23,6 +24,7 @@ from app.domains.auth.schemas import (
 )
 
 BRAND_KEY = "breero"
+NO_ACCESS_DASHBOARD = "/access-denied"
 
 DEFAULT_ACCESS: dict[UserRole, tuple[AccessRole, Department, TenantScope]] = {
     UserRole.customer: (AccessRole.customer, Department.customer, TenantScope.brand),
@@ -174,6 +176,12 @@ class AccessService:
         self.session = session
 
     async def context(self, user: User, brand_key: str = BRAND_KEY) -> PortalContext:
+        profile = await self.session.scalar(
+            select(AccessProfile).where(
+                AccessProfile.user_id == user.id,
+                AccessProfile.brand_key == brand_key,
+            )
+        )
         rows = list(
             (
                 await self.session.scalars(
@@ -187,6 +195,19 @@ class AccessService:
                 )
             ).all()
         )
+
+        if profile is not None and not rows:
+            return PortalContext(
+                user=UserRead.model_validate(user),
+                brand_key=brand_key,
+                dashboard_path=NO_ACCESS_DASHBOARD,
+                roles=[],
+                departments=[],
+                permissions=[],
+                assignments=[],
+                identity_mode="keycloak" if settings.keycloak_enabled else "local",
+            )
+
         assignments = self._assignment_reads(user, rows)
         roles = list(dict.fromkeys(item.role for item in assignments))
         departments = list(dict.fromkeys(item.department for item in assignments))
@@ -212,6 +233,19 @@ class AccessService:
         user = await self.session.scalar(select(User).where(User.id == user_id).with_for_update())
         if not user:
             raise HTTPException(404, "User not found")
+
+        profile = await self.session.scalar(
+            select(AccessProfile)
+            .where(
+                AccessProfile.user_id == user_id,
+                AccessProfile.brand_key == brand_key,
+            )
+            .with_for_update()
+        )
+        if profile is None:
+            self.session.add(AccessProfile(user_id=user_id, brand_key=brand_key))
+            await self.session.flush()
+
         await self.session.execute(
             delete(AccessAssignment).where(
                 AccessAssignment.user_id == user_id,

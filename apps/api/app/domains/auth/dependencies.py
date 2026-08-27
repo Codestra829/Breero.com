@@ -10,12 +10,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db.session import get_db
 from app.domains.auth.access_service import AccessService
-from app.domains.auth.models import IdentityLink, User, UserRole
+from app.domains.auth.models import AccessRole, IdentityLink, User, UserRole
 from app.domains.auth.repository import UserRepository
 from app.domains.auth.security import decode_access_token
 
 bearer = HTTPBearer(auto_error=False)
 BRAND_KEY = "breero"
+
+EFFECTIVE_ROLES_BY_LEGACY_ROLE: dict[UserRole, frozenset[AccessRole]] = {
+    UserRole.customer: frozenset({AccessRole.customer}),
+    UserRole.vendor_admin: frozenset({AccessRole.vendor_admin}),
+    UserRole.technician: frozenset({AccessRole.technician}),
+    UserRole.operations: frozenset({AccessRole.operations, AccessRole.ops_manager}),
+    UserRole.finance: frozenset({AccessRole.finance}),
+    UserRole.admin: frozenset({AccessRole.admin, AccessRole.superadmin}),
+}
 
 
 async def _keycloak_user(
@@ -101,8 +110,38 @@ async def current_user(
 
 
 def require_roles(*roles: UserRole) -> Callable:
-    async def dependency(user: Annotated[User, Depends(current_user)]) -> User:
-        if user.role not in roles:
+    allowed_roles = frozenset(
+        access_role
+        for role in roles
+        for access_role in EFFECTIVE_ROLES_BY_LEGACY_ROLE[role]
+    )
+
+    async def dependency(
+        user: Annotated[User, Depends(current_user)],
+        session: Annotated[AsyncSession, Depends(get_db)],
+    ) -> User:
+        context = await AccessService(session).context(user, BRAND_KEY)
+        if not allowed_roles.intersection(context.roles):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
+            )
+        return user
+
+    return dependency
+
+
+def require_permissions(*permissions: str) -> Callable:
+    required = frozenset(permission.strip() for permission in permissions if permission.strip())
+    if not required:
+        raise ValueError("At least one permission is required")
+
+    async def dependency(
+        user: Annotated[User, Depends(current_user)],
+        session: Annotated[AsyncSession, Depends(get_db)],
+    ) -> User:
+        context = await AccessService(session).context(user, BRAND_KEY)
+        effective = set(context.permissions)
+        if "*" not in effective and not required.issubset(effective):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
             )
@@ -112,13 +151,17 @@ def require_roles(*roles: UserRole) -> Callable:
 
 
 def require_any_permission(*permissions: str) -> Callable:
+    requested = frozenset(permission.strip() for permission in permissions if permission.strip())
+    if not requested:
+        raise ValueError("At least one permission is required")
+
     async def dependency(
         user: Annotated[User, Depends(current_user)],
         session: Annotated[AsyncSession, Depends(get_db)],
     ) -> User:
-        context = await AccessService(session).context(user)
+        context = await AccessService(session).context(user, BRAND_KEY)
         effective = set(context.permissions)
-        if "*" not in effective and not effective.intersection(permissions):
+        if "*" not in effective and not effective.intersection(requested):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Insufficient permissions",
