@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { Badge, Card, ErrorState, LoadingState, ShieldIcon } from "@breero/ui";
 import type { Department, PortalContext } from "@breero/types";
 import { useApiResource } from "@/lib/customer/use-api-resource";
@@ -24,7 +24,9 @@ export interface DepartmentDashboardProps {
 export function DepartmentDashboard({ department, eyebrow, title, description, modules }: DepartmentDashboardProps) {
   const load = useCallback((signal: AbortSignal): Promise<PortalContext> => loadPortalContext(signal), []);
   const { value: context, error, retry } = useApiResource(load);
-  const allowedDepartments = Array.isArray(department) ? department : [department];
+  const allowedDepartments = useMemo<Department[]>(() => (
+    Array.isArray(department) ? department : [department]
+  ), [department]);
   const authorized = context ? allowedDepartments.some((item) => canAccessDepartment(context, item)) : false;
 
   useEffect(() => {
