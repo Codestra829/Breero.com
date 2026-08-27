@@ -3,7 +3,13 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domains.auth.models import EmailVerificationToken, PasswordResetToken, Session, User
+from app.domains.auth.models import (
+    EmailVerificationToken,
+    IdentityLink,
+    PasswordResetToken,
+    Session,
+    User,
+)
 
 
 class UserRepository:
@@ -20,6 +26,33 @@ class UserRepository:
         self.session.add(user)
         await self.session.flush()
         return user
+
+    async def identity_by_subject(
+        self, brand_key: str, issuer: str, subject: str
+    ) -> IdentityLink | None:
+        return await self.session.scalar(
+            select(IdentityLink).where(
+                IdentityLink.brand_key == brand_key,
+                IdentityLink.issuer == issuer,
+                IdentityLink.subject == subject,
+            )
+        )
+
+    async def identity_by_user_issuer(
+        self, brand_key: str, issuer: str, user_id: uuid.UUID
+    ) -> IdentityLink | None:
+        return await self.session.scalar(
+            select(IdentityLink).where(
+                IdentityLink.brand_key == brand_key,
+                IdentityLink.issuer == issuer,
+                IdentityLink.user_id == user_id,
+            )
+        )
+
+    async def add_identity(self, identity: IdentityLink) -> IdentityLink:
+        self.session.add(identity)
+        await self.session.flush()
+        return identity
 
     async def session_by_hash(self, token_hash: str, *, lock: bool = False) -> Session | None:
         query = select(Session).where(Session.token_hash == token_hash)
