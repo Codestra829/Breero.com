@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, mo
 
 
 class TenantScopedInput(BaseModel):
-    brand_key: str = Field(default="breero", min_length=1, max_length=64)
+    brand_key: str = Field(default="breero", min_length=1, max_length=64, pattern=r"^[a-z0-9_-]+$")
     vendor_id: uuid.UUID | None = None
 
 
