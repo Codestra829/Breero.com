@@ -37,6 +37,22 @@ def upgrade():
     op.create_index("ix_identity_links_email", "identity_links", ["email"])
 
     op.create_table(
+        "access_profiles",
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column(
+            "user_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("brand_key", sa.String(64), nullable=False, server_default="breero"),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.UniqueConstraint("user_id", "brand_key", name="uq_access_profile_user_brand"),
+    )
+    op.create_index("ix_access_profiles_user_id", "access_profiles", ["user_id"])
+
+    op.create_table(
         "access_assignments",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column(
@@ -104,4 +120,5 @@ def downgrade():
     op.drop_table("user_permissions")
     op.drop_table("role_permissions")
     op.drop_table("access_assignments")
+    op.drop_table("access_profiles")
     op.drop_table("identity_links")
