@@ -57,7 +57,13 @@ describe("access assignment model", () => {
       roles: ["support"],
       departments: ["customer_support"],
       permissions: ["support.customers.read"],
-      assignments: [validAssignment],
+      assignments: [{
+        role: "support",
+        department: "customer_support",
+        tenant_scope: "brand",
+        vendor_id: null,
+        is_primary: true,
+      }],
       identity_mode: "keycloak",
     };
 
