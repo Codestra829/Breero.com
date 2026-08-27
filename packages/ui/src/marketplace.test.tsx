@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   CapacitySignal,
   MarketplaceServiceCard,
@@ -8,6 +8,8 @@ import {
   ProjectStatusTimeline,
   ProviderTrustCard,
 } from "./marketplace";
+
+afterEach(cleanup);
 
 describe("marketplace UI", () => {
   it("labels the three supported pricing modes truthfully", () => {
@@ -55,8 +57,9 @@ describe("marketplace UI", () => {
 
   it("announces current capacity without implying assignment", () => {
     render(<CapacitySignal state="manual_review" detail="A dispatcher must confirm the provider and time." />);
-    expect(screen.getByRole("status")).toHaveTextContent("Dispatcher review");
-    expect(screen.getByRole("status")).toHaveTextContent("A dispatcher must confirm");
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("Dispatcher review");
+    expect(status).toHaveTextContent("A dispatcher must confirm");
   });
 
   it("marks exactly the active lifecycle step", () => {
@@ -70,8 +73,9 @@ describe("marketplace UI", () => {
       />,
     );
 
-    expect(screen.getByText("Dispatcher review").closest("li")).toHaveAttribute("aria-current", "step");
-    expect(screen.getByText("Provider assignment").closest("li")).not.toHaveAttribute("aria-current");
+    const timeline = screen.getByRole("list", { name: "Project progress" });
+    expect(within(timeline).getByText("Dispatcher review").closest("li")).toHaveAttribute("aria-current", "step");
+    expect(within(timeline).getByText("Provider assignment").closest("li")).not.toHaveAttribute("aria-current");
   });
 
   it("uses alerts for failures and status semantics for non-error states", () => {
@@ -79,6 +83,7 @@ describe("marketplace UI", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Unable to load providers");
 
     rerender(<MarketplaceStatePanel state="empty" title="No matching providers" description="Adjust the service area or time window." />);
-    expect(screen.getByRole("status")).toHaveTextContent("No matching providers");
+    const emptyHeading = screen.getByRole("heading", { name: "No matching providers" });
+    expect(emptyHeading.closest('[role="status"]')).toHaveTextContent("Adjust the service area or time window");
   });
 });
