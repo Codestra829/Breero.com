@@ -39,6 +39,25 @@ export interface AccessAssignment {
   is_primary: boolean;
 }
 
+export interface AccessAssignmentInput {
+  role: AccessRole;
+  department: Department;
+  tenant_scope: TenantScope;
+  vendor_id?: UUID | null;
+  is_primary?: boolean;
+}
+
+export interface AccessProfileUpdate {
+  brand_key?: string;
+  assignments: AccessAssignmentInput[];
+}
+
+export interface AccessCatalog {
+  roles: AccessRole[];
+  departments: Department[];
+  tenant_scopes: TenantScope[];
+}
+
 export interface PortalContext {
   user: User;
   brand_key: string;
