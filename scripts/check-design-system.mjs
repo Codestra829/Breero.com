@@ -7,14 +7,19 @@ import { extname } from "node:path";
 const ROOT = process.cwd();
 const REQUIRED_FILES = [
   "apps/web/app/enterprise-design-system.css",
+  "packages/ui/src/marketplace.tsx",
+  "packages/ui/src/marketplace.css",
+  "packages/ui/src/marketplace.test.tsx",
   "docs/design-system.md",
   "docs/design-system-migration.md",
+  "docs/marketplace-experience-system.md",
   ".github/CODEOWNERS",
   ".github/pull_request_template.md",
 ];
 
 const ALLOWED_STYLE_AUTHORITIES = new Set([
   "packages/ui/src/styles.css",
+  "packages/ui/src/marketplace.css",
   "apps/web/app/globals.css",
   "apps/web/app/marketplace.css",
   "apps/web/app/brand.css",
@@ -41,11 +46,24 @@ for (const path of REQUIRED_FILES) {
 }
 
 const layout = existsSync("apps/web/app/layout.tsx") ? read("apps/web/app/layout.tsx") : "";
+if (!layout.includes('import "@breero/ui/marketplace.css";')) {
+  fail("RootLayout must import the shared marketplace experience stylesheet");
+}
 if (!layout.includes('import "./enterprise-design-system.css";')) {
   fail("RootLayout must import enterprise-design-system.css after the existing shared styles");
 }
 if (!layout.includes("Manrope")) {
   fail("RootLayout must keep the approved Manrope font authority");
+}
+
+const uiIndex = existsSync("packages/ui/src/index.ts") ? read("packages/ui/src/index.ts") : "";
+if (!uiIndex.includes('export * from "./marketplace";')) {
+  fail("@breero/ui must export the shared marketplace primitives");
+}
+
+const uiPackage = existsSync("packages/ui/package.json") ? read("packages/ui/package.json") : "";
+if (!uiPackage.includes('"./marketplace.css": "./src/marketplace.css"')) {
+  fail("@breero/ui must publish the marketplace stylesheet export");
 }
 
 const shell = existsSync("apps/web/components/app-shell.tsx") ? read("apps/web/components/app-shell.tsx") : "";
@@ -54,8 +72,16 @@ if (!shell.includes("<SiteHeader") || !shell.includes("<SiteFooter")) {
 }
 
 const header = existsSync("apps/web/components/site-header.tsx") ? read("apps/web/components/site-header.tsx") : "";
-if (!header.includes("<Logo") || !header.includes('data-cta="header-book"')) {
-  fail("SiteHeader must retain the shared BREERO logo and primary header CTA");
+if (!header.includes("<Logo") || !header.includes('data-cta="header-request-service"')) {
+  fail("SiteHeader must retain the shared BREERO logo and truthful request-service CTA");
+}
+if (header.includes('href="/booking"') || header.includes("Book a service")) {
+  fail("Global header must not promise booking while the accepted shell remains request-first");
+}
+
+const footer = existsSync("apps/web/components/site-footer.tsx") ? read("apps/web/components/site-footer.tsx") : "";
+if (!footer.includes('data-cta="footer-request-service"')) {
+  fail("SiteFooter must retain the truthful request-service conversion action");
 }
 
 let base = process.argv[2]?.trim();
