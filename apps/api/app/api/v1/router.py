@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    access,
     addresses,
     auth,
     availability,
@@ -23,6 +24,7 @@ from app.config import settings
 api_router = APIRouter()
 api_router.include_router(capabilities.router, prefix="/public", tags=["public-capabilities"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(access.router, prefix="/auth/access", tags=["auth-access"])
 api_router.include_router(services.router, prefix="/services", tags=["services"])
 api_router.include_router(customers.router, prefix="/customer", tags=["customer"])
 api_router.include_router(compliance.router, tags=["compliance"])
