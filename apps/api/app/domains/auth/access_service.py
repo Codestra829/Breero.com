@@ -215,11 +215,11 @@ class AccessService:
                 select(RolePermission).where(RolePermission.role_key.in_([role.value for role in roles]))
             )
         ).all()
-        for row in role_rows:
-            if row.allow:
-                permissions.add(row.permission)
+        for role_permission in role_rows:
+            if role_permission.allow:
+                permissions.add(role_permission.permission)
             else:
-                permissions.discard(row.permission)
+                permissions.discard(role_permission.permission)
         user_rows = (
             await self.session.scalars(
                 select(UserPermission).where(
@@ -228,11 +228,11 @@ class AccessService:
                 )
             )
         ).all()
-        for row in user_rows:
-            if row.allow:
-                permissions.add(row.permission)
+        for user_permission in user_rows:
+            if user_permission.allow:
+                permissions.add(user_permission.permission)
             else:
-                permissions.discard(row.permission)
+                permissions.discard(user_permission.permission)
         return permissions
 
     @staticmethod
