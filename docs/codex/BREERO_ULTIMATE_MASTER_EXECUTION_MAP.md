@@ -4,11 +4,15 @@ Status: **binding branch and acceptance authority**
 
 Source authority: `BREERO ULTIMATE MASTER FEATURES + SOFTWARE INSTALLATION + INFRASTRUCTURE MISSION` supplied on 2026-08-27.
 
-This document maps that mission onto the current BREERO repository. It does not silently replace the repository's supported architecture, imply that unimplemented domains are complete, or activate protected production behavior.
+This map applies that mission to the current repository. It does not replace supported technology, mark unimplemented domains complete, or activate protected production behavior.
 
-## 1. Mission outcome
+Detailed API/forms/integration/release authority:
 
-BREERO must become one coherent production-grade home-services marketplace supporting:
+```text
+docs/codex/BREERO_FEATURE_API_FORMS_DOCKER_MISSION.md
+```
+
+## 1. Required marketplace outcome
 
 ```text
 PUBLIC WEBSITE
@@ -30,28 +34,26 @@ OBSERVABILITY
 DEPLOYMENT
 ```
 
-Landing pages, forms, dashboards, mock APIs, and demo authentication are not a completed marketplace.
+Landing pages, forms, dashboards, mock APIs and demo authentication are not a completed marketplace.
 
-## 2. Existing architecture audit
-
-The repository already uses a supported modular-monolith architecture:
+## 2. Existing architecture preserved
 
 ```text
 BACKEND=FastAPI + Python 3.12
 ORM=SQLAlchemy async
 MIGRATIONS=Alembic
 DATABASE=PostgreSQL 17 + PostGIS
-CACHE_AND_QUEUE=Redis + Celery
+CACHE_QUEUE=Redis + Celery
 FRONTEND=Next.js 15 + React 19 + TypeScript
-PACKAGE_MANAGER=pnpm 10 + Turborepo
-IDENTITY=Keycloak/OIDC with local non-production compatibility paths
+PACKAGE_MANAGER=pnpm + Turborepo
+IDENTITY=Keycloak/OIDC
 CONTAINERS=Docker + Docker Compose
 EDGE=Caddy/Kong boundaries
 CI=GitHub Actions
-TESTING=pytest, Vitest, Testing Library, Playwright Chromium/Firefox/WebKit
+TESTS=pytest + Vitest + Testing Library + Playwright
 ```
 
-The source mission instructs the implementation agent to extend a supported existing architecture instead of replacing it. Therefore:
+The uploaded mission explicitly requires extending a supported existing architecture.
 
 ```text
 ASP.NET_CORE_REWRITE=NOT_APPLICABLE
@@ -60,28 +62,27 @@ AZURE_ONLY_REWRITE=NOT_APPLICABLE
 FASTAPI_NEXT_POSTGRES_ARCHITECTURE=PRESERVED
 ```
 
-Azure services and Bicep remain optional future infrastructure choices, not a prerequisite for implementing marketplace domains in the current Docker/GitHub deployment model.
+Azure/Bicep may remain an optional future infrastructure choice, not a prerequisite rewrite.
 
-## 3. Runtime and dependency policy
+## 3. Runtime and package policy
 
-Before changing a runtime or package:
+Before adding or changing software:
 
 ```text
-classify REQUIRED / OPTIONAL / FUTURE / ALREADY_INSTALLED / NOT_APPLICABLE
-check existing equivalent
-check framework compatibility
-check security and support status
-check license and maintenance
+classify REQUIRED | OPTIONAL | FUTURE | ALREADY_INSTALLED | NOT_APPLICABLE
+check the repository for an equivalent
+verify framework/runtime compatibility
+review security, support, license and maintenance
 prefer native framework capability
-update lockfiles
+update lockfiles and environment examples
 run the complete exact-head gate
 ```
 
-Node 24 certification is a separate runtime branch. It must not be mixed into provider, booking, dispatch, portal, or payment features.
+Node 24 certification belongs in `chore/node24-runtime-certification`, not a feature branch.
 
-## 4. Protected production posture
+## 4. Protected production posture and current enforcement status
 
-Until separately implemented, reviewed, staged, approved, and activated:
+Target protected values:
 
 ```text
 AUTO_ASSIGN_PROVIDER=false
@@ -100,13 +101,30 @@ FEATURED_PROVIDERS_ENABLED=false
 LEAD_BILLING_ENABLED=false
 ```
 
-The system may implement interfaces and disabled code paths without activating them.
+A documented value is not an enforced kill switch.
+
+Current planning blocker:
+
+```text
+LIVE_EMAIL_DELIVERY_POLICY=NOT_YET_PROVEN_IN_RUNTIME
+LIVE_SMS_DELIVERY_POLICY=NOT_YET_PROVEN_IN_RUNTIME
+```
+
+Before a production release may assert zero email/SMS delivery, the respective adapter branch must add recognized fail-closed settings, enforce them in the worker/adapter even when a delivery URL or credential exists, park disabled events without provider calls or false delivery, expose the effective capability snapshot, and prove provider-call count zero in tests.
+
+Until then:
+
+```text
+EMAIL_ZERO_SEND_GATE=FAIL
+SMS_ZERO_SEND_GATE=FAIL
+REQUEST_ONLY_PRODUCTION_RELEASE=NO_GO
+```
 
 ## 5. Dependency-ordered branch program
 
-Every branch opens as a draft PR, owns one heavy responsibility, preserves accepted compatibility, reports exact starting/final SHAs, and cannot deploy merely because CI is green.
+Every heavy branch opens as a draft PR, owns one responsibility, preserves compatibility, reports exact SHAs and cannot deploy merely because CI is green.
 
-### Phase A — governance, design, runtime, API foundation
+### Phase A — governance, design, runtime, API and identity
 
 ```text
 ci/required-check-governance
@@ -117,17 +135,9 @@ be/api-contract-cleanup
 be/auth-identity-tenancy-rbac
 ```
 
-Acceptance:
+Acceptance includes one required `quality` aggregator, shared enterprise/marketplace UI authority, stable error/trace/pagination/OpenAPI contracts, immutable external identity binding, deny-by-default tenant/permission/record policy and local production-auth shutdown.
 
-- unambiguous required `quality` aggregator;
-- shared enterprise and marketplace experience system;
-- runtime upgrade proven separately;
-- stable error, trace, pagination, OpenAPI, idempotency and concurrency conventions;
-- immutable external identity mapping;
-- deny-by-default tenant, permission and record policy;
-- local production authentication disabled.
-
-### Phase B — service catalog, address, geography, timezone, hours
+### Phase B — catalog, address, geography, timezone and hours
 
 Branch:
 
@@ -135,50 +145,61 @@ Branch:
 be/catalog-geography-timezone-hours
 ```
 
-Owns:
+Owns categories, subcategories, services, slugs, descriptions, duration, buffers, pricing modes, required skills/licenses/compliance, address-provider abstraction, normalization, ZIP/ZIP+4, city/state/county, coordinates, IANA timezone, DST, BREERO service zones, hours, Sunday emergency and PostGIS queries/indexes.
+
+Address-provider outage policy:
 
 ```text
-categories
-subcategories
-services
-service slugs and descriptions
-duration and buffers
-pricing modes
-required skills/licenses/compliance
-address-provider abstraction
-normalization and validation
-ZIP and ZIP+4
-city/state/county
-coordinates
-IANA timezone resolution
-DST handling
-BREERO service zones
-operating hours
-Sunday emergency policy
-geospatial indexes and queries
+REQUEST_ONLY_INTAKE=ACCEPT_FOR_MANUAL_REVIEW
+COVERAGE_OR_SERVICEABILITY=NOT_ESTABLISHED
+AUTOMATIC_AVAILABILITY_BOOKING_ASSIGNMENT=DENY
 ```
 
-Mandatory tests include spring-forward, fall-back, ambiguous/non-existent local times, Arizona, Hawaii, service-zone precedence, unsupported ZIP, address-provider failure, and PostGIS coverage behavior.
+Tests cover spring/fall DST, ambiguous/non-existent time, Arizona, Hawaii, unsupported ZIP, provider outage and PostGIS coverage.
 
-### Phase C — provider network, teams, service areas, compliance, documents
+### Phase C — provider organizations, teams and workers
 
-Branches:
+Branch:
 
 ```text
 be/provider-network-teams
-be/provider-coverage-schedule
-be/provider-compliance-documents
 ```
 
-`be/provider-network-teams` owns organization registration, team membership, provider administrators, professionals/workers, services, skills, status and tenancy.
+Owns applications, organizations, administrators, memberships, professionals/workers, services, skills, status and tenancy. Registration never equals approval.
 
-`be/provider-coverage-schedule` owns ZIP/city/county/zone/radius coverage, weekly availability, exceptions, vacation, sick time, training, manual blocks, holidays, emergency schedule and temporary overrides.
+### Phase D — provider coverage and schedule
 
-`be/provider-compliance-documents` owns identity/business/license/insurance/background/service-qualification status, expiration, secure private object storage, upload sessions, malware/quarantine policy, verification, suspension and eligibility exclusion.
+Branch:
 
-Provider registration never equals approval. A provider cannot extend BREERO's outer service boundary.
+```text
+be/provider-coverage-schedule
+```
 
-### Phase D — capacity, travel and atomic holds
+Owns ZIP/city/county/zone/radius coverage, weekly availability, exceptions, vacation, sick time, training, manual blocks, holidays, emergency schedule and overrides. Provider coverage cannot exceed BREERO's outer service boundary; availability cannot exceed BREERO hours.
+
+### Phase E — canonical private document service
+
+Branch:
+
+```text
+be/documents-private-storage
+```
+
+This is the single owner of object metadata, upload sessions, private storage, signed short-lived access, type/size/checksum validation, malware scanning, quarantine, cleanup, retention/deletion and object authorization.
+
+No other branch may create a parallel upload/storage/quarantine pipeline.
+
+### Phase F — provider compliance
+
+Branch:
+
+```text
+be/provider-compliance
+```
+
+Owns identity, business, license, insurance, background and service-qualification requirements/status; expiration; reviewer decision; suspension; eligibility exclusion; compliance notes/history; and links to the canonical document service.
+
+### Phase G — capacity, travel and atomic holds
 
 Branch:
 
@@ -186,35 +207,16 @@ Branch:
 be/scheduling-capacity-holds
 ```
 
-Owns:
+Owns service duration, buffers, travel-estimation abstraction, booking consumption, holds, blocks, time off, daily job/work-minute limits, concurrent limits, emergency reserves, job/time capacity and 30-minute `HELD/CONVERTED/EXPIRED/RELEASED` lifecycle.
 
-```text
-service duration
-before/after buffer
-travel-estimation abstraction
-existing bookings
-active holds
-manual blocks
-time off
-daily job and work-minute limits
-maximum concurrent jobs
-emergency reserves
-job capacity
-time capacity
-30-minute HELD/CONVERTED/EXPIRED/RELEASED lifecycle
-atomic reservation
-```
-
-Mandatory concurrency proof:
+Mandatory race proof:
 
 ```text
 Customer A and Customer B request the same final capacity simultaneously.
 Only allowed capacity survives.
 ```
 
-### Phase E — requests, quotes, bookings, rescheduling, cancellation, change orders
-
-Branches:
+### Phase H — request, quote, booking and change-order lifecycles
 
 ```text
 be/request-quote-lifecycle
@@ -222,17 +224,9 @@ be/booking-reschedule-cancel
 be/change-orders
 ```
 
-`be/request-quote-lifecycle` preserves `INSTANT_BOOKABLE`, `QUOTE_REQUIRED`, and `REQUEST_ONLY`, versioned quotes and line items, customer decisions, communication ownership and conversion rules.
+Preserve `INSTANT_BOOKABLE`, `QUOTE_REQUIRED`, and `REQUEST_ONLY`; versioned quotes/line items; customer decisions; booking/hold conversion; service-address timezone; cancellation/rescheduling; immutable history; idempotency/concurrency; and customer-approved change orders. No silent scope or payment mutation.
 
-`be/booking-reschedule-cancel` owns booking creation, hold conversion/release, service-address timezone, history, cancellation/rescheduling policy, optimistic concurrency and idempotency.
-
-`be/change-orders` owns proposed additional work, customer accept/reject, immutable agreed-scope history and effective pricing updates.
-
-No branch silently changes agreed scope or creates payment state.
-
-### Phase F — matching, candidate scoring and manual dispatch
-
-Branches:
+### Phase I — matching, scoring and manual dispatch
 
 ```text
 be/provider-matching-scoring
@@ -240,37 +234,27 @@ be/manual-dispatch-assignment
 fe/dispatch-console
 ```
 
-Eligibility filters before scoring:
+Eligibility precedes scoring:
 
 ```text
-provider/professional active
-provider approved
-compliance valid
-service and skill qualified
-coverage matched
-schedule matched
-no time-off or conflict
-capacity available
+active and approved provider/professional
+valid compliance
+service/skill qualified
+coverage, schedule and capacity matched
+no time-off/conflict
 Sunday/emergency eligible
 ```
 
-Configurable internal score inputs:
+Configurable internal inputs may include availability, distance, exact skill, remaining capacity, reliability, eligible rating and acceptance history. Internal scores are not public.
 
 ```text
-availability
-distance
-exact skill
-remaining capacity
-reliability
-eligible customer rating
-acceptance history
+PROVIDER_ASSIGNMENT_MODE=MANUAL
+AUTO_ASSIGN_PROVIDER=false
 ```
 
-Internal scores are not exposed publicly. Current assignment mode remains manual. Candidate ranking may advise dispatch but cannot auto-assign until separately activated.
+Recommendations may assist dispatch but do not assign automatically.
 
-### Phase G — customer, provider, worker and internal portals
-
-Branches:
+### Phase J — customer, provider, worker and internal portals
 
 ```text
 fe/customer-marketplace-portal
@@ -280,13 +264,9 @@ fe/operations-support-trust-portals
 fe/admin-platform-portal
 ```
 
-Each portal is backed by real APIs, authorization, persistence and complete data states. No portal uses fabricated KPIs, counts, providers, payments, reviews, messages or success data.
+Portals use real APIs, authorization, persistence and the shared enterprise/marketplace UI. They do not fabricate KPIs, providers, queues, payments, reviews, messages or success data.
 
-The shared `@breero/ui` marketplace system controls service cards, pricing modes, trust evidence, capacity signals, lifecycle timelines and loading/empty/error/restricted/disabled/success states.
-
-### Phase H — messaging, notifications and support cases
-
-Branches:
+### Phase K — messaging, notifications and support
 
 ```text
 be/messaging-conversations
@@ -295,15 +275,11 @@ be/support-cases
 fe/messaging-support-experience
 ```
 
-Messaging requires authorized booking/customer/provider/support relationships, attachment policy, read/unread, timestamps, audit and privacy.
+Messaging requires authorized relationships and privacy-controlled disclosure. Notifications use versioned event/channel/language templates and durable delivery. Support keeps customer/provider messages distinct from private internal notes.
 
-Notifications support in-app, email, SMS and future push through versioned event/channel/language templates. Live email/SMS remain disabled until separate provider and activation gates.
+Email/SMS transport remains in separate adapter branches and disabled until runtime enforcement and activation gates pass.
 
-Support cases keep public messages separate from internal notes and authorize attachments independently.
-
-### Phase I — reviews, trust moderation and provider performance
-
-Branches:
+### Phase L — reviews and provider performance
 
 ```text
 be/reviews-moderation
@@ -311,13 +287,9 @@ be/provider-performance
 fe/reviews-trust-experience
 ```
 
-Only customers with eligible completed service may create verified-job reviews. Support provider response, moderation, reporting and publication state.
+Only customers with eligible completed service create verified-job reviews. Support provider response, moderation, reporting and publication state. Internal risk scoring remains private.
 
-Provider performance includes completion, cancellation, decline, reassignment, on-time, acceptance, completion rate, eligible rating/count, response time and complaint rate. Internal risk scores remain private.
-
-### Phase J — leads and commercial placement
-
-Branches:
+### Phase M — leads and sponsored placement
 
 ```text
 be/lead-management
@@ -325,15 +297,9 @@ be/featured-provider-infrastructure
 fe/leads-commercial-admin
 ```
 
-Lead and booking concepts remain distinct.
+Lead and booking concepts remain distinct. Sponsored placement never overrides safety, qualification, coverage, license, compliance, schedule or capacity eligibility.
 
-Lead management owns source, qualification, category, geography, distribution, claim, acceptance/rejection, expiration, status, outcome and disabled billing state.
-
-Featured/sponsored placement owns campaign, category/ZIP sponsorship, budget, dates, impressions, clicks, leads and conversions. Commercial placement never overrides service qualification, coverage, licensing, compliance, schedule, capacity or safety.
-
-### Phase K — payments infrastructure, disabled by default
-
-Branches:
+### Phase N — disabled finance infrastructure
 
 ```text
 be/payments-refunds-infrastructure
@@ -341,18 +307,14 @@ be/provider-earnings-payouts
 fe/finance-payment-experience
 ```
 
-Do not begin before identity, authorization, audit, idempotency, concurrency, booking, quote, outbox/inbox, reconciliation and finance separation-of-duty foundations pass.
-
-Never store raw card numbers. Use a PCI-compliant provider and sandbox during implementation.
+Do not begin before identity, authorization, audit, idempotency, concurrency, quote/booking, durable delivery, reconciliation and finance separation-of-duty foundations pass.
 
 ```text
 PAYMENTS_ENABLED=false
 PAYOUTS_ENABLED=false
 ```
 
-### Phase L — analytics, observability, privacy, retention and exports
-
-Branches:
+### Phase O — analytics, privacy, retention and observability
 
 ```text
 be/analytics-observability
@@ -360,27 +322,29 @@ be/privacy-retention-exports
 fe/analytics-system-health
 ```
 
-Own structured logs, traces, metrics, health, queue/lease age, booking/request/capacity/provider metrics, PII redaction, classifications, configurable retention, audited asynchronous exports, dashboards and runbooks.
+Own structured logs/traces/metrics/health, queue/lease age, marketplace KPIs, PII redaction/classification, retention, audited asynchronous exports, dashboards and runbooks.
 
-### Phase M — integrations and durable delivery
+### Phase P — durable integrations and separate adapters
 
-Branches:
+Common reliability:
 
 ```text
 integration/outbox-inbox-webhooks
+```
+
+Provider-specific branches:
+
+```text
+integration/kong-codestra-gateway
 integration/odoo-projection
 integration/n8n-orchestration
 integration/klyrow-email
 integration/telnexa-sms
 ```
 
-All external mutation goes through authenticated commands, transactional outbox, durable signed inbox, replay protection, idempotent translators, retries, circuit/degraded behavior, dead-letter visibility and reconciliation.
+Each provider has separate credentials, tests, review, activation, degraded behavior and rollback. Odoo is a projection/workspace; n8n orchestrates but does not own correctness.
 
-Odoo is a projection/workspace rather than authoritative marketplace state. n8n orchestrates; it does not own correctness.
-
-### Phase N — local development, CI, staging and production release
-
-Branches:
+### Phase Q — development, CI, staging and production
 
 ```text
 chore/local-development-bootstrap
@@ -391,31 +355,13 @@ release/isolated-staging-certification
 release/production-candidate
 ```
 
-Own:
+Own reproducible setup, safe demo data/adapters, full test matrix, performance smoke, immutable images, SBOM/provenance, one canonical private production topology, backup/restore, staging UAT, rollback rehearsal, canary and abort thresholds.
 
-```text
-clone/configure/install/start/migrate/seed/run scripts
-safe local demo data
-safe email/SMS adapters
-frozen dependency installs
-lint/type/build/unit/integration/database/E2E/OpenAPI/migration/security tests
-performance smoke
-immutable digest-pinned images
-SBOM/provenance/signing policy
-one canonical production Compose topology
-private PostgreSQL/Redis/application networks
-Caddy/Kong ingress
-backup and isolated restore
-rollback rehearsal
-staging UAT
-production canary and abort thresholds
-```
-
-Production is never the first environment receiving a migration.
+Production is never the first migration target. A migration one-shot must pass and the expected head must be verified before new services or public routing.
 
 ## 6. Design acceptance
 
-The binding design authorities are:
+Binding authorities:
 
 ```text
 docs/design-system.md
@@ -423,101 +369,40 @@ docs/marketplace-experience-system.md
 docs/design-system-migration.md
 ```
 
-New or materially edited pages must support:
-
-```text
-search
-filter
-sort
-pagination where applicable
-forms and backend validation
-drawers/dialogs and focus recovery
-loading
-empty
-error
-restricted
-disabled
-success
-mobile widths 320 through 1440+
-keyboard and screen-reader behavior
-reduced motion
-Chromium/Firefox/WebKit
-```
-
-The interface must distinguish request, quote, booking, assignment, job and completion states.
+Every applicable changed surface handles search/filter/sort/pagination, forms, drawers/dialogs, loading, empty, error, restricted, disabled, success, 320–1440+ responsive behavior, keyboard/screen reader/reduced motion and Chromium/Firefox/WebKit. Request, quote, booking, assignment, job and completion remain distinct.
 
 ## 7. API acceptance
 
-Every API operation documents:
-
-```text
-owner
-audience
-authentication
-role and permission
-tenant and legal entity
-ownership and record policy
-resource state
-feature/capability
-idempotency
-concurrency/version
-request and response
-errors and headers
-rate limits
-emitted events
-deprecation
-```
+Every operation documents owner, audience, auth, permission, tenant/legal entity, ownership/record policy, resource state, capability, idempotency, concurrency, request/response, errors/headers, rate limit, event and deprecation.
 
 An endpoint is not complete merely because it exists. Authorization, persistence, concurrency, migrations and failure behavior must be tested.
 
 ## 8. Complete test matrix
-
-Each applicable branch contributes to:
 
 ```text
 unit
 integration
 PostgreSQL/PostGIS
 API contract
-authentication and authorization
-ownership and provider tenancy
-booking and quote state
-ZIP/service zone/timezone/DST
-hours and Sunday emergency
-provider matching and capacity
-30-minute holds and double-booking protection
+authentication/authorization/ownership/tenancy
+booking/quote state
+ZIP/zone/timezone/DST/hours/emergency
+matching/capacity/holds/double-booking
 cancellation/rescheduling/assignment/reassignment
-compliance and secure files
-reviews and moderation
-rate limiting and abuse
-accessibility and responsive behavior
-E2E
-migration and rollback
-security
-performance smoke
-backup and restore
+compliance/private files
+reviews/moderation
+rate limiting/abuse
+accessibility/responsive/E2E
+migration/rollback
+security/performance
+backup/restore
 ```
 
 ## 9. Final completion rule
 
-Nothing is complete merely because it renders.
+Nothing is complete merely because it renders or an endpoint exists.
 
-Nothing is complete merely because an endpoint exists.
-
-Nothing is complete unless:
-
-```text
-authorization is tested
-data persists
-concurrency is safe
-migrations work
-rollback or forward-fix is evaluated
-required tests pass
-exact-head CI passes
-fresh review applies to the final SHA
-staging evidence exists for release work
-protected production features remain controlled
-```
+Completion requires tested authorization, persistence, concurrency, migrations, rollback/forward-fix, exact-head CI, final-SHA review, staging evidence for releases and enforced protected capabilities.
 
 ## 10. Current authority state
 
@@ -531,5 +416,3 @@ PRODUCTION_DEPLOYED=NO
 LIVE_SERVER_CHANGED=NO
 ULTIMATE_MISSION_COMPLETE=NO
 ```
-
-This document defines execution; it does not falsely mark the full marketplace complete.
