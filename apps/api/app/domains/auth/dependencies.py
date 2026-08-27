@@ -4,15 +4,72 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.session import get_db
-from app.domains.auth.models import User, UserRole
+from app.domains.auth.models import IdentityLink, User, UserRole
 from app.domains.auth.repository import UserRepository
 from app.domains.auth.security import decode_access_token
 
 bearer = HTTPBearer(auto_error=False)
+BRAND_KEY = "breero"
+
+
+async def _keycloak_user(
+    claims: dict,
+    repository: UserRepository,
+    session: AsyncSession,
+) -> User:
+    email = str(claims.get("email") or "").strip().lower()
+    subject = str(claims.get("sub") or "").strip()
+    issuer = str(claims.get("iss") or "").rstrip("/")
+    if not email or not subject or not issuer or not claims.get("email_verified"):
+        raise HTTPException(status_code=401, detail="Verified account required")
+
+    identity = await repository.identity_by_subject(BRAND_KEY, issuer, subject)
+    if identity:
+        user = await repository.by_id(identity.user_id)
+    else:
+        user = await repository.by_email(email)
+        if not user:
+            raise HTTPException(status_code=403, detail="Account is not provisioned")
+        existing = await repository.identity_by_user_issuer(BRAND_KEY, issuer, user.id)
+        if existing:
+            raise HTTPException(status_code=403, detail="Identity does not match provisioned account")
+        try:
+            await repository.add_identity(
+                IdentityLink(
+                    user_id=user.id,
+                    brand_key=BRAND_KEY,
+                    issuer=issuer,
+                    subject=subject,
+                    email=email,
+                )
+            )
+            await session.commit()
+        except IntegrityError as exc:
+            await session.rollback()
+            identity = await repository.identity_by_subject(BRAND_KEY, issuer, subject)
+            if not identity or identity.user_id != user.id:
+                raise HTTPException(status_code=403, detail="Identity link conflict") from exc
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or inactive account")
+
+    required_role = {
+        UserRole.customer: "breero_customer",
+        UserRole.vendor_admin: "breero_provider",
+        UserRole.technician: "breero_worker",
+        UserRole.operations: "breero_dispatcher",
+        UserRole.finance: "breero_support",
+        UserRole.admin: "breero_admin",
+    }
+    token_roles = set((claims.get("realm_access") or {}).get("roles") or [])
+    if required_role[user.role] not in token_roles:
+        raise HTTPException(status_code=403, detail="Account role is not authorized")
+    return user
 
 
 async def current_user(
@@ -26,21 +83,7 @@ async def current_user(
     claims = decode_access_token(credentials.credentials)
     repository = UserRepository(session)
     if settings.keycloak_enabled:
-        email = str(claims.get("email") or "").strip().lower()
-        if not email or not claims.get("email_verified"):
-            raise HTTPException(status_code=401, detail="Verified account required")
-        user = await repository.by_email(email)
-        required_role = {
-            UserRole.customer: "breero_customer",
-            UserRole.vendor_admin: "breero_provider",
-            UserRole.technician: "breero_worker",
-            UserRole.operations: "breero_dispatcher",
-            UserRole.finance: "breero_support",
-            UserRole.admin: "breero_admin",
-        }
-        token_roles = set((claims.get("realm_access") or {}).get("roles") or [])
-        if not user or required_role[user.role] not in token_roles:
-            raise HTTPException(status_code=403, detail="Account role is not authorized")
+        user = await _keycloak_user(claims, repository, session)
     else:
         try:
             user_id = uuid.UUID(claims["sub"])
