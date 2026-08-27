@@ -15,6 +15,8 @@ const REQUIRED_FILES = [
   "docs/marketplace-experience-system.md",
   ".github/CODEOWNERS",
   ".github/pull_request_template.md",
+  ".github/workflows/design-system.yml",
+  ".github/workflows/quality.yml",
 ];
 
 const ALLOWED_STYLE_AUTHORITIES = new Set([
@@ -27,6 +29,7 @@ const ALLOWED_STYLE_AUTHORITIES = new Set([
 ]);
 
 const CODE_EXTENSIONS = new Set([".tsx", ".ts", ".jsx", ".js", ".css", ".scss"]);
+const JSX_EXTENSIONS = new Set([".tsx", ".jsx"]);
 const errors = [];
 
 function git(args) {
@@ -41,24 +44,110 @@ function fail(message) {
   errors.push(message);
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function stripJavaScriptComments(source) {
+  let result = "";
+  let state = "code";
+  let quote = "";
+
+  for (let index = 0; index < source.length; index += 1) {
+    const current = source[index];
+    const next = source[index + 1];
+
+    if (state === "line-comment") {
+      if (current === "\n") {
+        result += current;
+        state = "code";
+      }
+      continue;
+    }
+
+    if (state === "block-comment") {
+      if (current === "*" && next === "/") {
+        index += 1;
+        state = "code";
+      } else if (current === "\n") {
+        result += current;
+      }
+      continue;
+    }
+
+    if (state === "string") {
+      result += current;
+      if (current === "\\") {
+        if (next !== undefined) {
+          result += next;
+          index += 1;
+        }
+      } else if (current === quote) {
+        state = "code";
+        quote = "";
+      }
+      continue;
+    }
+
+    if (current === "/" && next === "/") {
+      state = "line-comment";
+      index += 1;
+      continue;
+    }
+
+    if (current === "/" && next === "*") {
+      state = "block-comment";
+      index += 1;
+      continue;
+    }
+
+    if (current === '"' || current === "'" || current === "`") {
+      state = "string";
+      quote = current;
+      result += current;
+      continue;
+    }
+
+    result += current;
+  }
+
+  return result;
+}
+
+function activeJavaScript(path) {
+  return stripJavaScriptComments(existsSync(path) ? read(path) : "");
+}
+
+function hasSideEffectImport(source, specifier) {
+  const escaped = escapeRegExp(specifier);
+  return new RegExp(`^\\s*import\\s+["']${escaped}["']\\s*;?\\s*$`, "m").test(source);
+}
+
+function activeYaml(path) {
+  return (existsSync(path) ? read(path) : "")
+    .split("\n")
+    .filter((line) => !line.trimStart().startsWith("#"))
+    .join("\n");
+}
+
 for (const path of REQUIRED_FILES) {
   if (!existsSync(path)) fail(`missing required governance file: ${path}`);
 }
 
-const layout = existsSync("apps/web/app/layout.tsx") ? read("apps/web/app/layout.tsx") : "";
-if (!layout.includes('import "@breero/ui/marketplace.css";')) {
-  fail("RootLayout must import the shared marketplace experience stylesheet");
+const layout = activeJavaScript("apps/web/app/layout.tsx");
+if (!hasSideEffectImport(layout, "@breero/ui/marketplace.css")) {
+  fail("RootLayout must actively import the shared marketplace experience stylesheet");
 }
-if (!layout.includes('import "./enterprise-design-system.css";')) {
-  fail("RootLayout must import enterprise-design-system.css after the existing shared styles");
+if (!hasSideEffectImport(layout, "./enterprise-design-system.css")) {
+  fail("RootLayout must actively import enterprise-design-system.css");
 }
-if (!layout.includes("Manrope")) {
-  fail("RootLayout must keep the approved Manrope font authority");
+if (!/^\s*import\s*\{[^}]*\bManrope\b[^}]*\}\s*from\s*["']next\/font\/google["']\s*;?/m.test(layout)) {
+  fail("RootLayout must keep an active Manrope import from next/font/google");
 }
 
-const uiIndex = existsSync("packages/ui/src/index.ts") ? read("packages/ui/src/index.ts") : "";
-if (!uiIndex.includes('export * from "./marketplace";')) {
-  fail("@breero/ui must export the shared marketplace primitives");
+const uiIndex = activeJavaScript("packages/ui/src/index.ts");
+if (!/^\s*export\s+\*\s+from\s+["']\.\/marketplace["']\s*;?/m.test(uiIndex)) {
+  fail("@breero/ui must actively export the shared marketplace primitives");
 }
 
 const uiPackage = existsSync("packages/ui/package.json") ? read("packages/ui/package.json") : "";
@@ -66,22 +155,37 @@ if (!uiPackage.includes('"./marketplace.css": "./src/marketplace.css"')) {
   fail("@breero/ui must publish the marketplace stylesheet export");
 }
 
-const shell = existsSync("apps/web/components/app-shell.tsx") ? read("apps/web/components/app-shell.tsx") : "";
-if (!shell.includes("<SiteHeader") || !shell.includes("<SiteFooter")) {
-  fail("AppShell must retain the shared SiteHeader and SiteFooter");
+const shell = activeJavaScript("apps/web/components/app-shell.tsx");
+if (!/<SiteHeader(?:\s|\/|>)/.test(shell) || !/<SiteFooter(?:\s|\/|>)/.test(shell)) {
+  fail("AppShell must actively render the shared SiteHeader and SiteFooter");
 }
 
-const header = existsSync("apps/web/components/site-header.tsx") ? read("apps/web/components/site-header.tsx") : "";
-if (!header.includes("<Logo") || !header.includes('data-cta="header-request-service"')) {
-  fail("SiteHeader must retain the shared BREERO logo and truthful request-service CTA");
+const header = activeJavaScript("apps/web/components/site-header.tsx");
+if (!/<Logo(?:\s|\/|>)/.test(header) || !/data-cta\s*=\s*["']header-request-service["']/.test(header)) {
+  fail("SiteHeader must actively render the shared BREERO logo and truthful request-service CTA");
 }
-if (header.includes('href="/booking"') || header.includes("Book a service")) {
+if (/href\s*=\s*["']\/booking["']/.test(header) || />\s*Book a service\s*</.test(header)) {
   fail("Global header must not promise booking while the accepted shell remains request-first");
 }
 
-const footer = existsSync("apps/web/components/site-footer.tsx") ? read("apps/web/components/site-footer.tsx") : "";
-if (!footer.includes('data-cta="footer-request-service"')) {
-  fail("SiteFooter must retain the truthful request-service conversion action");
+const footer = activeJavaScript("apps/web/components/site-footer.tsx");
+if (!/data-cta\s*=\s*["']footer-request-service["']/.test(footer)) {
+  fail("SiteFooter must actively render the truthful request-service conversion action");
+}
+
+const codeowners = existsSync(".github/CODEOWNERS") ? read(".github/CODEOWNERS") : "";
+if (!/^\/\.github\/workflows\/quality\.yml\s+@appolon1908-hue\s*$/m.test(codeowners)) {
+  fail("CODEOWNERS must protect the aggregate required quality workflow");
+}
+
+const quality = activeYaml(".github/workflows/quality.yml");
+for (const [description, required] of [
+  ["define the design-system-quality job", /^\s{2}design-system-quality:\s*$/m],
+  ["require design-system-quality in the aggregate needs list", /^\s+-\s+design-system-quality\s*$/m],
+  ["map the design-system result into the aggregate environment", /DESIGN_SYSTEM_RESULT:\s*\$\{\{\s*needs\.design-system-quality\.result\s*\}\}/],
+  ["fail the aggregate gate unless design-system-quality succeeds", /\[\[\s*"\$DESIGN_SYSTEM_RESULT"\s*==\s*success\s*\]\]/],
+]) {
+  if (!required.test(quality)) fail(`Required quality workflow must ${description}`);
 }
 
 let base = process.argv[2]?.trim();
@@ -94,11 +198,24 @@ if (!base || /^0+$/.test(base)) {
 }
 
 let diff = "";
+let changedFiles = [];
 if (base) {
   try {
     diff = git(["diff", "--unified=0", `${base}...HEAD`, "--"]);
+    changedFiles = git(["diff", "--name-only", `${base}...HEAD`, "--"])
+      .split("\n")
+      .filter(Boolean);
   } catch {
     diff = "";
+    changedFiles = [];
+  }
+}
+
+for (const path of changedFiles) {
+  if (!JSX_EXTENSIONS.has(extname(path)) || !existsSync(path)) continue;
+  const source = activeJavaScript(path);
+  if (/\bstyle\s*=/.test(source)) {
+    fail(`${path}: JSX style attributes are prohibited; use shared classes and tokens`);
   }
 }
 
@@ -117,10 +234,6 @@ if (!diff) {
     if (!CODE_EXTENSIONS.has(extname(currentFile))) continue;
 
     const added = line.slice(1);
-
-    if (/\bstyle\s*=\s*\{\{/.test(added)) {
-      fail(`${currentFile}: inline visual style is prohibited`);
-    }
 
     if (/font-family\s*:/.test(added) && !ALLOWED_STYLE_AUTHORITIES.has(currentFile)) {
       fail(`${currentFile}: font-family must be controlled by the shared design system`);
