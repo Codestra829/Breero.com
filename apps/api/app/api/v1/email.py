@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,8 +30,8 @@ router = APIRouter()
 async def list_domains(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_any_permission("email.domain.read", "email.domain.manage")),
-):
-    return await TenantEmailService(session).list_domains(user)
+) -> list[EmailDomainRead]:
+    return [EmailDomainRead.model_validate(item) for item in await TenantEmailService(session).list_domains(user)]
 
 
 @router.post("/domains", response_model=EmailDomainRead, status_code=201)
@@ -39,8 +39,8 @@ async def create_domain(
     data: EmailDomainCreate,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_any_permission("email.domain.manage")),
-):
-    return await TenantEmailService(session).create_domain(data, user)
+) -> EmailDomainRead:
+    return EmailDomainRead.model_validate(await TenantEmailService(session).create_domain(data, user))
 
 
 @router.post("/domains/{domain_id}/verification", response_model=EmailDomainRead)
@@ -49,16 +49,18 @@ async def set_domain_verification(
     verified: bool = Query(...),
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_any_permission("email.domain.verify")),
-):
-    return await TenantEmailService(session).set_domain_verification(domain_id, verified, user)
+) -> EmailDomainRead:
+    return EmailDomainRead.model_validate(
+        await TenantEmailService(session).set_domain_verification(domain_id, verified, user)
+    )
 
 
 @router.get("/senders", response_model=list[EmailSenderRead])
 async def list_senders(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_any_permission("email.sender.read", "email.sender.manage")),
-):
-    return await TenantEmailService(session).list_senders(user)
+) -> list[EmailSenderRead]:
+    return [EmailSenderRead.model_validate(item) for item in await TenantEmailService(session).list_senders(user)]
 
 
 @router.post("/senders", response_model=EmailSenderRead, status_code=201)
@@ -66,15 +68,15 @@ async def create_sender(
     data: EmailSenderCreate,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_any_permission("email.sender.manage")),
-):
-    return await TenantEmailService(session).create_sender(data, user)
+) -> EmailSenderRead:
+    return EmailSenderRead.model_validate(await TenantEmailService(session).create_sender(data, user))
 
 
 @router.get("/credentials", response_model=list[EmailCredentialRead])
 async def list_credentials(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_any_permission("email.credential.read", "email.credential.manage")),
-):
+) -> list[EmailCredentialRead]:
     return await TenantEmailService(session).list_credentials(user)
 
 
@@ -83,7 +85,7 @@ async def create_credential(
     data: EmailCredentialCreate,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_any_permission("email.credential.manage")),
-):
+) -> EmailCredentialRead:
     return await TenantEmailService(session).create_credential(data, user)
 
 
@@ -92,7 +94,7 @@ async def compose_message(
     data: EmailComposeRequest,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_any_permission("email.message.compose")),
-):
+) -> EmailMessageRead:
     return await TenantEmailService(session).compose(data, user)
 
 
@@ -101,15 +103,15 @@ async def get_message(
     message_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_any_permission("email.message.read", "email.message.compose")),
-):
-    return await TenantEmailService(session).get_message(message_id, user)
+) -> EmailMessageRead:
+    return EmailMessageRead.model_validate(await TenantEmailService(session).get_message(message_id, user))
 
 
 @router.get("/outbox", response_model=list[EmailOutboxRead])
 async def list_outbox(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_any_permission("email.outbox.read")),
-):
+) -> list[EmailOutboxRead]:
     service = TenantEmailService(session)
     rows = list(
         (
@@ -125,8 +127,8 @@ async def list_outbox(
     result: list[EmailOutboxRead] = []
     for event, message in rows:
         try:
-            await service._assert_scope(user, message.brand_key, message.vendor_id)
-        except Exception:
+            await service.assert_scope(user, message.brand_key, message.vendor_id)
+        except HTTPException:
             continue
         result.append(
             EmailOutboxRead(
@@ -146,10 +148,9 @@ async def retry_outbox(
     event_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_any_permission("email.outbox.retry")),
-):
+) -> EmailOutboxRead:
     event = await session.get(IntegrationEvent, event_id)
     if not event or event.aggregate_type != "email_message":
-        from fastapi import HTTPException
         raise HTTPException(404, "Email outbox event not found")
     await TenantEmailService(session).get_message(event.aggregate_id, user)
     event = await OutboxService(session).retry(event_id, user.id)

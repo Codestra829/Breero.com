@@ -87,7 +87,7 @@ async def test_login_dashboard_domain_sender_compose_outbox_delivery(
                 provider="smtp",
                 label="Tenant SMTP",
                 username=f"smtp-{marker}",
-                secret_ref=f"breero-email/test/{marker}",
+                secret_ref=f"breero-email/brand/breero/test/{marker}",
                 smtp_host="smtp.example.test",
                 smtp_port=587,
                 use_tls=True,
@@ -153,24 +153,18 @@ async def test_login_dashboard_domain_sender_compose_outbox_delivery(
 
 
 @pytest.mark.asyncio
-async def test_vendor_scope_cannot_cross_tenant_email_resources() -> None:
+async def test_vendor_scope_cannot_cross_tenant_email_resources_or_secret_namespace() -> None:
     marker = uuid.uuid4().hex
     async with SessionLocal() as session:
         vendor_one = Vendor(
-            legal_name=f"Tenant One {marker}",
-            display_name="Tenant One",
-            email=f"tenant-one-{marker}@example.test",
-            phone="+12815550110",
-            status=VendorStatus.ACTIVE,
-            capabilities=["email"],
+            legal_name=f"Tenant One {marker}", display_name="Tenant One",
+            email=f"tenant-one-{marker}@example.test", phone="+12815550110",
+            status=VendorStatus.ACTIVE, capabilities=["email"],
         )
         vendor_two = Vendor(
-            legal_name=f"Tenant Two {marker}",
-            display_name="Tenant Two",
-            email=f"tenant-two-{marker}@example.test",
-            phone="+12815550111",
-            status=VendorStatus.ACTIVE,
-            capabilities=["email"],
+            legal_name=f"Tenant Two {marker}", display_name="Tenant Two",
+            email=f"tenant-two-{marker}@example.test", phone="+12815550111",
+            status=VendorStatus.ACTIVE, capabilities=["email"],
         )
         session.add_all([vendor_one, vendor_two])
         await session.flush()
@@ -187,14 +181,9 @@ async def test_vendor_scope_cannot_cross_tenant_email_resources() -> None:
         await session.flush()
         session.add(
             AccessAssignment(
-                user_id=provider.id,
-                brand_key="breero",
-                role_key="vendor_admin",
-                department="provider",
-                tenant_scope="vendor",
-                vendor_id=vendor_one.id,
-                active=True,
-                is_primary=True,
+                user_id=provider.id, brand_key="breero", role_key="vendor_admin",
+                department="provider", tenant_scope="vendor", vendor_id=vendor_one.id,
+                active=True, is_primary=True,
             )
         )
         await session.commit()
@@ -212,3 +201,17 @@ async def test_vendor_scope_cannot_cross_tenant_email_resources() -> None:
                 provider,
             )
         assert exc_info.value.status_code == 403
+
+        with pytest.raises(HTTPException) as secret_error:
+            await service.create_credential(
+                EmailCredentialCreate(
+                    vendor_id=vendor_one.id,
+                    provider="smtp",
+                    label="Wrong tenant secret",
+                    secret_ref=f"breero-email/vendor/{vendor_two.id}/smtp/main",
+                    smtp_host="smtp.example.test",
+                    smtp_port=587,
+                ),
+                provider,
+            )
+        assert secret_error.value.status_code == 400

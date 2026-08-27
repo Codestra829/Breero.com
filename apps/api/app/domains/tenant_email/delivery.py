@@ -1,6 +1,7 @@
 import asyncio
 import smtplib
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from email.message import EmailMessage as MimeMessage
 from pathlib import Path
 from typing import Protocol
@@ -72,7 +73,9 @@ class SmtpTenantEmailGateway:
         subject: str,
         text_body: str,
     ) -> str:
-        if credential.provider != "smtp" or not credential.smtp_host or not credential.smtp_port:
+        smtp_host = credential.smtp_host
+        smtp_port = credential.smtp_port
+        if credential.provider != "smtp" or smtp_host is None or smtp_port is None:
             raise EmailDeliveryConfigurationError("SMTP credential is incomplete")
         mime = MimeMessage()
         mime["From"] = f"{display_name} <{from_email}>"
@@ -83,7 +86,7 @@ class SmtpTenantEmailGateway:
         mime.set_content(text_body)
 
         def deliver() -> None:
-            with smtplib.SMTP(credential.smtp_host, credential.smtp_port, timeout=20) as client:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as client:
                 if credential.use_tls:
                     client.starttls()
                 if credential.username:
@@ -172,8 +175,6 @@ class TenantEmailDeliveryService:
         )
         message.status = "DELIVERED"
         message.provider_message_id = provider_message_id
-        from datetime import UTC, datetime
-
         message.delivered_at = datetime.now(UTC)
         await self.session.flush()
 
