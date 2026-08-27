@@ -2,7 +2,17 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -137,8 +147,17 @@ class IdentityLink(Base):
 class AccessAssignment(Base):
     __tablename__ = "access_assignments"
     __table_args__ = (
+        CheckConstraint(
+            "(tenant_scope = 'vendor' AND vendor_id IS NOT NULL) OR "
+            "(tenant_scope <> 'vendor' AND vendor_id IS NULL)",
+            name="ck_access_assignment_vendor_scope",
+        ),
         UniqueConstraint(
-            "user_id", "brand_key", "role_key", "department", name="uq_access_assignment_role_department"
+            "user_id",
+            "brand_key",
+            "role_key",
+            "department",
+            name="uq_access_assignment_role_department",
         ),
     )
 
