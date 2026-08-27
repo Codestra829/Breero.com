@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Button, Card, Checkbox, FormField, Input, Select } from "@breero/ui";
 import type { AccessAssignmentInput, AccessCatalog, AccessRole, Department, PortalContext, TenantScope } from "@breero/types";
 import { customerApi } from "@/lib/customer/api";
@@ -48,7 +48,7 @@ export function AccessAssignmentForm() {
     setAssignments((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
   }
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setState("saving");
     setMessage("");
