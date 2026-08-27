@@ -1,6 +1,6 @@
 "use client";
 
-import type { PortalContext } from "@breero/types";
+import type { Department, PortalContext } from "@breero/types";
 import { customerApi } from "./customer/api";
 
 const ALLOWED_DASHBOARDS = new Set([
@@ -25,12 +25,11 @@ export async function loadPortalContext(signal?: AbortSignal): Promise<PortalCon
   return context;
 }
 
-export async function routeToPortal(): Promise<never> {
+export async function routeToPortal(): Promise<void> {
   const context = await loadPortalContext();
   window.location.replace(context.dashboard_path);
-  return new Promise<never>(() => undefined);
 }
 
-export function canAccessDepartment(context: PortalContext, department: string): boolean {
-  return context.departments.includes(department as PortalContext["departments"][number]);
+export function canAccessDepartment(context: PortalContext, department: Department): boolean {
+  return context.departments.includes(department);
 }
