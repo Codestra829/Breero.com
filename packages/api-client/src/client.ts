@@ -1,11 +1,11 @@
 import type {
-  AddressValidation, AddressValidationRequest, AuthSession, AvailabilitySearchRequest,
-  AvailabilitySlot, Booking, BookingConfirmation, BookingCreateRequest, BookingCreateResponse, ChangePasswordRequest, CustomerAddress,
-  CustomerAddressInput, CustomerBookingList, CustomerPayment, CustomerProfile,
-  CustomerProfilePatch, ForgotPasswordRequest, LoginMode, LoginRequest, MessageResponse, Page,
-  Payment, PaymentIntentRequest, PortalContext, PublicCapabilities, Quote, RefreshRequest, RegisterRequest,
-  ResetPasswordRequest, ServiceDetail, ServiceQuestion, ServiceSummary, TokenRequest,
-  User, UUID,
+  AccessCatalog, AccessProfileUpdate, AddressValidation, AddressValidationRequest, AuthSession,
+  AvailabilitySearchRequest, AvailabilitySlot, Booking, BookingConfirmation, BookingCreateRequest,
+  BookingCreateResponse, ChangePasswordRequest, CustomerAddress, CustomerAddressInput,
+  CustomerBookingList, CustomerPayment, CustomerProfile, CustomerProfilePatch, ForgotPasswordRequest,
+  LoginMode, LoginRequest, MessageResponse, Page, Payment, PaymentIntentRequest, PortalContext,
+  PublicCapabilities, Quote, RefreshRequest, RegisterRequest, ResetPasswordRequest, ServiceDetail,
+  ServiceQuestion, ServiceSummary, TokenRequest, User, UUID,
 } from "@breero/types";
 import { ApiTransport, type Transport, type TransportOptions } from "./transport";
 
@@ -20,6 +20,9 @@ export interface BreeroApi {
     resetPassword(input: ResetPasswordRequest): Promise<MessageResponse>; changePassword(input: ChangePasswordRequest): Promise<MessageResponse>;
     verifyEmail(input: TokenRequest): Promise<MessageResponse>; resendVerification(signal?: AbortSignal): Promise<MessageResponse>;
     me(signal?: AbortSignal): Promise<User>; context(signal?: AbortSignal): Promise<PortalContext>;
+    accessCatalog(signal?: AbortSignal): Promise<AccessCatalog>;
+    userAccess(userId: UUID, signal?: AbortSignal): Promise<PortalContext>;
+    replaceUserAccess(userId: UUID, input: AccessProfileUpdate, signal?: AbortSignal): Promise<PortalContext>;
   };
   services: { list(signal?: AbortSignal): Promise<ServiceSummary[]>; detail(id: UUID, signal?: AbortSignal): Promise<ServiceDetail>; questions(id: UUID, signal?: AbortSignal): Promise<ServiceQuestion[]> };
   addresses: { validate(input: AddressValidationRequest, signal?: AbortSignal): Promise<AddressValidation> };
@@ -64,6 +67,9 @@ export function createApiClient(http: Transport): BreeroApi {
       resendVerification: (signal) => http.request("/auth/email/resend-verification", { method: "POST", signal, retry: false }),
       me: (signal) => http.request("/auth/me", { signal }),
       context: (signal) => http.request("/auth/context", { signal }),
+      accessCatalog: (signal) => http.request("/auth/access/catalog", { signal }),
+      userAccess: (userId, signal) => http.request(`/auth/access/users/${encoded(userId)}`, { signal }),
+      replaceUserAccess: (userId, body, signal) => http.request(`/auth/access/users/${encoded(userId)}`, { method: "PUT", body, signal, retry: false }),
     },
     services: {
       list: (signal) => http.request("/services", { signal }),
