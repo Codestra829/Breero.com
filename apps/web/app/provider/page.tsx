@@ -12,5 +12,5 @@ const modules = [
 ];
 
 export default function ProviderDashboard() {
-  return <DepartmentDashboard department="provider" eyebrow="Provider operations" title="Provider dashboard" description="Your authorized provider workspace." modules={modules}/>;
+  return <DepartmentDashboard department={["provider", "vendor_success"]} eyebrow="Provider operations" title="Provider dashboard" description="Your authorized provider and vendor-success workspace." modules={modules}/>;
 }
