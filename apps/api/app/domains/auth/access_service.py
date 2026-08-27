@@ -69,7 +69,6 @@ DEFAULT_PERMISSIONS: dict[AccessRole, set[str]] = {
         "provider.quotes.manage",
         "email.domain.read",
         "email.domain.manage",
-        "email.domain.verify",
         "email.sender.read",
         "email.sender.manage",
         "email.credential.read",
