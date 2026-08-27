@@ -144,6 +144,25 @@ class IdentityLink(Base):
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class AccessProfile(Base):
+    """Marks a brand access profile as explicitly managed, including no-access state."""
+
+    __tablename__ = "access_profiles"
+    __table_args__ = (
+        UniqueConstraint("user_id", "brand_key", name="uq_access_profile_user_brand"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    brand_key: Mapped[str] = mapped_column(String(64), default="breero")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class AccessAssignment(Base):
     __tablename__ = "access_assignments"
     __table_args__ = (
