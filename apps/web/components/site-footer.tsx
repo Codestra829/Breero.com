@@ -17,10 +17,10 @@ export function SiteFooter() {
       <div>
         <p className="enterprise-footer-cta__eyebrow">Home services, handled</p>
         <h2 id="enterprise-footer-heading">One clear next step for your home.</h2>
-        <p>Tell BREERO what you need. We coordinate the request and keep the experience clear from first contact through fulfillment.</p>
+        <p>Tell BREERO what you need. We coordinate the request, verify the applicable provider requirements, and keep the experience clear from intake through fulfillment.</p>
       </div>
       <div className="enterprise-footer-cta__actions">
-        <Link className="br-button br-button--primary br-button--lg" href="/booking" data-cta="footer-book">Book a service <ArrowRightIcon size={18} /></Link>
+        <Link className="br-button br-button--primary br-button--lg" href="/request-service" data-cta="footer-request-service">Request service <ArrowRightIcon size={18} /></Link>
         <Link className="br-button br-button--outline br-button--lg" href="/services">Explore services</Link>
       </div>
     </section>
@@ -28,7 +28,7 @@ export function SiteFooter() {
       <div className="footer__intro">
         <Logo light />
         <p>Home services, without the hassle.</p>
-        <span className="footer__trust"><ShieldIcon size={18} />Quote required. No online payment is required or collected.</span>
+        <span className="footer__trust"><ShieldIcon size={18} />Request and quote workflow. No online payment is required or collected.</span>
         <p><strong>{legalIdentity}</strong><br/>{legalAddress}<br/><a href={`mailto:${legalBusiness.supportEmail}`}>{legalBusiness.supportEmail}</a><br/><a href={legalBusiness.corporateSite}>Codestra.co</a></p>
       </div>
       <div className="footer__links">
