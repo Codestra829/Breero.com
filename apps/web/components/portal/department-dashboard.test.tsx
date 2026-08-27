@@ -55,22 +55,47 @@ const modules = [
   },
 ];
 
+function renderDashboard() {
+  return render(
+    <DepartmentDashboard
+      department="dispatch"
+      eyebrow="Operations"
+      title="Operations dashboard"
+      description="Authorized operational workspace."
+      modules={modules}
+    />,
+  );
+}
+
 beforeEach(() => {
   loadPortalContext.mockReset();
   loadPortalContext.mockResolvedValue(context);
 });
 
 describe("DepartmentDashboard", () => {
+  it("shows a named loading state while portal context is unresolved", () => {
+    loadPortalContext.mockImplementationOnce(() => new Promise<PortalContext>(() => undefined));
+    renderDashboard();
+
+    expect(screen.getByRole("status")).toHaveTextContent("Loading your authorized workspace");
+  });
+
+  it("shows an error state and recovers through the retry button", async () => {
+    loadPortalContext
+      .mockRejectedValueOnce(new Error("portal unavailable"))
+      .mockResolvedValueOnce(context);
+    renderDashboard();
+
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByRole("heading", { name: "We couldn’t load your workspace" })).toBeInTheDocument();
+    fireEvent.click(within(alert).getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByRole("heading", { name: "Operations dashboard" })).toBeInTheDocument();
+    expect(loadPortalContext).toHaveBeenCalledTimes(2);
+  });
+
   it("supports search, state filters, module buttons and the detail drawer", async () => {
-    render(
-      <DepartmentDashboard
-        department="dispatch"
-        eyebrow="Operations"
-        title="Operations dashboard"
-        description="Authorized operational workspace."
-        modules={modules}
-      />,
-    );
+    renderDashboard();
 
     expect(await screen.findByRole("heading", { name: "Operations dashboard" })).toBeInTheDocument();
     expect(screen.getByText("2 available")).toBeInTheDocument();
@@ -95,15 +120,7 @@ describe("DepartmentDashboard", () => {
   });
 
   it("shows a recoverable empty result state without fabricating dashboard data", async () => {
-    render(
-      <DepartmentDashboard
-        department="dispatch"
-        eyebrow="Operations"
-        title="Operations dashboard"
-        description="Authorized operational workspace."
-        modules={modules}
-      />,
-    );
+    renderDashboard();
 
     await screen.findByRole("heading", { name: "Operations dashboard" });
     fireEvent.change(screen.getByLabelText("Search modules"), { target: { value: "not-a-real-module" } });
