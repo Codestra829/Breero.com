@@ -1,10 +1,10 @@
 import type { BreeroApi } from "./client";
-import type { AddressValidation, AuthSession, AvailabilitySlot, Booking, BookingCreateResponse, CustomerProfile, Payment, PublicCapabilities, Quote, ServiceDetail, ServiceSummary, User } from "@breero/types";
+import type { AddressValidation, AuthSession, AvailabilitySlot, Booking, BookingCreateResponse, CustomerProfile, LoginMode, Payment, PortalContext, PublicCapabilities, Quote, ServiceDetail, ServiceSummary, User } from "@breero/types";
 
 export interface MockScenario {
   services?: ServiceDetail[]; address?: AddressValidation; slots?: AvailabilitySlot[];
   session?: AuthSession; bookings?: Booking[]; bookingCreateResponse?: BookingCreateResponse; payments?: Payment[]; quotes?: Quote[]; profile?: CustomerProfile;
-  capabilities?: PublicCapabilities;
+  capabilities?: PublicCapabilities; portalContext?: PortalContext; loginMode?: LoginMode;
   latencyMs?: number; fail?: Partial<Record<keyof BreeroApi, Error>>;
 }
 const wait = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
@@ -21,6 +21,19 @@ export function createMockBreeroApi(scenario: MockScenario = {}): BreeroApi {
     if (scenario.fail?.[domain]) throw scenario.fail[domain];
     return value();
   };
+  const defaultPortalContext = (): PortalContext => {
+    const user = scenario.session?.user ?? missing("session.user");
+    return {
+      user,
+      brand_key: "breero",
+      dashboard_path: "/account",
+      roles: ["customer"],
+      departments: ["customer"],
+      permissions: ["customer.profile.read", "customer.booking.read", "customer.quote.read"],
+      assignments: [{ role: "customer", department: "customer", tenant_scope: "brand", vendor_id: null, is_primary: true }],
+      identity_mode: scenario.loginMode?.mode ?? "local",
+    };
+  };
   return {
     public: { capabilities: (s) => run("public", () => scenario.capabilities ?? {
       request_intake: true, instant_booking: false, online_payments: false,
@@ -28,6 +41,7 @@ export function createMockBreeroApi(scenario: MockScenario = {}): BreeroApi {
       marketplace_matching: false, messaging: false, reviews: false,
     }, s) },
     auth: {
+      loginMode: (s) => run("auth", () => scenario.loginMode ?? { mode: "local", issuer: "" }, s),
       login: () => run("auth", () => scenario.session ?? missing("session")),
       register: () => run("auth", () => scenario.session ?? missing("session")),
       refresh: () => run("auth", () => scenario.session ?? missing("session")),
@@ -39,6 +53,7 @@ export function createMockBreeroApi(scenario: MockScenario = {}): BreeroApi {
       verifyEmail: () => run("auth", () => ({ message: "Email verified" })),
       resendVerification: (s) => run("auth", () => ({ message: "Verification sent if required" }), s),
       me: (s) => run<User>("auth", () => scenario.session?.user ?? missing("session.user"), s),
+      context: (s) => run("auth", () => scenario.portalContext ?? defaultPortalContext(), s),
     },
     services: {
       list: (s) => run<ServiceSummary[]>("services", () => scenario.services ?? [], s),
