@@ -6,6 +6,7 @@ from app.api.v1 import (
     admin_users,
     auth,
     availability,
+    booking_intents,
     bookings,
     capabilities,
     compliance,
@@ -44,6 +45,11 @@ api_router.include_router(
     tags=["admin-provider-applications"],
 )
 api_router.include_router(services.router, prefix="/services", tags=["services"])
+api_router.include_router(
+    booking_intents.router,
+    prefix="/booking",
+    tags=["booking-intents"],
+)
 api_router.include_router(customers.router, prefix="/customer", tags=["customer"])
 api_router.include_router(compliance.router, tags=["compliance"])
 if settings.geocoding_enabled:
