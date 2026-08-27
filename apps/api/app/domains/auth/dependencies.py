@@ -28,20 +28,21 @@ async def _keycloak_user(
     if not email or not subject or not issuer or not claims.get("email_verified"):
         raise HTTPException(status_code=401, detail="Verified account required")
 
+    resolved_user: User | None = None
     identity = await repository.identity_by_subject(BRAND_KEY, issuer, subject)
     if identity:
-        user = await repository.by_id(identity.user_id)
+        resolved_user = await repository.by_id(identity.user_id)
     else:
-        user = await repository.by_email(email)
-        if not user:
+        resolved_user = await repository.by_email(email)
+        if not resolved_user:
             raise HTTPException(status_code=403, detail="Account is not provisioned")
-        existing = await repository.identity_by_user_issuer(BRAND_KEY, issuer, user.id)
+        existing = await repository.identity_by_user_issuer(BRAND_KEY, issuer, resolved_user.id)
         if existing:
             raise HTTPException(status_code=403, detail="Identity does not match provisioned account")
         try:
             await repository.add_identity(
                 IdentityLink(
-                    user_id=user.id,
+                    user_id=resolved_user.id,
                     brand_key=BRAND_KEY,
                     issuer=issuer,
                     subject=subject,
@@ -52,10 +53,10 @@ async def _keycloak_user(
         except IntegrityError as exc:
             await session.rollback()
             identity = await repository.identity_by_subject(BRAND_KEY, issuer, subject)
-            if not identity or identity.user_id != user.id:
+            if not identity or identity.user_id != resolved_user.id:
                 raise HTTPException(status_code=403, detail="Identity link conflict") from exc
 
-    if not user:
+    if not resolved_user:
         raise HTTPException(status_code=401, detail="Invalid or inactive account")
 
     required_role = {
@@ -67,9 +68,9 @@ async def _keycloak_user(
         UserRole.admin: "breero_admin",
     }
     token_roles = set((claims.get("realm_access") or {}).get("roles") or [])
-    if required_role[user.role] not in token_roles:
+    if required_role[resolved_user.role] not in token_roles:
         raise HTTPException(status_code=403, detail="Account role is not authorized")
-    return user
+    return resolved_user
 
 
 async def current_user(
@@ -82,6 +83,7 @@ async def current_user(
         )
     claims = decode_access_token(credentials.credentials)
     repository = UserRepository(session)
+    user: User | None
     if settings.keycloak_enabled:
         user = await _keycloak_user(claims, repository, session)
     else:
