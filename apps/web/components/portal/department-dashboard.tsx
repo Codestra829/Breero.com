@@ -28,7 +28,7 @@ import {
 } from "./dashboard-model";
 import styles from "./portal-dashboard.module.css";
 
-export interface WorkspaceModule extends DashboardModuleDefinition {}
+export type WorkspaceModule = DashboardModuleDefinition;
 
 export interface DepartmentDashboardProps {
   department: Department | Department[];
@@ -232,7 +232,7 @@ export function DepartmentDashboard({
         description={selectedModule?.module.description}
         footer={(
           <div className={styles.drawerFooter}>
-            <Button variant="outline" onClick={() => setSelectedModule(null)}>Close</Button>
+            <Button variant="outline" onClick={() => setSelectedModule(null)}>Done</Button>
             {selectedModule?.allowed && selectedModule.module.href && (
               <Link
                 className={`br-button br-button--primary br-button--md ${styles.linkButton}`}
