@@ -18,7 +18,6 @@ from app.domains.auth.models import (
     UserRole,
 )
 from app.domains.auth.repository import UserRepository
-from app.domains.auth.schemas import RegisterRequest
 from app.domains.auth.security import hash_password, hash_token, new_opaque_token
 from app.domains.auth.service import AuthService
 from app.domains.common.outbox import AuditLog, EventStatus, IntegrationEvent

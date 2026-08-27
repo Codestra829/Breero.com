@@ -3,48 +3,45 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
-from app.api.v1.router import api_router
-from app.domains.workforce.models import ProviderApplication, ProviderApplicationStatus
+from app.domains.workforce.models import (
+    ProviderApplication,
+    ProviderApplicationStatus,
+)
 from app.domains.workforce.onboarding_service import ProviderOnboardingService
 from app.domains.workforce.schemas import (
     ProviderApplicationDecision,
     ProviderOnboardingUpdate,
 )
-
-
-def route_contract() -> set[tuple[str, str]]:
-    return {
-        (route.path, method)
-        for route in api_router.routes
-        for method in getattr(route, "methods", set())
-    }
+from app.main import app
 
 
 def test_provider_onboarding_routes_are_registered() -> None:
+    paths = app.openapi()["paths"]
     required = {
-        ("/auth/register/provider", "POST"),
-        ("/provider/profile", "GET"),
-        ("/provider/profile", "PATCH"),
-        ("/provider/onboarding", "GET"),
-        ("/provider/onboarding", "PATCH"),
-        ("/provider/onboarding/submit", "POST"),
-        ("/admin/provider-applications", "GET"),
-        ("/admin/provider-applications/{application_id}", "GET"),
-        ("/admin/provider-applications/{application_id}/approve", "POST"),
-        ("/admin/provider-applications/{application_id}/reject", "POST"),
+        "/api/v1/auth/register/provider": {"post"},
+        "/api/v1/provider/profile": {"get", "patch"},
+        "/api/v1/provider/onboarding": {"get", "patch"},
+        "/api/v1/provider/onboarding/submit": {"post"},
+        "/api/v1/admin/provider-applications": {"get"},
+        "/api/v1/admin/provider-applications/{application_id}": {"get"},
+        "/api/v1/admin/provider-applications/{application_id}/approve": {"post"},
+        "/api/v1/admin/provider-applications/{application_id}/reject": {"post"},
         (
-            "/admin/provider-applications/{application_id}/request-information",
-            "POST",
-        ),
+            "/api/v1/admin/provider-applications/"
+            "{application_id}/request-information"
+        ): {"post"},
     }
-    assert required.issubset(route_contract())
+    for path, methods in required.items():
+        assert methods <= set(paths[path])
 
 
 def test_onboarding_patch_rejects_status_and_vendor_mass_assignment() -> None:
     with pytest.raises(ValidationError):
         ProviderOnboardingUpdate.model_validate({"status": "APPROVED"})
     with pytest.raises(ValidationError):
-        ProviderOnboardingUpdate.model_validate({"vendor_id": str(uuid.uuid4())})
+        ProviderOnboardingUpdate.model_validate(
+            {"vendor_id": str(uuid.uuid4())}
+        )
 
 
 def test_postal_codes_validate_zip_and_zip4() -> None:
