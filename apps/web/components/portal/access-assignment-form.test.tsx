@@ -87,7 +87,7 @@ describe("AccessAssignmentForm", () => {
     render(<AccessAssignmentForm />);
 
     expect(await screen.findByRole("heading", { name: "Department access" })).toBeInTheDocument();
-    const userId = screen.getByLabelText("User UUID");
+    const userId = screen.getByRole("searchbox", { name: /User UUID/ });
     fireEvent.change(userId, { target: { value: targetContext.user.id } });
     expect(screen.getByRole("button", { name: "Review access changes" })).toBeDisabled();
 
@@ -95,7 +95,7 @@ describe("AccessAssignmentForm", () => {
 
     expect(await screen.findByText("Support User")).toBeInTheDocument();
     expect(userAccess).toHaveBeenCalledWith(targetContext.user.id);
-    expect(screen.getByLabelText("Role")).toHaveValue("support");
+    expect(screen.getByRole("combobox", { name: /Role/ })).toHaveValue("support");
     expect(screen.getByRole("button", { name: "Review access changes" })).toBeEnabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Review access changes" }));
@@ -124,7 +124,7 @@ describe("AccessAssignmentForm", () => {
     render(<AccessAssignmentForm />);
 
     await screen.findByRole("heading", { name: "Department access" });
-    fireEvent.change(screen.getByLabelText("User UUID"), { target: { value: targetContext.user.id } });
+    fireEvent.change(screen.getByRole("searchbox", { name: /User UUID/ }), { target: { value: targetContext.user.id } });
     fireEvent.click(screen.getByRole("button", { name: "Load existing access" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("We could not complete that request");
