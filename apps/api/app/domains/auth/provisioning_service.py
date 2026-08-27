@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
@@ -67,7 +68,11 @@ class InternalUserProvisioningService:
             raise HTTPException(409, "Email already registered")
 
         legacy_role, access_role, department, tenant_scope = ROLE_BINDINGS[data.role]
-        invitation_state = "not_required"
+        invitation_state: Literal[
+            "not_required",
+            "pending_configuration",
+            "pending_delivery",
+        ] = "not_required"
         try:
             user = await self.users.add(
                 User(
