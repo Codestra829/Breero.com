@@ -1,4 +1,4 @@
-import type { UUID, User } from "./index";
+import type { ISODateTime, UUID, User } from "./index";
 
 export type AccessRole =
   | "customer"
