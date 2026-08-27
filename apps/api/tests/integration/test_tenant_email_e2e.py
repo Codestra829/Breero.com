@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.config import settings
 from app.db.session import SessionLocal
@@ -40,6 +40,9 @@ async def test_login_dashboard_domain_sender_compose_outbox_delivery(
     monkeypatch.setattr(settings, "transactional_email_mode", "controlled_canary")
 
     async with SessionLocal() as session:
+        await session.execute(delete(IntegrationEvent))
+        await session.commit()
+
         account = User(
             email=f"email-admin-{marker}@example.test",
             full_name="Tenant Email Admin",
@@ -129,7 +132,7 @@ async def test_login_dashboard_domain_sender_compose_outbox_delivery(
         )
         outbox = OutboxService(session)
         processed = await outbox.process(delivery.deliver)
-        assert processed >= 1
+        assert processed == 1
 
         await session.refresh(event)
         stored_message = await session.get(EmailMessage, message.id)
