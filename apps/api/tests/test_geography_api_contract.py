@@ -20,12 +20,12 @@ from app.integrations.geocoding import FakeGeocodingAdapter, GeocodedAddress
 from app.main import app
 
 
-def test_geography_routes_are_registered_in_openapi() -> None:
+def test_geography_admin_routes_are_registered_in_openapi() -> None:
+    # Admin zone/postal-code management is unconditional (matching admin_users.py
+    # and provider_onboarding.admin_router), unlike the customer-facing
+    # booking_geography routes below, which depend on geocoding.
     paths = app.openapi()["paths"]
     expected = {
-        "/api/v1/booking/address/validate": {"post"},
-        "/api/v1/booking/service-area/check": {"post"},
-        "/api/v1/booking/timezone/resolve": {"post"},
         "/api/v1/admin/service-zones": {"get", "post"},
         "/api/v1/admin/service-zones/{service_area_id}": {
             "get",
@@ -43,6 +43,25 @@ def test_geography_routes_are_registered_in_openapi() -> None:
     }
     for path, methods in expected.items():
         assert methods <= set(paths[path])
+
+
+def test_booking_geography_routes_are_gated_behind_geocoding_enabled() -> None:
+    # Regression test: these three routes used to be mounted unconditionally,
+    # bypassing the same settings.geocoding_enabled gate /addresses/validate
+    # respects. geocoding_enabled defaults to False, so with default settings
+    # none of them should be registered.
+    from app.config import settings
+
+    paths = app.openapi()["paths"]
+    booking_geography_paths = {
+        "/api/v1/booking/address/validate",
+        "/api/v1/booking/service-area/check",
+        "/api/v1/booking/timezone/resolve",
+    }
+    if settings.geocoding_enabled:
+        assert booking_geography_paths <= set(paths)
+    else:
+        assert not booking_geography_paths & set(paths)
 
 
 def test_admin_geography_is_deny_by_default() -> None:

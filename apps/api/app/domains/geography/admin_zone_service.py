@@ -442,7 +442,7 @@ class AdminServiceZoneService:
         await self.session.flush()
 
     async def _ensure_coverage_selector(self, zone: ServiceArea) -> None:
-        postal_codes = await self.repository.zone_postal_codes(zone.id)
+        postal_codes = await self.repository.zone_postal_codes(zone.id, active_only=True)
         has_radius = zone.center is not None and zone.radius_meters is not None
         if not (
             postal_codes

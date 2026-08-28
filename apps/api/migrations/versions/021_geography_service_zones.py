@@ -42,6 +42,11 @@ def upgrade() -> None:
         "service_areas",
         "version > 0",
     )
+    op.create_check_constraint(
+        "service_area_radius_requires_center",
+        "service_areas",
+        "radius_meters IS NULL OR (radius_meters > 0 AND center IS NOT NULL)",
+    )
     op.create_index("ix_service_areas_priority", "service_areas", ["priority"])
 
     op.add_column("addresses", sa.Column("line2", sa.String(200)))
@@ -407,6 +412,11 @@ def downgrade() -> None:
     op.drop_column("addresses", "line2")
 
     op.drop_index("ix_service_areas_priority", table_name="service_areas")
+    op.drop_constraint(
+        "service_area_radius_requires_center",
+        "service_areas",
+        type_="check",
+    )
     op.drop_constraint(
         "service_area_positive_version",
         "service_areas",

@@ -21,6 +21,7 @@ from app.domains.geography.schemas import (
     PostalCodeUpdate,
     ServiceAreaCheckRequest,
     ServiceZoneCreate,
+    ServiceZoneUpdate,
 )
 from app.domains.geography.service import (
     AdminPostalCodeService,
@@ -476,3 +477,115 @@ async def test_admin_zone_and_postal_import_are_versioned_audited_and_idempotent
             "postal_code.import",
             "postal_code.update",
         }
+
+
+@pytest.mark.asyncio
+async def test_emergency_only_postal_codes_do_not_leak_into_legacy_coverage() -> None:
+    # Regression test: sync_legacy_postal_codes used to copy every active postal
+    # code into the legacy ServiceArea.postal_codes array regardless of
+    # regular_service_enabled. That array is exactly what the existing booking
+    # domain (AddressService.validate / AvailabilityService.search) matches
+    # against for ordinary bookings, so an emergency-only postal code leaking in
+    # would make an address bookable for regular service when it shouldn't be.
+    marker = uuid.uuid4().hex
+    async with SessionLocal() as session:
+        entity = LegalEntity(
+            code=f"EMRG-{marker[:8]}", name="Emergency Zone Entity", currency="USD", active=True
+        )
+        service = _service(marker, "emergency")
+        actor = _admin(marker)
+        session.add_all([entity, service, actor])
+        await session.commit()
+        await session.refresh(entity)
+
+        zone_service = AdminServiceZoneService(session)
+        zone = await zone_service.create_zone(
+            actor,
+            ServiceZoneCreate(
+                legal_entity_id=entity.id,
+                name="Emergency Coverage Zone",
+                postal_codes=["77010"],
+                service_ids=[service.id],
+            ),
+            correlation_id=f"emrg-{marker}",
+        )
+        assert zone.postal_codes == ["77010"]
+
+        postal_service = AdminPostalCodeService(session)
+        await postal_service.import_postal_codes(
+            actor,
+            PostalCodeImportRequest.model_validate(
+                {
+                    "service_area_id": str(zone.id),
+                    "rows": [
+                        {
+                            "postal_code": "77011",
+                            "city": "Houston",
+                            "state_code": "TX",
+                            "regular_service_enabled": False,
+                            "emergency_service_enabled": True,
+                        }
+                    ],
+                }
+            ),
+            idempotency_key=f"postal-import-emergency:{marker}",
+        )
+
+        refreshed = await session.get(ServiceArea, zone.id)
+        assert refreshed is not None
+        assert refreshed.postal_codes == ["77010"]
+
+
+@pytest.mark.asyncio
+async def test_deactivating_all_postal_codes_fails_coverage_selector_check() -> None:
+    # Regression test: _ensure_coverage_selector used to count inactive postal
+    # codes as valid coverage, so deactivating a zone's only postal code left an
+    # active zone with zero live coverage instead of being rejected.
+    marker = uuid.uuid4().hex
+    async with SessionLocal() as session:
+        entity = LegalEntity(
+            code=f"COV-{marker[:8]}", name="Coverage Zone Entity", currency="USD", active=True
+        )
+        service = _service(marker, "coverage")
+        actor = _admin(marker)
+        session.add_all([entity, service, actor])
+        await session.commit()
+        await session.refresh(entity)
+
+        zone_service = AdminServiceZoneService(session)
+        zone = await zone_service.create_zone(
+            actor,
+            ServiceZoneCreate(
+                legal_entity_id=entity.id,
+                name="Postal-Only Coverage Zone",
+                postal_codes=["77020"],
+                service_ids=[service.id],
+            ),
+            correlation_id=f"cov-{marker}",
+        )
+
+        postal_service = AdminPostalCodeService(session)
+        rows = await postal_service.list_postal_codes(
+            service_area_id=zone.id,
+            postal_code=None,
+            state_code=None,
+            active=None,
+            page=1,
+            page_size=25,
+        )
+        row = rows.items[0]
+        await postal_service.update_postal_code(
+            row.id,
+            actor,
+            PostalCodeUpdate(active=False),
+            expected_version=row.version,
+        )
+
+        with pytest.raises(DomainError) as coverage_error:
+            await zone_service.update_zone(
+                zone.id,
+                actor,
+                ServiceZoneUpdate(priority=60),
+                expected_version=zone.version,
+            )
+        assert coverage_error.value.code == "SERVICE_ZONE_COVERAGE_REQUIRED"

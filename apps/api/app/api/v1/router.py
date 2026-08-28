@@ -62,15 +62,18 @@ api_router.include_router(
     prefix="/booking",
     tags=["booking-intents"],
 )
-api_router.include_router(
-    booking_geography.router,
-    prefix="/booking",
-    tags=["booking-geography"],
-)
 api_router.include_router(customers.router, prefix="/customer", tags=["customer"])
 api_router.include_router(compliance.router, tags=["compliance"])
 if settings.geocoding_enabled:
     api_router.include_router(addresses.router, prefix="/addresses", tags=["addresses"])
+    # /booking/address/validate and /booking/service-area/check both call the same
+    # geocoder as /addresses/validate; /booking/timezone/resolve is bundled with them
+    # rather than exposed alone with geocoding off.
+    api_router.include_router(
+        booking_geography.router,
+        prefix="/booking",
+        tags=["booking-geography"],
+    )
 if settings.scheduling_enabled:
     api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
     api_router.include_router(bookings.router, prefix="/bookings", tags=["bookings"])

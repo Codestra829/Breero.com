@@ -429,8 +429,17 @@ class GeographyRepository:
         if not zone:
             return
         rows = await self.zone_postal_codes(service_area_id, active_only=True)
+        # The legacy ServiceArea.postal_codes array is what the existing booking
+        # domain (AddressService.validate / AvailabilityService.search) matches
+        # against for ordinary bookings. An emergency-only row here must not leak
+        # into it, or an address that should only accept emergency dispatch would
+        # be treated as fully serviceable for regular bookings too.
         zone.postal_codes = list(
-            dict.fromkeys(base_postal_code(row.postal_code) for row in rows)
+            dict.fromkeys(
+                base_postal_code(row.postal_code)
+                for row in rows
+                if row.regular_service_enabled
+            )
         )
         await self.session.flush()
 
