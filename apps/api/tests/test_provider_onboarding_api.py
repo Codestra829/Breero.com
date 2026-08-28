@@ -1,11 +1,15 @@
+import json
 import uuid
 
 import pytest
 from pydantic import ValidationError
 
+from app.domains.auth.models import User, UserRole
+from app.domains.common.outbox import EventStatus
 from app.domains.workforce.models import (
     ProviderApplication,
     ProviderApplicationStatus,
+    Vendor,
 )
 from app.domains.workforce.onboarding_service import ProviderOnboardingService
 from app.domains.workforce.schemas import (
@@ -13,6 +17,37 @@ from app.domains.workforce.schemas import (
     ProviderOnboardingUpdate,
 )
 from app.main import app
+
+
+def make_user(role: UserRole = UserRole.vendor_admin) -> User:
+    return User(
+        id=uuid.uuid4(),
+        email=f"{uuid.uuid4().hex}@example.com",
+        password_hash="disabled",
+        full_name="Provider Owner",
+        role=role,
+        is_active=True,
+        email_verified=True,
+    )
+
+
+class SequentialScalarSession:
+    def __init__(self, values: list) -> None:
+        self._values = list(values)
+        self.added: list = []
+        self.commits = 0
+
+    async def scalar(self, _query):
+        return self._values.pop(0)
+
+    def add(self, value) -> None:
+        self.added.append(value)
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+    async def refresh(self, _obj) -> None:
+        return None
 
 
 def test_provider_onboarding_routes_are_registered() -> None:
@@ -114,3 +149,60 @@ def test_complete_application_has_no_missing_submission_domains() -> None:
 def test_provider_application_decision_requires_reason() -> None:
     with pytest.raises(ValidationError):
         ProviderApplicationDecision(reason="no")
+
+
+@pytest.mark.asyncio
+async def test_update_onboarding_serializes_uuid_list_fields_to_strings() -> None:
+    # Regression test: `services`/`compliance_documents` are typed list[uuid.UUID] on
+    # the request schema, but the ORM column is a plain JSONB list with no custom
+    # json_serializer on the engine. Writing raw UUID objects onto it crashes at
+    # commit with "TypeError: Object of type UUID is not JSON serializable".
+    vendor = Vendor(id=uuid.uuid4())
+    application = ProviderApplication(
+        id=uuid.uuid4(),
+        vendor_id=vendor.id,
+        status=ProviderApplicationStatus.DRAFT,
+        version=1,
+    )
+    session = SequentialScalarSession([vendor, application])
+    service = ProviderOnboardingService(session)  # type: ignore[arg-type]
+
+    service_id = uuid.uuid4()
+    document_id = uuid.uuid4()
+    result = await service.update_onboarding(
+        make_user(),
+        ProviderOnboardingUpdate(services=[service_id], compliance_documents=[document_id]),
+    )
+
+    assert result.services == [str(service_id)]
+    assert result.compliance_documents == [str(document_id)]
+    # Would raise TypeError before the fix if UUID objects had leaked through.
+    json.dumps(result.services)
+    json.dumps(result.compliance_documents)
+    assert session.commits == 1
+
+
+def test_provider_application_events_are_pending_not_pending_configuration() -> None:
+    # Regression test: PENDING_CONFIGURATION is only ever promoted to PENDING by
+    # OutboxService.activate_pending_configuration(aggregate_type="public_submission")
+    # (see app/workers/tasks.py), which never matches aggregate_type="provider_application".
+    # These events have no external-adapter dependency to gate on, so they must be
+    # created PENDING directly or they are silently stuck forever.
+    added: list = []
+
+    class RecordingSession:
+        def add(self, value) -> None:
+            added.append(value)
+
+    application = ProviderApplication(
+        id=uuid.uuid4(),
+        vendor_id=uuid.uuid4(),
+        status=ProviderApplicationStatus.DRAFT,
+        version=1,
+    )
+    service = ProviderOnboardingService(RecordingSession())  # type: ignore[arg-type]
+
+    service._event(application, "provider_application_submitted", {})
+
+    assert len(added) == 1
+    assert added[0].status == EventStatus.PENDING

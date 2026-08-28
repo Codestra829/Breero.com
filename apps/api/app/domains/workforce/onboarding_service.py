@@ -240,7 +240,7 @@ class ProviderOnboardingService:
             ProviderApplicationStatus.INFORMATION_REQUESTED,
         }:
             raise HTTPException(409, "Submitted applications cannot be edited")
-        for field, value in data.model_dump(exclude_unset=True).items():
+        for field, value in data.model_dump(exclude_unset=True, mode="json").items():
             setattr(application, field, value)
         application.version += 1
         self._audit(
@@ -447,7 +447,13 @@ class ProviderOnboardingService:
                 event_type=event_type,
                 idempotency_key=f"{event_type}:{application.id}:{application.version}",
                 payload={"application_id": str(application.id), **payload},
-                status=EventStatus.PENDING_CONFIGURATION,
+                # PENDING, not PENDING_CONFIGURATION: these events have no external-adapter
+                # dependency (not a "breero."-prefixed CRM event, not an email notification),
+                # so there's nothing to gate on. PENDING_CONFIGURATION is only ever promoted
+                # by OutboxService.activate_pending_configuration(aggregate_type="public_submission")
+                # (see workers/tasks.py), which never matches aggregate_type="provider_application" —
+                # using that status here would leave these events permanently unprocessed.
+                status=EventStatus.PENDING,
                 attempts=0,
                 available_at=datetime.now(UTC),
             )
