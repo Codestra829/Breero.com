@@ -17,7 +17,7 @@ from app.domains.auth.models import (
     UserRole,
 )
 from app.domains.catalog.models import Service
-from app.domains.common.outbox import AuditLog, IntegrationEvent
+from app.domains.common.outbox import AuditLog, EventStatus, IntegrationEvent
 from app.domains.provider_catalog.models import (
     ApprovalStatus,
     ProviderService,
@@ -269,10 +269,10 @@ async def test_provider_services_and_skills_are_scoped_versioned_and_approved_to
             "provider.onboarding.submit",
             "provider.onboarding.approve",
         } <= audits
-        events = set(
+        events = list(
             (
                 await session.scalars(
-                    select(IntegrationEvent.event_type).where(
+                    select(IntegrationEvent).where(
                         IntegrationEvent.aggregate_id.in_(
                             {selected_service.id, selected_skill.id}
                         )
@@ -280,8 +280,14 @@ async def test_provider_services_and_skills_are_scoped_versioned_and_approved_to
                 )
             ).all()
         )
-        assert "provider_service_selectd" in events
-        assert "provider_skill_selectd" in events
+        event_types = {event.event_type for event in events}
+        assert "provider_service_selected" in event_types
+        assert "provider_skill_selected" in event_types
+        # Regression test: these events have no external-adapter dependency, so
+        # they must be created PENDING, not PENDING_CONFIGURATION -- the only
+        # promoter of that status is never called with a matching aggregate_type
+        # (see app/workers/tasks.py), which would leave them permanently stuck.
+        assert all(event.status == EventStatus.PENDING for event in events)
 
 
 @pytest.mark.asyncio
@@ -302,3 +308,50 @@ async def test_provider_catalog_permissions_are_seeded_by_migration() -> None:
             "provider.skills.read",
             "provider.skills.manage",
         } <= permissions
+
+
+@pytest.mark.asyncio
+async def test_withdrawing_a_selection_survives_catalog_service_deactivation() -> None:
+    # Regression test: update_service used to require the underlying catalog
+    # Service to still be active before applying ANY patch, including
+    # active=False (withdrawal) -- so once BREERO deactivated a service, a
+    # provider could no longer withdraw their own selection via PATCH, only
+    # DELETE (remove_service, which has no such check).
+    marker = uuid.uuid4().hex
+    async with SessionLocal() as session:
+        owner, vendor, worker, application = await _provider_fixture(
+            session, marker, "withdraw"
+        )
+        service = Service(
+            slug=f"catalog-service-withdraw-{marker}",
+            name="Withdrawable service",
+            description="Provider catalog withdrawal fixture",
+            category="plumbing",
+            pricing_model="request_only",
+            duration_minutes=60,
+            provider_approval_required=False,
+            is_active=True,
+            is_bookable=False,
+        )
+        session.add(service)
+        await session.commit()
+        await session.refresh(owner)
+        await session.refresh(service)
+
+        catalog = ProviderCatalogService(session)
+        selected = await catalog.add_service(
+            owner,
+            ProviderServiceCreate(service_id=service.id),
+            correlation_id=f"withdraw-{marker}",
+        )
+
+        service.is_active = False
+        await session.commit()
+
+        withdrawn = await catalog.update_service(
+            selected.id,
+            owner,
+            ProviderServiceUpdate(active=False),
+            expected_version=selected.version,
+        )
+        assert withdrawn.active is False

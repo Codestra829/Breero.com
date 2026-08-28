@@ -1,5 +1,4 @@
 import uuid
-from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -142,12 +141,16 @@ class ProviderCatalogService:
                 404,
             )
         self._require_version(record.version, expected_version, "provider service")
-        catalog_service = await self.repository.active_service(record.service_id)
-        if not catalog_service:
-            raise DomainError("SERVICE_NOT_FOUND", "Catalog service not found.", 404)
-        if command.active is not None:
-            record.active = command.active
-            if command.active and record.status == ApprovalStatus.REJECTED:
+        if command.active:
+            # Only (re)activating a selection needs the catalog service to still be
+            # active -- withdrawing one (active=False) must keep working even after
+            # BREERO deactivates the underlying catalog service, same as
+            # remove_service already does with no such check.
+            catalog_service = await self.repository.active_service(record.service_id)
+            if not catalog_service:
+                raise DomainError("SERVICE_NOT_FOUND", "Catalog service not found.", 404)
+            record.active = True
+            if record.status == ApprovalStatus.REJECTED:
                 record.status = self._selection_status(
                     vendor,
                     catalog_service.provider_approval_required,
@@ -155,6 +158,8 @@ class ProviderCatalogService:
                 record.rejection_reason = None
                 record.reviewed_by = None
                 record.reviewed_at = None
+        elif command.active is False:
+            record.active = False
         if command.display_order is not None:
             record.display_order = command.display_order
         record.version += 1
@@ -521,12 +526,16 @@ class ProviderCatalogService:
                 created_at=now,
             )
         )
+        prefix, verb = action.rsplit(".", 1)
+        verb_past = {"select": "selected", "update": "updated", "remove": "removed"}.get(
+            verb, verb + "d"
+        )
         self.session.add(
             IntegrationEvent(
                 aggregate_type=aggregate_type,
                 aggregate_id=aggregate_id,
                 aggregate_version=aggregate_version,
-                event_type=action.replace(".", "_") + "d",
+                event_type=f"{prefix.replace('.', '_')}_{verb_past}",
                 idempotency_key=(
                     f"{aggregate_type}:{aggregate_id}:"
                     f"{aggregate_version}:{action}"
@@ -536,7 +545,16 @@ class ProviderCatalogService:
                     "actor_user_id": str(actor.id),
                     **metadata,
                 },
-                status=EventStatus.PENDING_CONFIGURATION,
+                # PENDING, not PENDING_CONFIGURATION: these events have no
+                # external-adapter dependency (not "breero."-prefixed, not an email
+                # notification) to gate on. PENDING_CONFIGURATION is only ever
+                # promoted by OutboxService.activate_pending_configuration(), which
+                # is called with aggregate_type="public_submission" in
+                # workers/tasks.py and never matches "provider_service"/
+                # "provider_skill" -- using that status here left the same class of
+                # bug fixed for onboarding_service.py's events elsewhere in this PR
+                # chain: the event would be permanently stuck and never delivered.
+                status=EventStatus.PENDING,
                 attempts=0,
                 available_at=now,
             )
