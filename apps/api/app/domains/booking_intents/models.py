@@ -15,7 +15,6 @@ class BookingIntentStatus(str, enum.Enum):
     ADDRESS_VALIDATED = "ADDRESS_VALIDATED"
     COVERAGE_CONFIRMED = "COVERAGE_CONFIRMED"
     AVAILABILITY_FOUND = "AVAILABILITY_FOUND"
-    CAPACITY_HELD = "CAPACITY_HELD"
     SUBMITTED = "SUBMITTED"
     EXPIRED = "EXPIRED"
 
@@ -48,3 +47,6 @@ class BookingIntent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    booking_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("bookings.id", ondelete="SET NULL"), index=True
+    )

@@ -20,7 +20,6 @@ def upgrade() -> None:
         "ADDRESS_VALIDATED",
         "COVERAGE_CONFIRMED",
         "AVAILABILITY_FOUND",
-        "CAPACITY_HELD",
         "SUBMITTED",
         "EXPIRED",
         name="booking_intent_status",
@@ -29,7 +28,7 @@ def upgrade() -> None:
     op.execute(
         "CREATE TYPE booking_intent_status AS ENUM "
         "('DRAFT','ADDRESS_VALIDATED','COVERAGE_CONFIRMED',"
-        "'AVAILABILITY_FOUND','CAPACITY_HELD','SUBMITTED','EXPIRED')"
+        "'AVAILABILITY_FOUND','SUBMITTED','EXPIRED')"
     )
     op.create_table(
         "booking_intents",
@@ -53,6 +52,11 @@ def upgrade() -> None:
         sa.Column("status", status_type, nullable=False, server_default="DRAFT"),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False, server_default="1"),
+        sa.Column(
+            "booking_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("bookings.id", ondelete="SET NULL"),
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -87,6 +91,7 @@ def upgrade() -> None:
     op.create_index("ix_booking_intents_address_id", "booking_intents", ["address_id"])
     op.create_index("ix_booking_intents_status", "booking_intents", ["status"])
     op.create_index("ix_booking_intents_expires_at", "booking_intents", ["expires_at"])
+    op.create_index("ix_booking_intents_booking_id", "booking_intents", ["booking_id"])
 
 
 def downgrade() -> None:

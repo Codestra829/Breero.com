@@ -1,19 +1,27 @@
 import secrets
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import DomainError
-from app.domains.booking.models import Address
+from app.domains.booking.models import Address, Booking
+from app.domains.booking.schemas import (
+    AvailabilitySearchRequest,
+    BookingAnswerInput,
+    BookingCreateRequest,
+    BookingWindow,
+    CustomerInput,
+)
+from app.domains.booking.service import AvailabilityService, BookingService
 from app.domains.catalog.models import Service
 from app.domains.common.clock import Clock, SystemClock
 from app.domains.common.outbox import AuditLog
 
 from .models import BookingIntent, BookingIntentStatus
 from .repository import BookingIntentRepository
-from .schemas import BookingIntentCreate, BookingIntentUpdate
+from .schemas import BookingIntentCreate, BookingIntentUpdate, SlotSelection
 
 BOOKING_INTENT_TTL = timedelta(minutes=120)
 EDITABLE_STATUSES = frozenset(
@@ -69,7 +77,10 @@ class BookingIntentService:
         intent_id: uuid.UUID,
         anonymous_session_id: uuid.UUID,
     ) -> BookingIntent:
-        intent = await self._owned(intent_id, anonymous_session_id)
+        # Locked: _reject_expired below can mutate and commit as a side effect of a
+        # read, so two concurrent GETs on an already-expired intent must not both
+        # try to apply that transition.
+        intent = await self._owned(intent_id, anonymous_session_id, lock=True)
         await self._reject_expired(intent)
         return intent
 
@@ -111,19 +122,32 @@ class BookingIntentService:
 
         if "address_id" in values:
             address_id = values["address_id"]
-            if address_id is not None and await self.session.get(Address, address_id) is None:
-                raise DomainError(
-                    "ADDRESS_NOT_FOUND",
-                    "Validated address was not found.",
-                    422,
-                )
-            intent.address_id = address_id
-            intent.selected_slot = None
-            intent.status = (
-                BookingIntentStatus.ADDRESS_VALIDATED
-                if address_id is not None
-                else BookingIntentStatus.DRAFT
-            )
+            address: Address | None = None
+            if address_id is not None:
+                address = await self.session.get(Address, address_id)
+                # Same error for "doesn't exist" and "belongs to someone else": an
+                # anonymous session has no identity to own an address by, so any
+                # address already linked to a registered customer must be rejected
+                # here or it could be attached to an unrelated session's intent.
+                # A distinct error would let a caller enumerate other customers'
+                # address_ids by observing which ones return a different response.
+                if address is None or address.customer_id is not None:
+                    raise DomainError(
+                        "ADDRESS_NOT_FOUND",
+                        "Validated address was not found.",
+                        422,
+                    )
+            if address_id != intent.address_id:
+                intent.address_id = address_id
+                intent.timezone_id = None
+                intent.requested_date = None
+                intent.selected_slot = None
+            if address_id is None:
+                intent.status = BookingIntentStatus.DRAFT
+            elif address is not None and address.service_area_id is not None:
+                intent.status = BookingIntentStatus.COVERAGE_CONFIRMED
+            else:
+                intent.status = BookingIntentStatus.ADDRESS_VALIDATED
 
         if "timezone_id" in values:
             timezone_id = values["timezone_id"]
@@ -147,21 +171,48 @@ class BookingIntentService:
 
         if command.clear_selected_slot:
             intent.selected_slot = None
-            if intent.address_id is not None:
-                intent.status = BookingIntentStatus.ADDRESS_VALIDATED
-            else:
-                intent.status = BookingIntentStatus.DRAFT
+            intent.status = await self._status_after_clearing_slot(intent)
 
         selected_slot = command.selected_slot
-        if "selected_slot" in values and selected_slot is not None:
-            if not intent.address_id or not intent.timezone_id or not intent.requested_date:
-                raise DomainError(
-                    "BOOKING_INTENT_INCOMPLETE",
-                    "Address, timezone and requested date are required before selecting a slot.",
-                    422,
+        if "selected_slot" in values:
+            if selected_slot is None:
+                # Explicit `"selected_slot": null` is distinct from omitting the
+                # field and must clear the slot too, same as clear_selected_slot.
+                intent.selected_slot = None
+                intent.status = await self._status_after_clearing_slot(intent)
+            else:
+                if not intent.address_id or not intent.timezone_id or not intent.requested_date:
+                    raise DomainError(
+                        "BOOKING_INTENT_INCOMPLETE",
+                        "Address, timezone and requested date are required before selecting a slot.",
+                        422,
+                    )
+                service = await self._active_service(intent.service_id)
+                if not service.is_bookable:
+                    raise DomainError(
+                        "SERVICE_NOT_BOOKABLE",
+                        "This service currently supports requests only and cannot be booked.",
+                        409,
+                    )
+                window = self._slot_window(intent, selected_slot)
+                slots = await AvailabilityService(self.session).search(
+                    AvailabilitySearchRequest(
+                        service_id=intent.service_id,
+                        address_id=intent.address_id,
+                        date_from=intent.requested_date,
+                        date_to=intent.requested_date,
+                    )
                 )
-            intent.selected_slot = selected_slot.model_dump()
-            intent.status = BookingIntentStatus.AVAILABILITY_FOUND
+                if not any(
+                    slot.start == window.start and slot.end == window.end for slot in slots
+                ):
+                    raise DomainError(
+                        "SLOT_UNAVAILABLE",
+                        "The selected time slot is no longer available.",
+                        409,
+                    )
+                intent.selected_slot = selected_slot.model_dump()
+                intent.status = BookingIntentStatus.AVAILABILITY_FOUND
 
         intent.version += 1
         self._audit(
@@ -199,11 +250,82 @@ class BookingIntentService:
             )
             await self.session.commit()
 
+    async def submit(
+        self,
+        intent_id: uuid.UUID,
+        anonymous_session_id: uuid.UUID,
+        customer: CustomerInput,
+        answers: list[BookingAnswerInput],
+        *,
+        expected_version: int,
+        idempotency_key: str,
+    ) -> Booking:
+        intent = await self._owned(intent_id, anonymous_session_id, lock=True)
+        await self._reject_expired(intent)
+        self._require_version(intent, expected_version)
+        if intent.status != BookingIntentStatus.AVAILABILITY_FOUND:
+            raise DomainError(
+                "BOOKING_INTENT_NOT_READY",
+                "A validated address, date and slot are required before submitting.",
+                409,
+            )
+        assert intent.address_id and intent.timezone_id and intent.requested_date
+        selected_slot = SlotSelection.model_validate(intent.selected_slot)
+        window = self._slot_window(intent, selected_slot)
+
+        # Delegates to the same authoritative BookingService.create() the direct
+        # /bookings endpoint uses, rather than re-deriving capacity/pricing/
+        # eligibility logic here: it re-validates the slot is still free (the
+        # intent could have gone stale since AVAILABILITY_FOUND was set), takes
+        # the real capacity hold, and is idempotent on idempotency_key so a retry
+        # after a failure between the two commits below is always safe.
+        booking = await BookingService(self.session).create(
+            BookingCreateRequest(
+                service_id=intent.service_id,
+                customer=customer,
+                address_id=intent.address_id,
+                window=window,
+                answers=answers,
+            ),
+            idempotency_key,
+        )
+
+        intent.status = BookingIntentStatus.SUBMITTED
+        intent.booking_id = booking.id
+        intent.version += 1
+        self._audit(
+            intent,
+            "booking_intent.submit",
+            {"booking_id": str(booking.id), "version": intent.version},
+        )
+        await self.session.commit()
+        await self.session.refresh(intent)
+        return booking
+
     async def _active_service(self, service_id: uuid.UUID) -> Service:
         service = await self.session.get(Service, service_id)
         if not service or not service.is_active:
             raise DomainError("SERVICE_NOT_FOUND", "Service not found.", 404)
         return service
+
+    async def _status_after_clearing_slot(self, intent: BookingIntent) -> BookingIntentStatus:
+        if intent.address_id is None:
+            return BookingIntentStatus.DRAFT
+        address = await self.session.get(Address, intent.address_id)
+        if address is not None and address.service_area_id is not None:
+            return BookingIntentStatus.COVERAGE_CONFIRMED
+        return BookingIntentStatus.ADDRESS_VALIDATED
+
+    def _slot_window(self, intent: BookingIntent, selected_slot: SlotSelection) -> BookingWindow:
+        zone = self._timezone(intent.timezone_id)
+        assert intent.requested_date is not None
+        start_local = datetime.combine(
+            intent.requested_date, time.fromisoformat(selected_slot.start_local), tzinfo=zone
+        )
+        end_local = datetime.combine(
+            intent.requested_date, time.fromisoformat(selected_slot.end_local), tzinfo=zone
+        )
+        return BookingWindow(start=start_local.astimezone(UTC), end=end_local.astimezone(UTC))
 
     async def _owned(
         self,

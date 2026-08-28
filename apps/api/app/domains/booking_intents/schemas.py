@@ -3,6 +3,8 @@ from datetime import date, datetime, time
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.domains.booking.schemas import BookingAnswerInput, CustomerInput
+
 from .models import BookingIntentStatus
 
 
@@ -35,7 +37,11 @@ class BookingIntentUpdate(BaseModel):
         default=None,
         min_length=1,
         max_length=64,
-        pattern=r"^[A-Za-z_+-]+(?:/[A-Za-z0-9_+.-]+)+$",
+        # Allows both multi-segment zones ("America/Los_Angeles") and the valid IANA
+        # zones with no "/" at all ("UTC", "GMT+0", "EST5EDT"). ZoneInfo() itself is
+        # the actual validity check (see BookingIntentService._timezone) — this is
+        # only a shape pre-filter, so it must not reject real zone names.
+        pattern=r"^[A-Za-z0-9_+-]+(?:/[A-Za-z0-9_+.-]+)*$",
     )
     requested_date: date | None = None
     selected_slot: SlotSelection | None = None
@@ -63,5 +69,13 @@ class BookingIntentRead(BaseModel):
     status: BookingIntentStatus
     expires_at: datetime
     version: int
+    booking_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
+
+
+class BookingIntentSubmitRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    customer: CustomerInput
+    answers: list[BookingAnswerInput] = Field(default_factory=list)

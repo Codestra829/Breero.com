@@ -15,6 +15,7 @@ def test_booking_intent_routes_are_registered() -> None:
     expected = {
         "/api/v1/booking/intents": {"post"},
         "/api/v1/booking/intents/{intent_id}": {"get", "patch", "delete"},
+        "/api/v1/booking/intents/{intent_id}/submit": {"post"},
     }
     for path, methods in expected.items():
         assert methods <= set(paths[path])
@@ -26,7 +27,6 @@ def test_booking_intent_status_contract_is_separate_from_booking_status() -> Non
         "ADDRESS_VALIDATED",
         "COVERAGE_CONFIRMED",
         "AVAILABILITY_FOUND",
-        "CAPACITY_HELD",
         "SUBMITTED",
         "EXPIRED",
     }
@@ -76,3 +76,12 @@ def test_invalid_session_cookie_is_not_accepted_for_existing_intent() -> None:
     assert _session_id(str(session_id), create=False) == session_id
     with pytest.raises(DomainError):
         _session_id("not-a-uuid", create=False)
+
+
+def test_timezone_id_accepts_slash_less_iana_zones() -> None:
+    # Regression test: the pattern used to require a "/", rejecting valid zones
+    # like "UTC" -- the exact fallback value the service itself uses internally.
+    for zone in ("UTC", "GMT", "EST5EDT", "America/Los_Angeles"):
+        assert BookingIntentUpdate(timezone_id=zone).timezone_id == zone
+    with pytest.raises(ValidationError):
+        BookingIntentUpdate(timezone_id="not a zone!")

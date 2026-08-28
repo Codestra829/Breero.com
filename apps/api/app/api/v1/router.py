@@ -45,11 +45,6 @@ api_router.include_router(
     tags=["admin-provider-applications"],
 )
 api_router.include_router(services.router, prefix="/services", tags=["services"])
-api_router.include_router(
-    booking_intents.router,
-    prefix="/booking",
-    tags=["booking-intents"],
-)
 api_router.include_router(customers.router, prefix="/customer", tags=["customer"])
 api_router.include_router(compliance.router, tags=["compliance"])
 if settings.geocoding_enabled:
@@ -57,6 +52,15 @@ if settings.geocoding_enabled:
 if settings.scheduling_enabled:
     api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
     api_router.include_router(bookings.router, prefix="/bookings", tags=["bookings"])
+    # Booking intents are the pre-submission funnel for the same scheduling
+    # surface (their submit step delegates straight into BookingService.create),
+    # so they must be switched off together with availability/bookings — not
+    # mounted unconditionally.
+    api_router.include_router(
+        booking_intents.router,
+        prefix="/booking",
+        tags=["booking-intents"],
+    )
 if settings.payments_enabled and settings.stripe_enabled:
     api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
     api_router.include_router(

@@ -8,9 +8,12 @@ from app.config import settings
 from app.core.errors import DomainError
 from app.core.rate_limit import rate_limit
 from app.db.session import get_db
+from app.domains.booking.presenters import booking_to_create_response
+from app.domains.booking.schemas import BookingCreateResponse
 from app.domains.booking_intents.schemas import (
     BookingIntentCreate,
     BookingIntentRead,
+    BookingIntentSubmitRequest,
     BookingIntentUpdate,
 )
 from app.domains.booking_intents.service import BOOKING_INTENT_TTL, BookingIntentService
@@ -145,3 +148,29 @@ async def abandon_booking_intent(
         expected_version=_version(if_match),
     )
     response.delete_cookie(BOOKING_SESSION_COOKIE, path="/api/v1/booking")
+
+
+@router.post(
+    "/intents/{intent_id}/submit",
+    response_model=BookingCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def submit_booking_intent(
+    intent_id: uuid.UUID,
+    payload: BookingIntentSubmitRequest,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    idempotency_key: Annotated[str, Header(min_length=8, max_length=128, alias="Idempotency-Key")],
+    _: Annotated[None, Depends(rate_limit("booking-intent-submit", 10, 60))],
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    booking_session: Annotated[str | None, Cookie(alias=BOOKING_SESSION_COOKIE)] = None,
+) -> BookingCreateResponse:
+    session_id = _session_id(booking_session, create=False)
+    booking = await BookingIntentService(session).submit(
+        intent_id,
+        session_id,
+        payload.customer,
+        payload.answers,
+        expected_version=_version(if_match),
+        idempotency_key=idempotency_key,
+    )
+    return booking_to_create_response(booking)
